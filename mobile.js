@@ -443,8 +443,8 @@
   const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
   const dow = iso => new Date(iso + 'T00:00:00').getDay();
   function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
-  // Fill in scheduled trips for the past year (one time); the start date can be changed on the page.
-  if (!data.settings.autoFromYear) { const d = new Date(); d.setFullYear(d.getFullYear() - 1); data.settings.autoFrom = isoLocal(d); data.settings.autoFromYear = true; }
+  // Fill in scheduled trips from January 1 of this year (one time); the start date can be changed on the page.
+  if (!data.settings.autoFromJan) { data.settings.autoFrom = new Date().getFullYear() + '-01-01'; data.settings.autoFromJan = true; }
   const scheduled = () => data.routes.filter(r => r.days && r.days.length);
   const places = () => data.routes.filter(r => !r.days || !r.days.length);
   const routeLabel = r => r.name + (r.detail ? ' (' + r.detail + ')' : '');
