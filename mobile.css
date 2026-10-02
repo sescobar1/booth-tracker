@@ -1,10 +1,11 @@
 /* Phone-first additions: quick add, bottom tabs, sheets, reports, print. */
 [hidden]{display:none!important}
-.quick-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.quick-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 18px}
 .big-btn{border:0;border-radius:14px;padding:18px 12px;font-size:1.1rem;font-weight:800;color:#fff;box-shadow:0 4px 14px #1932461f}
 .big-btn.sold{background:var(--green)}
 .big-btn.bought{background:var(--navy)}
 .big-btn.trip{background:#b67c20}
+.big-btn.cookies{background:#c85a7a}
 .button.ghost{background:#fff;color:var(--navy);border:1px solid #bfd0d9}
 .file-btn{display:inline-block;cursor:pointer}
 .import-link{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff8e9;border:1px solid #ead4aa;border-radius:10px;padding:12px 14px;margin:17px 0}
@@ -176,6 +177,7 @@ dialog.sheet::backdrop{background:#17344766}
   .mile-cards .value,#work .cards .value{font-size:1.05rem}
   .mile-cards .label,#work .cards .label{font-size:.62rem}
   .quick-row .big-btn{min-width:0}
+  .quick-row{grid-template-columns:repeat(2,minmax(0,1fr))}
   .big-btn{padding:16px 6px;font-size:1rem}
   .toolbar{flex-wrap:wrap}
   .import-box .button,.import-box .file-btn{margin:4px 0}
