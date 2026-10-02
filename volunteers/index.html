@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Band Volunteers</title>
+  <meta name="description" content="Band Boosters volunteers: one sign-up page for adults and students, group texts, check-in, and sign-in sheets.">
+  <meta name="theme-color" content="#1f3a68">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Volunteers">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top no-print">
+    <div class="brand"><img src="icon.svg" alt="" width="28" height="28"> <span>Band Volunteers</span></div>
+    <button type="button" class="ghost small" id="topShare">📣 Share</button>
+  </header>
+
+  <main id="view"></main>
+
+  <nav class="tabs no-print">
+    <a href="#events" data-tab="events"><span>📅</span>Events</a>
+    <a href="#people" data-tab="people"><span>👥</span>People</a>
+    <a href="#share" data-tab="share"><span>📣</span>Share</a>
+    <a href="#more" data-tab="more"><span>⚙</span>More</a>
+  </nav>
+
+  <div id="modal" class="modal no-print" hidden><div class="sheet" id="modalBody"></div></div>
+  <div id="toast" class="toast no-print" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script src="db.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  </script>
+</body>
+</html>
