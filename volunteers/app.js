@@ -351,10 +351,15 @@ function editEvent(id, copyFrom) {
 }
 const JOB_IDEAS = ['Concession Stand', 'Hospitality Room', 'Security', 'Tally Room', 'Chaperone', 'Pit Crew', 'Water / Snacks', 'Uniforms', 'Ticket Table', 'Setup', 'Cleanup'];
 
+// A link to one event can open before the list has loaded from the cloud; wait instead of bouncing away.
+function missingEvent() {
+  $('view').innerHTML = '<a class="back" href="#events">‹ Events</a><p class="helper">' + (signedIn() ? 'This event was deleted or moved.' : 'Loading… If this doesn\'t change, sign in on the Events tab.') + '</p>';
+}
+
 let evFilter = 'all';
 function viewEvent(id) {
   const ev = event(id);
-  if (!ev) { location.hash = 'events'; return; }
+  if (!ev) { missingEvent(); return; }
   const c = eventCounts(ev);
   const ss = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
     .filter(x => evFilter === 'all' || (evFilter === 'student' ? x.p.type === 'student' : evFilter === 'adult' ? x.p.type !== 'student' : !digits(x.p.phone)))
@@ -527,7 +532,7 @@ function textOneByOne(ev, queue, text) {
 let ciSearch = '';
 function viewCheckin(id) {
   const ev = event(id);
-  if (!ev) { location.hash = 'events'; return; }
+  if (!ev) { missingEvent(); return; }
   const all = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p).sort((a, b) => sortName(a.p).localeCompare(sortName(b.p)));
   const inCount = all.filter(x => x.s.inAt).length;
   $('view').innerHTML = '<a class="back" href="#event/' + id + '">‹ ' + esc(ev.name) + '</a>' +
@@ -562,7 +567,7 @@ const CREDIT_CELL = '<td class="credit">☐ Trip credit<br>☐ Volunteer hours</
 let sheetOpts = { split: false, blanks: 8, phone: true };
 function viewSheet(id) {
   const ev = event(id);
-  if (!ev) { location.hash = 'events'; return; }
+  if (!ev) { missingEvent(); return; }
   const list = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
     .sort((a, b) => ((a.s.role || '') + sortName(a.p)).localeCompare((b.s.role || '') + sortName(b.p)));
   const table = (title, rows) => {

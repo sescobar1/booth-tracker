@@ -176,3 +176,5 @@ body.public { padding-bottom: 32px; }
 .sugrow { padding: 4px 0; border-bottom: 1px dotted var(--line); }
 .intro { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; padding: 4px 14px; margin: 8px 0 14px; }
 .intro a { font-weight: 600; word-break: break-word; }
+.pub-foot { text-align: center; padding: 8px 16px 24px; font-size: .85rem; }
+.pub-foot a { color: var(--muted); }
