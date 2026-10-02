@@ -45,6 +45,16 @@
     data.routesVersion = CFG.routesVersion;
   }
   data.amazon = data.amazon || [];
+  // Jan–Aug 2026 sales were replaced with the store's own report. Booth changes made line by line in
+  // those months pointed at the old lines, so clear them once (rules saved by item name still apply).
+  if (CFG.seedData && !data.salesFileYall2026) {
+    ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August'].forEach(n => {
+      const m = n + ' 2026';
+      [data.booths, data.rowEdits].forEach(o => { if (o && o.sales) delete o.sales[m]; });
+      if (data.imported && data.imported.sales) delete data.imported.sales[m];
+    });
+    data.salesFileYall2026 = true; save();
+  }
 
   // ---------- small helpers ----------
   // A big "take a photo" button wrapping a file input; works for camera or photo library.
