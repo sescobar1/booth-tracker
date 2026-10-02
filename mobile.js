@@ -9,12 +9,28 @@
   data.settings = Object.assign({ relicEvery: 7, mileRate: 0.7, mpg: 25, gasPrice: 2.75 }, data.settings || {});
   data.shifts = data.shifts || [];
   data.mileage = data.mileage || [];
-  // Regular trips; miles are one way (Russellville–Sherwood 76, Russellville–Conway 46).
-  data.routes = data.routes || [
-    { id: 'store', name: 'Relic store', detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, perWeek: 3 },
-    { id: 'pricebreak', name: 'Price Break', detail: 'Home ⇄ Price Break, Russellville', miles: 5, round: true, perWeek: 2 },
-    { id: 'conway', name: 'Conway', detail: 'Russellville ⇄ Conway', miles: 46, round: true, perWeek: 1 }
+  // Regular trips and places; miles are one way from home (Russellville stores 5, Dardanelle 10, Atkins 15).
+  const DEFAULT_ROUTES = [
+    { id: 'store', name: 'Relic store', detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, days: [0, 3, 5] },
+    { id: 'pricebreak', name: 'Price Break', detail: 'Russellville', miles: 5, round: true, days: [2, 6] },
+    { id: 'conway', name: "St. Joe's", detail: 'Russellville ⇄ Conway', miles: 46, round: true, days: [5] },
+    { id: 'goodwill', name: 'Goodwill', detail: 'Russellville', miles: 5, round: true, days: [] },
+    { id: 'marvas', name: "Marva's", detail: 'Russellville', miles: 5, round: true, days: [] },
+    { id: 'dardanelle', name: 'Dardanelle thrift store', detail: 'Dardanelle', miles: 10, round: true, days: [] },
+    { id: 'atkins', name: 'Atkins thrift store', detail: 'Atkins', miles: 15, round: true, days: [] }
   ];
+  data.routes = data.routes || [];
+  if (!data.routesV2) {
+    for (const d of DEFAULT_ROUTES) {
+      const r = data.routes.find(x => x.id === d.id);
+      if (!r) data.routes.push({ ...d });
+      else { if (!r.days) r.days = d.days; if (d.id === 'conway' && r.name === 'Conway') r.name = d.name; if (d.id === 'pricebreak') r.detail = d.detail; }
+    }
+    data.routes.forEach(r => { if (!r.days) r.days = []; delete r.perWeek; });
+    data.routesV2 = true;
+  }
+  data.mileSkips = data.mileSkips || [];
+  data.amazon = data.amazon || [];
 
   // ---------- small helpers ----------
   const pad = n => String(n).padStart(2, '0');
@@ -76,7 +92,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['inventory', 'Inventory', 'Overall and store stock'], ['restock', 'Restock', 'What to restock and slow movers'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -351,8 +367,6 @@
   // ---------- to-do & reminders ----------
   function renderTodo(need) {
     const items = [], relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
-    const wk = weekTrips(), planned = data.routes.reduce((t, r) => t + (Number(r.perWeek) || 0), 0);
-    if (planned && wk.length < planned) items.push(['Log this week\'s trips', wk.length + ' of ' + planned + ' regular trips logged', 'mileage', 'Log']);
     if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest Relic sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
     if (backupAge >= 7) items.push(['Back up your data', data.lastBackup ? 'Last backup ' + backupAge + ' days ago' : 'No backup yet — your data lives only on this device', 'backup', 'Back up']);
     if (need.length) items.push([need.length + ' item' + (need.length === 1 ? '' : 's') + ' to restock', need.filter(x => x.status === 'out').length + ' out of stock', 'restock', 'View']);
@@ -414,76 +428,131 @@
       return '<div class="best-card"><h4>' + c + '</h4>' + (top.length ? '<ol>' + top.map(g => '<li>' + esc(g.name) + ' <span>' + g.n + ' · ' + money(g.amt) + '</span></li>').join('') + '</ol>' : '<p class="helper" style="margin:0">No sales in this period.</p>') + '</div>'; }).join('');
   }
   // ---------- mileage ----------
+  // Scheduled trips are logged automatically on their weekdays (0 = Sunday).
+  // Places without a schedule are logged with one tap.
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const r2 = v => Math.round(v * 100) / 100;
   const tripMiles = r => Math.round((Number(r.miles) || 0) * (r.round ? 2 : 1) * 10) / 10;
   const gasFor = miles => miles / (Number(data.settings.mpg) || 25) * (Number(data.settings.gasPrice) || 0);
   const gasOf = t => t.gas != null ? t.gas : gasFor(t.miles);
+  const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+  const dow = iso => new Date(iso + 'T00:00:00').getDay();
   function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
-  function weekTrips() { const s0 = weekStart(); return data.mileage.filter(t => t.route && t.date >= s0); }
+  if (!data.settings.autoFrom) data.settings.autoFrom = weekStart();
+  const scheduled = () => data.routes.filter(r => r.days && r.days.length);
+  const places = () => data.routes.filter(r => !r.days || !r.days.length);
+  const routeLabel = r => r.name + (r.detail ? ' (' + r.detail + ')' : '');
+  function tripFor(r, date, auto) {
+    const miles = tripMiles(r);
+    return { id: newId(), date, purpose: routeLabel(r), miles, rate: data.settings.mileRate, gas: r2(gasFor(miles)), route: r.id, auto: !!auto };
+  }
+  function autoLog() {
+    const from = data.settings.autoFrom, to = todayIso(), skips = new Set(data.mileSkips);
+    const before = data.mileage.length;
+    // Drop automatic trips that no longer match a schedule or the start date.
+    data.mileage = data.mileage.filter(t => {
+      if (!t.auto) return true;
+      const r = data.routes.find(x => x.id === t.route);
+      return r && t.date >= from && (r.days || []).includes(dow(t.date));
+    });
+    let changed = data.mileage.length !== before;
+    const have = new Set(data.mileage.filter(t => t.route).map(t => t.route + '|' + t.date));
+    for (let d = from, guard = 0; d <= to && guard < 1200; d = addDays(d, 1), guard++)
+      for (const r of scheduled()) if (r.days.includes(dow(d))) {
+        const k = r.id + '|' + d;
+        if (!have.has(k) && !skips.has(k)) { data.mileage.push(tripFor(r, d, true)); have.add(k); changed = true; }
+      }
+    if (changed) save();
+    return changed;
+  }
+  autoLog();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autoLog()) renderExtras(); });
+
   $('tripDate').value = todayIso();
+  $('autoFrom').value = data.settings.autoFrom;
+  $('autoFrom').addEventListener('change', e => { if (e.target.value) { data.settings.autoFrom = e.target.value; autoLog(); save(); renderExtras(); toast('Scheduled trips filled in from ' + nice(e.target.value) + '.'); } });
   const myears = () => [...new Set([String(new Date().getFullYear()), ...data.mileage.map(t => t.date.slice(0, 4))])].sort().reverse();
+
   function renderMileage() {
     if (!$('mileage').classList.contains('active')) return;
-    const wk = weekTrips();
-    $('routeCards').innerHTML = data.routes.length ? data.routes.map(r => {
-      const n = wk.filter(t => t.route === r.id).length, goal = Number(r.perWeek) || 0;
-      const dots = goal ? Array.from({ length: Math.max(goal, n) }, (_, i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') : '';
-      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + tripMiles(r) + ' mi' + (r.round ? ' round trip' : '') + ' · about ' + money(gasFor(tripMiles(r))) + ' gas</small>' +
-        '<div class="week-dots">' + dots + '<span>' + n + (goal ? ' of ' + goal : '') + ' this week</span></div>' +
-        '</div><button type="button" class="button log-trip" data-route="' + r.id + '">+ Log trip</button></div>';
-    }).join('') : '<p class="helper">No regular trips yet. Add one under “Edit my regular trips”.</p>';
+    const ws = weekStart(), wk = data.mileage.filter(t => t.route && t.date >= ws), today = todayIso();
+    const gasLine = r => tripMiles(r) + ' mi' + (r.round ? ' round trip' : '') + ' · about ' + money(gasFor(tripMiles(r))) + ' gas';
+    $('routeCards').innerHTML = scheduled().length ? scheduled().map(r => {
+      const n = wk.filter(t => t.route === r.id).length, goal = r.days.length;
+      const dots = Array.from({ length: Math.max(goal, n) }, (_, i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('');
+      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + gasLine(r) + '</small><small class="days-line">' + r.days.slice().sort().map(d => DAYS[d]).join(' · ') + '</small>' +
+        '<div class="week-dots">' + dots + '<span>' + n + ' of ' + goal + ' this week</span></div></div><button type="button" class="button ghost log-trip" data-route="' + r.id + '">+ Extra trip</button></div>';
+    }).join('') : '<p class="helper">No scheduled trips. Pick days for a place below to log it automatically.</p>';
+    $('placeCards').innerHTML = places().length ? places().map(r => {
+      const last = data.mileage.filter(t => t.route === r.id).map(t => t.date).sort().pop();
+      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + gasLine(r) + '</small><small class="days-line">' + (last ? 'Last trip ' + (last === today ? 'today' : nice(last)) : 'No trips yet') + '</small></div><button type="button" class="button log-trip" data-route="' + r.id + '">+ Log trip</button></div>';
+    }).join('') : '<p class="helper">No places yet. Add one below.</p>';
+    // summary cards
+    const thisMonth = today.slice(0, 7), thisYear = today.slice(0, 4);
+    [['Week', data.mileage.filter(t => t.date >= ws && t.date <= today)], ['Month', data.mileage.filter(t => t.date.startsWith(thisMonth))], ['Year', data.mileage.filter(t => t.date.startsWith(thisYear))]].forEach(([k, list]) => {
+      const g = list.reduce((t, x) => t + gasOf(x), 0), mi = list.reduce((t, x) => t + x.miles, 0), d = list.reduce((t, x) => t + x.miles * x.rate, 0);
+      $('mc' + k).textContent = money(g); $('mc' + k + 'Mi').textContent = Math.round(mi * 10) / 10 + ' mi · ' + money(d) + ' deduction';
+    });
+    // trip log
     const ys = myears(), cur = $('mileYear').value;
     $('mileYear').innerHTML = ys.map(y => '<option>' + y + '</option>').join(''); $('mileYear').value = ys.includes(cur) ? cur : ys[0];
     const y = $('mileYear').value, trips = data.mileage.filter(t => t.date.startsWith(y)).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
     const miles = trips.reduce((t, x) => t + x.miles, 0), ded = trips.reduce((t, x) => t + x.miles * x.rate, 0);
     $('mileTotal').textContent = money(ded); $('mileGas').textContent = money(trips.reduce((t, x) => t + gasOf(x), 0));
-    const sum = list => [list.reduce((t, x) => t + gasOf(x), 0), list.reduce((t, x) => t + x.miles, 0), list.reduce((t, x) => t + x.miles * x.rate, 0)];
-    const thisMonth = isoLocal(new Date()).slice(0, 7), thisYear = thisMonth.slice(0, 4);
-    [['Week', data.mileage.filter(t => t.date >= weekStart())], ['Month', data.mileage.filter(t => t.date.startsWith(thisMonth))], ['Year', data.mileage.filter(t => t.date.startsWith(thisYear))]].forEach(([k, list]) => {
-      const [g, mi, d] = sum(list); $('mc' + k).textContent = money(g); $('mc' + k + 'Mi').textContent = Math.round(mi * 10) / 10 + ' mi · ' + money(d) + ' deduction';
-    });
     $('mileSummary').textContent = trips.length + ' trip' + (trips.length === 1 ? '' : 's') + ' · ' + Math.round(miles * 10) / 10 + ' miles in ' + y + '.';
-    $('mileRows').innerHTML = trips.length ? trips.map(x => '<tr><td>' + esc(x.date) + '</td><td>' + esc(x.purpose) + '</td><td class="num">' + x.miles + '</td><td class="num">' + money(gasOf(x)) + '</td><td class="num">' + money(x.miles * x.rate) + '</td><td><button type="button" class="del mile-del" data-id="' + x.id + '">Delete</button></td></tr>').join('') :
+    $('mileRows').innerHTML = trips.length ? trips.map(x => '<tr><td>' + esc(x.date) + '<small class="dow">' + DAYS[dow(x.date)] + '</small></td><td>' + esc(x.purpose) + (x.auto ? ' <span class="tag auto">Auto</span>' : '') + '</td><td class="num">' + x.miles + '</td><td class="num">' + money(gasOf(x)) + '</td><td class="num">' + money(x.miles * x.rate) + '</td><td><button type="button" class="del mile-del" data-id="' + x.id + '">' + (x.auto ? 'Didn\'t go' : 'Delete') + '</button></td></tr>').join('') :
       '<tr><td colspan="6" class="empty">No trips logged for ' + y + '.</td></tr>';
-    $('routeRows').innerHTML = data.routes.map(r => '<tr><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="name" value="' + esc(r.name) + '" aria-label="Trip name"></td><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="detail" value="' + esc(r.detail || '') + '" aria-label="Route"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" step=".1" inputmode="decimal" data-id="' + r.id + '" data-f="miles" value="' + r.miles + '" aria-label="Miles one way"></td><td><input type="checkbox" class="route-edit" data-id="' + r.id + '" data-f="round"' + (r.round ? ' checked' : '') + ' aria-label="Round trip"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" inputmode="numeric" data-id="' + r.id + '" data-f="perWeek" value="' + (r.perWeek || 0) + '" aria-label="Times a week"></td><td><button type="button" class="del route-del" data-id="' + r.id + '">Remove</button></td></tr>').join('');
+    // editor
+    const dayBoxes = r => '<span class="day-boxes">' + DAYS.map((d, i) => '<label title="' + d + '"><input type="checkbox" class="route-edit" data-id="' + r.id + '" data-f="day" data-d="' + i + '"' + ((r.days || []).includes(i) ? ' checked' : '') + '>' + d[0] + '</label>').join('') + '</span>';
+    $('routeRows').innerHTML = data.routes.map(r => '<tr><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="name" value="' + esc(r.name) + '" aria-label="Name"></td><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="detail" value="' + esc(r.detail || '') + '" aria-label="Town or route"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" step=".1" inputmode="decimal" data-id="' + r.id + '" data-f="miles" value="' + r.miles + '" aria-label="Miles one way"></td><td><input type="checkbox" class="route-edit" data-id="' + r.id + '" data-f="round"' + (r.round ? ' checked' : '') + ' aria-label="Round trip"></td><td>' + dayBoxes(r) + '</td><td><button type="button" class="del route-del" data-id="' + r.id + '">Remove</button></td></tr>').join('');
   }
   $('mileYear').addEventListener('change', renderMileage);
   document.addEventListener('click', e => {
     const log = e.target.closest('.log-trip'), del = e.target.closest('.mile-del'), rdel = e.target.closest('.route-del');
     if (log) {
       const r = data.routes.find(x => x.id === log.dataset.route); if (!r) return;
-      const miles = tripMiles(r), date = $('tripDate').value || todayIso();
-      const gas = Math.round(gasFor(miles) * 100) / 100;
-      data.mileage.push({ id: newId(), date, purpose: r.name + ' (' + (r.detail || 'regular trip') + ')', miles, rate: data.settings.mileRate, gas, route: r.id });
-      save(); renderExtras(); toast('Logged ' + miles + ' miles · ' + r.name + ' · about ' + money(gas) + ' gas');
+      const t = tripFor(r, $('tripDate').value || todayIso(), false);
+      data.mileage.push(t); save(); renderExtras(); toast('Logged ' + t.miles + ' miles · ' + r.name + ' · about ' + money(t.gas) + ' gas');
     }
     if (del) {
-      const x = data.mileage.find(t => t.id === del.dataset.id);
-      if (x && confirm('Delete the ' + x.miles + '-mile trip on ' + x.date + '?')) { data.mileage = data.mileage.filter(t => t !== x); save(); renderExtras(); }
+      const x = data.mileage.find(t => t.id === del.dataset.id); if (!x) return;
+      if (confirm((x.auto ? 'Remove this automatic trip (you didn\'t go)?' : 'Delete this trip?') + '\n' + x.purpose + ' · ' + x.date)) {
+        if (x.auto) data.mileSkips.push(x.route + '|' + x.date);
+        data.mileage = data.mileage.filter(t => t !== x); save(); renderExtras();
+      }
     }
     if (rdel) {
       const r = data.routes.find(x => x.id === rdel.dataset.id);
-      if (r && confirm('Remove the regular trip “' + r.name + '”? Trips already logged stay in your log.')) { data.routes = data.routes.filter(x => x !== r); save(); renderExtras(); }
+      if (r && confirm('Remove “' + r.name + '”? Trips you logged yourself stay in your log; automatic ones are removed.')) {
+        data.routes = data.routes.filter(x => x !== r); data.mileage = data.mileage.filter(t => !(t.auto && t.route === r.id)); save(); renderExtras();
+      }
     }
   });
   document.addEventListener('change', e => {
     const t = e.target; if (!t.matches('.route-edit')) return;
     const r = data.routes.find(x => x.id === t.dataset.id); if (!r) return;
     const f = t.dataset.f;
-    r[f] = f === 'round' ? t.checked : (f === 'miles' || f === 'perWeek') ? Math.max(0, Number(t.value) || 0) : t.value.trim();
-    save(); renderExtras();
+    if (f === 'day') { const d = Number(t.dataset.d); r.days = (r.days || []).filter(x => x !== d); if (t.checked) r.days.push(d); }
+    else r[f] = f === 'round' ? t.checked : f === 'miles' ? Math.max(0, Number(t.value) || 0) : t.value.trim();
+    autoLog(); save(); renderExtras();
   });
   const rf = $('routeForm');
+  rf.elements.town.addEventListener('change', () => { if (rf.elements.town.value) rf.elements.miles.value = rf.elements.town.value; });
+  rf.elements.miles.value = rf.elements.town.value;
   rf.addEventListener('submit', e => {
     e.preventDefault();
-    data.routes.push({ id: newId(), name: rf.elements.name.value.trim(), detail: rf.elements.detail.value.trim(), miles: Number(rf.elements.miles.value) || 0, round: true, perWeek: Math.max(0, Number(rf.elements.perWeek.value) || 0) });
-    save(); rf.reset(); rf.elements.perWeek.value = 1; renderExtras(); toast('Regular trip added.');
+    const town = rf.elements.town.selectedOptions[0].dataset.town || '';
+    const days = [...rf.querySelectorAll('[name=day]:checked')].map(x => Number(x.value));
+    data.routes.push({ id: newId(), name: rf.elements.name.value.trim(), detail: town, miles: Number(rf.elements.miles.value) || 0, round: true, days });
+    autoLog(); save(); rf.reset(); rf.elements.miles.value = rf.elements.town.value; renderExtras();
+    toast(days.length ? 'Added. Trips on ' + days.map(d => DAYS[d]).join(', ') + ' will log automatically.' : 'Place added. Tap Log trip when you go.');
   });
   const mf = $('mileForm');
   mf.date.value = todayIso(); $('mileRate').value = data.settings.mileRate;
   mf.addEventListener('submit', e => {
     e.preventDefault();
     const rate = data.settings.mileRate, miles = Number(mf.miles.value) || 0;
-    data.mileage.push({ id: newId(), date: mf.date.value, purpose: mf.purpose.value.trim(), miles, rate, gas: Math.round(gasFor(miles) * 100) / 100 });
+    data.mileage.push({ id: newId(), date: mf.date.value, purpose: mf.purpose.value.trim(), miles, rate, gas: r2(gasFor(miles)) });
     save(); mf.purpose.value = ''; mf.miles.value = ''; renderExtras(); toast('Trip added.');
   });
   $('mileRate').addEventListener('change', e => { const r = Number(e.target.value); if (r > 0) { data.settings.mileRate = r; save(); renderExtras(); } });
@@ -544,6 +613,57 @@
   });
   $('printYear').addEventListener('click', () => window.print());
 
+  // ---------- Amazon orders ----------
+  const af = $('amzForm');
+  af.date.value = todayIso();
+  let amzBoothTouched = false;
+  af.item.addEventListener('input', () => { if (!amzBoothTouched && af.item.value.trim()) af.booth.value = boothFor(af.item.value); });
+  af.booth.addEventListener('change', () => { amzBoothTouched = true; });
+  af.sellPrice.addEventListener('input', () => { af.sellPrice.dataset.touched = af.sellPrice.value ? '1' : ''; });
+  ['qty', 'amount'].forEach(n => af[n].addEventListener('input', () => updatePreview(af, 'amzPreview')));
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const sortKey = x => x.date || (x.month.split(' ')[1] + '-' + pad(MONTH_NAMES.indexOf(x.month.split(' ')[0]) + 1) + '-00');
+  function amazonRows() {
+    const out = [];
+    for (const m of months) for (const x of allRows('purchases', m)) if (x.key[0] === 'z' || /amazon/i.test(x.item)) out.push({ ...x, month: m });
+    return out;
+  }
+  function renderAmazon() {
+    if (!$('amazon').classList.contains('active')) return;
+    const all = amazonRows(), nowYear = String(new Date().getFullYear());
+    const ys = [...new Set([nowYear, ...all.map(x => x.month.split(' ')[1])])].sort().reverse(), cur = $('amzYear').value;
+    $('amzYear').innerHTML = ys.map(y => '<option>' + y + '</option>').join(''); $('amzYear').value = ys.includes(cur) ? cur : ys[0];
+    const y = $('amzYear').value, inYear = all.filter(x => x.month.endsWith(' ' + y)), tot = l => l.reduce((t, x) => t + x.amount, 0);
+    const mon = all.filter(x => x.month === currentMonth);
+    $('amzMonth').textContent = money(tot(mon)); $('amzMonthN').textContent = mon.length + ' order' + (mon.length === 1 ? '' : 's') + ' in ' + currentMonth;
+    $('amzYearTot').textContent = money(tot(inYear)); $('amzYearN').textContent = inYear.length + ' order' + (inYear.length === 1 ? '' : 's') + ' in ' + y;
+    const items = inYear.reduce((t, x) => t + (Number(x.qty) || 1), 0);
+    $('amzEach').textContent = money(items ? tot(inYear) / items : 0); $('amzEachN').textContent = items + ' item' + (items === 1 ? '' : 's') + ' in ' + y;
+    $('amzRows').innerHTML = inYear.length ? inYear.slice().sort((a, b) => sortKey(b).localeCompare(sortKey(a))).map(x => '<tr><td>' + esc(x.date || x.month) + '</td><td>' + esc(x.item) + '</td><td>' + esc(x.orderNo || '—') + '</td><td>' + esc(code(x.booth)) + '</td><td class="num">' + (x.qty || 1) + '</td><td class="num">' + money(x.amount) + '</td><td class="num">' + money(x.amount / (x.qty || 1)) + '</td><td>' +
+      (x.key[0] === 'z' ? '<button type="button" class="del amz-del" data-id="' + x.key.slice(1) + '">Delete</button>' : '<span class="helper" style="margin:0">Worksheet</span>') + '</td></tr>').join('') :
+      '<tr><td colspan="8" class="empty">No Amazon orders for ' + y + ' yet.</td></tr>';
+  }
+  $('amzYear').addEventListener('change', renderAmazon);
+  af.addEventListener('submit', e => {
+    e.preventDefault();
+    const date = af.date.value || todayIso(); let m = monthOf(date); if (!months.includes(m)) m = currentMonth;
+    const item = af.item.value.trim(), qty = Math.max(1, Number(af.qty.value) || 1), amount = r2(Number(af.amount.value) || 0), booth = af.booth.value;
+    const sell = Number(af.sellPrice.value) || 0, override = af.sellPrice.dataset.touched === '1';
+    const rec = { id: newId(), date, month: m, item, booth, qty, amount, orderNo: af.orderNo.value.trim(), source: 'Amazon' };
+    if (override && sell > 0) rec.sell = r2(sell);
+    data.amazon.push(rec);
+    addToInventory(af.invDest.value, item, booth, qty, amount, sell, override);
+    saveDocs(item, [...af.receipt.files], 'Invoice', 'Amazon order ' + (rec.orderNo || '') + ' · ' + money(amount));
+    save(); render();
+    af.reset(); af.date.value = date; af.sellPrice.dataset.touched = ''; amzBoothTouched = false; updatePreview(af, 'amzPreview');
+    toast('Amazon order saved to ' + m + '.');
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.amz-del'); if (!b) return;
+    const x = data.amazon.find(t => t.id === b.dataset.id);
+    if (x && confirm('Delete the Amazon order “' + x.item + '” (' + money(x.amount) + ')? It will also come off your purchases.')) { data.amazon = data.amazon.filter(t => t !== x); save(); render(); }
+  });
+
   // ---------- render hook ----------
   function renderExtras() {
     const need = renderRestock();
@@ -552,6 +672,7 @@
     renderReports();
     renderMileage();
     renderWork();
+    renderAmazon();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };

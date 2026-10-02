@@ -67,6 +67,25 @@
 .work-form{grid-template-columns:1fr 1.6fr .7fr .9fr auto}
 #work .cards .helper{margin:4px 0 0;font-size:.78rem}
 
+/* Mileage schedule, places, Amazon */
+.sec-title{font-size:1rem;margin:4px 0 10px}
+.sec-title small{font-weight:400;color:#64747d;font-size:.82rem;margin-left:4px}
+.sec-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sec-row label{font-size:.85rem;color:#4e5f69}
+.days-line{color:#31576b!important;font-weight:600}
+.tag.auto{background:#e8f1f6;color:#24536f}
+.dow{display:block;color:#64747d;font-size:.72rem}
+.day-boxes{display:inline-flex;gap:2px}
+.day-boxes label{display:flex;flex-direction:column;align-items:center;font-size:.7rem;color:#4e5f69}
+.days-pick{grid-column:1/-1;border:1px solid #cbd9df;border-radius:9px;padding:6px 10px 8px;margin:0;background:#fff;display:flex;flex-wrap:wrap;gap:4px 12px}
+.days-pick legend{font-size:.75rem;font-weight:700;color:#5c6b74;padding:0 4px}
+.form .days-pick label{display:flex;align-items:center;gap:4px;font-size:.88rem;font-weight:600;color:#173447}
+.form .days-pick input{display:inline-block;width:auto;margin:0}
+.place-form{grid-template-columns:1.4fr 1.2fr .8fr;background:transparent;padding:0;margin:8px 0}
+.place-form .button{grid-column:1/-1}
+.amz-form{grid-template-columns:repeat(4,minmax(0,1fr))}
+.amz-form .button{grid-column:1/-1}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -112,7 +131,13 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
-  .gas-form,.work-form{grid-template-columns:1fr 1fr}
+  .gas-form,.work-form,.amz-form,.place-form{grid-template-columns:1fr 1fr}
+  .place-form [name=name]{min-width:0}
+  .cards.amz-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .amz-cards .card{padding:11px 9px;min-width:0}
+  .amz-cards .value{font-size:1.05rem}
+  .amz-cards .label{font-size:.62rem}
+  .amz-cards .helper{font-size:.72rem;margin:4px 0 0}
   .cards.mile-cards,#work .cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   .mile-cards .card,#work .cards .card{padding:11px 9px;min-width:0}
   .mile-cards .value,#work .cards .value{font-size:1.05rem}
