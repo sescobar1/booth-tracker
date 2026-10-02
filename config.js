@@ -34,9 +34,10 @@ window.BOOTH_CONFIG = {
   seedBatches: [{ recipe: 'nobake', made: '2026-09-30' }, { recipe: 'chocchip', made: '2026-09-30' }],
   towns: [['Russellville', 5], ['Dardanelle', 10], ['Atkins', 15], ['Conway', 46], ['Sherwood', 76]],
   // Bump routesVersion when the trips below change so phones pick up the new schedule once.
-  routesVersion: 4,
-  // Wednesday store trips stopped in October 2026; the earlier ones really happened, so they stay in the log.
-  keepPastTrips: [{ route: 'store', days: [3], before: '2026-10-03' }],
+  routesVersion: 5,
+  // Wednesday store trips stopped in October 2026. Before that they were every other Wednesday,
+  // counting back from Sept 30, so only those stay in the log.
+  keepPastTrips: [{ route: 'store', days: [3], before: '2026-10-03', everyOtherFrom: '2026-09-30' }],
   routes: [
     { id: 'store', name: 'Relic store', detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, days: [0] },
     // Fridays: one loop, Russellville → St. Joe's in Conway (46) → Relic in Sherwood (32) → home (76).

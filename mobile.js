@@ -28,9 +28,14 @@
   // A Friday store trip marked "Didn't go" carries over to the combined Friday trip.
   if ((data.routesVersion || 0) < (CFG.routesVersion || 0)) {
     // Trips on days that were dropped from a schedule stay logged before the cutoff date (they happened).
-    (CFG.keepPastTrips || []).forEach(k => data.mileage.forEach(t => {
-      if (t.auto && t.route === k.route && t.date < k.before && k.days.includes(new Date(t.date + 'T00:00:00').getDay())) t.auto = false;
-    }));
+    // With everyOtherFrom, only every other week counting from that date is kept; the weeks between are removed.
+    (CFG.keepPastTrips || []).forEach(k => {
+      data.mileage = data.mileage.filter(t => {
+        if (t.route !== k.route || t.date >= k.before || !k.days.includes(new Date(t.date + 'T00:00:00').getDay())) return true;
+        if (k.everyOtherFrom && Math.round((new Date(k.everyOtherFrom + 'T00:00:00') - new Date(t.date + 'T00:00:00')) / (7 * DAY)) % 2) return false;
+        t.auto = false; return true;
+      });
+    });
     for (const d of DEFAULT_ROUTES) {
       const r = data.routes.find(x => x.id === d.id);
       if (r) Object.assign(r, { name: d.name, detail: d.detail, miles: d.miles, round: d.round, days: d.days.slice() });
