@@ -667,31 +667,32 @@
 
   // ---------- cookie cost calculator ----------
   // Each ingredient: package price for a package amount, and how much one batch uses (same unit).
-  // Prices are Walmart Great Value; edit them to match your receipts.
+  // Shaana's recipes with Walmart prices: Great Value everything except Jif peanut butter.
   const DEFAULT_RECIPES = [
     { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
-      { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 2 },
       { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 1 },
-      { name: 'Milk (gallon, est.)', pack: 2.88, packAmt: 16, unit: 'cups', use: 0.5 },
-      { name: 'Cocoa powder (GV 8 oz)', pack: 5.17, packAmt: 2.67, unit: 'cups', use: 0.25 },
-      { name: 'Peanut butter (GV 40 oz)', pack: 3.58, packAmt: 4.4, unit: 'cups', use: 0.5 },
-      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 3 },
-      { name: 'Vanilla (2 oz, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 }
+      { name: 'Cocoa (GV 8 oz)', pack: 5.17, packAmt: 2.67, unit: 'cups', use: 0.25 },
+      { name: 'Vanilla (GV, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 },
+      { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 2 },
+      { name: 'Milk (GV gallon, est.)', pack: 2.88, packAmt: 16, unit: 'cups', use: 0.5 },
+      { name: 'Peanut butter (Jif 40 oz)', pack: 6.97, packAmt: 4.4, unit: 'cups', use: 0.75 },
+      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 3 }
     ] },
     { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
-      { name: 'Flour (GV 5 lb)', pack: 2.38, packAmt: 18, unit: 'cups', use: 2.25 },
       { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 2 },
-      { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 0.75 },
-      { name: 'Brown sugar (GV 2 lb)', pack: 2.34, packAmt: 4.5, unit: 'cups', use: 0.75 },
+      { name: 'White sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 0.5 },
+      { name: 'Brown sugar (GV 2 lb)', pack: 2.34, packAmt: 4.5, unit: 'cups', use: 1 },
+      { name: 'Vanilla (GV, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 2 },
       { name: 'Eggs (GV dozen)', pack: 1.67, packAmt: 12, unit: 'eggs', use: 2 },
-      { name: 'Chocolate chips (GV 12 oz)', pack: 3.86, packAmt: 2, unit: 'cups', use: 2 },
-      { name: 'Vanilla (2 oz, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 },
-      { name: 'Baking soda (1 lb, est.)', pack: 0.98, packAmt: 94, unit: 'tsp', use: 1 },
-      { name: 'Salt (26 oz, est.)', pack: 0.78, packAmt: 123, unit: 'tsp', use: 1 }
+      { name: 'Flour (GV 5 lb)', pack: 2.38, packAmt: 18, unit: 'cups', use: 3 },
+      { name: 'Corn starch (GV 16 oz)', pack: 1.92, packAmt: 168, unit: 'tsp', use: 1 },
+      { name: 'Baking soda (GV, est.)', pack: 0.98, packAmt: 94, unit: 'tsp', use: 0.75 },
+      { name: 'Salt (GV, est.)', pack: 0.78, packAmt: 123, unit: 'tsp', use: 0.75 },
+      { name: 'Chocolate chips (GV 12 oz bag)', pack: 3.86, packAmt: 2, unit: 'cups', use: 2 }
     ] }
   ];
-  // Walmart (Great Value) prices; replaces the earlier generic prices once.
-  if (!data.recipes || !data.recipesWalmart) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesWalmart = true; }
+  // Load Shaana's recipes once; after that, her own edits are kept.
+  if (!data.recipes || !data.recipesMine) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesMine = true; }
   data.settings.relicFee = data.settings.relicFee ?? 10;
   const ingCost = g => (Number(g.packAmt) > 0 ? (Number(g.pack) || 0) / Number(g.packAmt) * (Number(g.use) || 0) : 0);
   function recipeMath(r) {
