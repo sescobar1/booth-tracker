@@ -364,8 +364,13 @@ dialog.sheet::backdrop{background:#17344766}
   .buy-form .buy-what{grid-column:1/-1}
   .age-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-.buy-photo{display:inline-block;margin:0 0 10px}
+.buy-photos{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
 .buy-lens{display:flex;gap:12px;align-items:center;margin:0 0 12px}
 .buy-lens:empty{display:none}
 .lens-thumb{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid #d9e1e5;flex-shrink:0}
 .lens-go{display:inline-block;text-decoration:none;margin-bottom:4px}
+.best-form{grid-template-columns:2fr 1fr}
+.buy-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.best-save{display:flex;gap:8px;margin:8px 0}
+.best-save input{flex:1;min-width:0;font-size:1rem;padding:9px;border:1px solid #cfd9de;border-radius:10px}
+.best-del{flex-shrink:0}

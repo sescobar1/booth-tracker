@@ -66,6 +66,8 @@ The anon key is meant to be public; Row Level Security keeps each person's data 
 **More → Selling smarts** (or **🔍 Should I buy it?** on the dashboard):
 
 - **Should I buy?** Type what you found and the price. It shows what similar items sold for at your booths, how fast they sell, how many you already have in the store, the most to pay to double your money, and a Buy / Maybe / Pass call, plus links to eBay, Mercari, Facebook Marketplace and Google prices.
+- **Photo lookup:** take a photo or choose one from the camera roll, then open it in Google Lens to see what it is and what it sells for.
+- **Best price:** what you've paid before (price each, with bulk lots set aside), prices you've saved at other stores, and links that open Google Shopping, Walmart, Amazon, Temu, AliExpress, eBay, Dollar Tree and Facebook Marketplace sorted cheapest first.
 - **Aging stock:** store items by days since they were listed (30 / 60 / 90+), with a suggested markdown for each.
 - **Price check:** items that sell fast enough to charge more, and items priced above what they usually sell for.
 - **Markdowns:** every price drop (from these tools, the Inventory page, or a lower price in a new store inventory upload) and whether the item sold afterward.

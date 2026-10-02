@@ -1326,7 +1326,7 @@
     }
     box.innerHTML = '<div class="verdict ' + verdict[0] + '">' + verdict[1] + '</div><ul class="why">' + why.filter(Boolean).map(w => '<li>' + w + '</li>').join('') + '</ul>' +
       (hits.length ? '<details class="buy-hits"><summary>See the ' + Math.min(hits.length, 15) + ' most recent sales</summary><ul>' + hits.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15).map(x => '<li>' + esc(x.item) + ' · ' + money(x.amount) + (x.date ? ' · ' + nice(x.date) : '') + '</li>').join('') + '</ul></details>' : '') +
-      links + (cost ? '<button type="button" class="button" id="buyBought">I bought it: add to purchases</button>' : '');
+      links + '<div class="buy-actions"><button type="button" class="button ghost" id="buyBest">💲 Find the best price</button>' + (cost ? '<button type="button" class="button" id="buyBought">I bought it: add to purchases</button>' : '') + '</div>';
   }
   let buyTm;
   ['buyItem', 'buyCost', 'buyQty'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(buyTm); buyTm = setTimeout(renderBuyCheck, 200); }));
@@ -1356,7 +1356,7 @@
       img.src = url;
     });
   }
-  $('buyPhoto').addEventListener('change', async e => {
+  async function onBuyPhoto(e) {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     const box = $('buyLens'), sync = window.boothSync, sb = sync && sync.client(), u = sync && sync.user();
     const local = URL.createObjectURL(f);
@@ -1375,6 +1375,80 @@
         if (old.length) sb.storage.from('lens').remove(old);
       }).catch(() => {});
     } catch (err) { box.innerHTML = '<p class="helper">The photo could not be uploaded. Check your signal and try again.</p>'; }
+  }
+  $('buyPhoto').addEventListener('change', onBuyPhoto);
+  $('buyPhotoLib').addEventListener('change', onBuyPhoto);
+
+  // Best price: what you've paid before, prices you've noted at other stores, and the cheapest listings online.
+  data.priceLog = data.priceLog || [];
+  // Unit cost from a purchase line; names like "Flannels ($5 each x 35)" or "cups x2" say it directly.
+  function unitCost(x) {
+    const each = /\$\s?(\d+(?:\.\d+)?)\s*each/i.exec(x.item), times = /\bx\s?(\d+)\b/i.exec(x.item), lead = /^(\d+)\s+[a-z]/i.exec(x.item) || /(\d+)\s*(?:pairs?|pk|packs?|ct|count|pcs|pieces)\b/i.exec(x.item);
+    if (each) return { unit: Number(each[1]), known: true };
+    const n = times ? Number(times[1]) : lead ? Number(lead[1]) : (Number(x.qty) || 1);
+    return { unit: n ? x.amount / n : x.amount, known: !!(times || lead || Number(x.qty) > 1) };
+  }
+  const when = w => /^\d{4}-\d\d-\d\d$/.test(w || '') ? nice(w) : esc(w || '');
+  function renderBestPrice() {
+    const box = $('bestResult'); if (!box) return;
+    const q = $('bestItem').value.trim(), price = Number($('bestCost').value) || 0, enc = encodeURIComponent(q), m = matcher(q);
+    if (!m) { box.innerHTML = '<p class="helper">Type what you want to buy. You\'ll see what you\'ve paid before, prices you\'ve noted at other stores, and the cheapest listings online.</p>'; return; }
+    const paid = [];
+    for (const mo of months) for (const x of allRows('purchases', mo)) {
+      if (!x.amount || /rent|balance from|carry ?over/i.test(x.item) || !m(x.item)) continue;
+      const u = unitCost(x);
+      paid.push({ item: x.item, unit: u.unit, known: u.known, when: x.date || mo, where: x.source || ((/\b(temu|amazon|walmart|shein|aliexpress|dollar tree|goodwill|price break|marva'?s|etsy|ebay|hobby lobby|target)\b/i.exec(x.item) || [])[1] || '') });
+    }
+    const sold = salesFlat().filter(x => m(x.item)), s = sold.length ? salesStats(sold) : null;
+    // A line with no count that cost more than one sells for was a bulk lot, so it can't give a price each.
+    paid.forEach(p => { p.bulk = !p.known && (/,| and /i.test(p.item) || (s && p.unit > s.typical * 1.5)); });
+    const noted = data.priceLog.filter(p => m(p.item));
+    const each = paid.filter(p => !p.bulk), bulk = paid.filter(p => p.bulk);
+    const all = [...each.map(p => ({ ...p, kind: 'Bought' })), ...noted.map(p => ({ item: p.item, unit: p.price, when: p.date, where: p.where, kind: 'Saw', id: p.id }))].filter(p => p.unit > 0);
+    const low = all.length ? all.reduce((a, b) => (b.unit < a.unit ? b : a)) : null, usual = median(each.map(p => p.unit));
+    let verdict = '';
+    if (price && low) {
+      verdict = price <= low.unit ? ['buy', '🎉 Best price you\'ve seen'] : usual && price <= usual ? ['maybe', '👍 Good: under your usual ' + money(usual)] : ['pass', '💸 You\'ve gotten it for ' + money(low.unit)];
+      verdict = '<div class="verdict ' + verdict[0] + '">' + verdict[1] + '</div>';
+    }
+    const where = w => w ? ' at ' + esc(w) : '';
+    const shops = [
+      ['Google Shopping', 'https://www.google.com/search?tbm=shop&tbs=p_ord:p&q=' + enc],
+      ['Walmart', 'https://www.walmart.com/search?sort=price_low&q=' + enc],
+      ['Amazon', 'https://www.amazon.com/s?s=price-asc-rank&k=' + enc],
+      ['Temu', 'https://www.temu.com/search_result.html?search_key=' + enc],
+      ['AliExpress', 'https://www.aliexpress.us/w/wholesale-' + encodeURIComponent(q.replace(/\s+/g, '-')) + '.html?SortType=price_asc'],
+      ['eBay Buy It Now', 'https://www.ebay.com/sch/i.html?LH_BIN=1&_sop=15&_nkw=' + enc],
+      ['Dollar Tree', 'https://www.dollartree.com/searchresults?Ntt=' + enc],
+      ['FB Marketplace', 'https://www.facebook.com/marketplace/search/?sortBy=price_ascend&query=' + enc]
+    ];
+    box.innerHTML = verdict +
+      '<ul class="why">' +
+      (low ? '<li>Lowest you\'ve found: <b>' + money(low.unit) + '</b> each' + where(low.where) + ' (' + when(low.when) + ').</li>' : '<li>No past purchases or saved prices for this yet.</li>') +
+      (usual ? '<li>You usually pay <b>' + money(usual) + '</b> each (' + each.length + ' purchase' + (each.length === 1 ? '' : 's') + ').</li>' : '') +
+      (bulk.length ? '<li>Plus ' + bulk.length + ' bulk buy' + (bulk.length === 1 ? '' : 's') + ' without a count (' + bulk.map(p => money(p.unit) + ' ' + esc(p.item)).slice(0, 3).join(', ') + '), left out of the price each.</li>' : '') +
+      (price && low && price > low.unit ? '<li>At ' + money(price) + ' you\'d pay <b>' + money(price - low.unit) + '</b> more each than your best.</li>' : '') +
+      (s ? '<li>It sells for about <b>' + money(s.typical) + '</b> at your booth, so pay no more than <b>' + money(s.typical / 2) + '</b> to double your money.</li>' : '') +
+      '</ul>' +
+      (all.length ? '<details class="buy-hits"' + (all.length <= 6 ? ' open' : '') + '><summary>Prices you\'ve paid and seen (' + all.length + ')</summary><ul class="age-list">' + all.slice().sort((a, b) => a.unit - b.unit).slice(0, 25).map(p =>
+        '<li><div><b>' + money(p.unit) + '</b> · ' + esc(p.item) + '<small>' + p.kind + where(p.where) + ' · ' + esc(p.when.length > 10 ? p.when : nice(p.when)) + '</small></div>' + (p.id ? '<button type="button" class="del best-del" data-id="' + p.id + '" aria-label="Remove">×</button>' : '') + '</li>').join('') + '</ul></details>' : '') +
+      (price ? '<div class="best-save"><input id="bestWhere" placeholder="Where? (Walmart, Goodwill…)" autocomplete="off"><button type="button" class="button ghost" id="bestSave">Save this price</button></div>' : '') +
+      '<div class="comp-links"><span>Cheapest first at:</span>' + shops.map(([t, u]) => '<a class="button ghost" href="' + u + '" target="_blank" rel="noopener">' + t + '</a>').join('') + '</div>' +
+      '<p class="helper">Save prices as you shop around and this keeps a list, so you know which store had it cheapest.</p>';
+  }
+  let bestTm;
+  ['bestItem', 'bestCost'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(bestTm); bestTm = setTimeout(renderBestPrice, 200); }));
+  document.addEventListener('click', e => {
+    if (e.target.id === 'bestSave') {
+      const item = $('bestItem').value.trim(), price = Number($('bestCost').value) || 0; if (!item || !price) return;
+      data.priceLog.unshift({ id: Date.now().toString(36), item, price: Math.round(price * 100) / 100, where: $('bestWhere').value.trim(), date: todayIso() });
+      save(); renderBestPrice(); toast('Price saved.');
+    }
+    const del = e.target.closest('.best-del');
+    if (del) { data.priceLog = data.priceLog.filter(p => p.id !== del.dataset.id); save(); renderBestPrice(); }
+    if (e.target.id === 'buyBest') {
+      $('bestItem').value = $('buyItem').value; $('bestCost').value = $('buyCost').value; data.sellTab = 'best'; renderSell(); window.scrollTo(0, 0);
+    }
   });
 
   // Log a price drop so the Markdowns tab can show whether it worked.
@@ -1470,7 +1544,7 @@
     const t = data.sellTab || 'buy';
     document.querySelectorAll('[data-sell]').forEach(b => b.classList.toggle('active', b.dataset.sell === t));
     document.querySelectorAll('.sell-pane').forEach(p => { p.hidden = p.id !== 'sell-' + t; });
-    if (t === 'buy') renderBuyCheck(); else if (t === 'aging') renderAging(); else if (t === 'price') renderPriceCheck(); else renderMarkdowns();
+    if (t === 'buy') renderBuyCheck(); else if (t === 'best') renderBestPrice(); else if (t === 'aging') renderAging(); else if (t === 'price') renderPriceCheck(); else renderMarkdowns();
   }
 
   // ---------- holiday prep: last year's Oct–Dec sales and this year's key dates ----------
