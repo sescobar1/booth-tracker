@@ -438,7 +438,8 @@
   const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
   const dow = iso => new Date(iso + 'T00:00:00').getDay();
   function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
-  if (!data.settings.autoFrom) data.settings.autoFrom = weekStart();
+  // Fill in scheduled trips for the past year (one time); the start date can be changed on the page.
+  if (!data.settings.autoFromYear) { const d = new Date(); d.setFullYear(d.getFullYear() - 1); data.settings.autoFrom = isoLocal(d); data.settings.autoFromYear = true; }
   const scheduled = () => data.routes.filter(r => r.days && r.days.length);
   const places = () => data.routes.filter(r => !r.days || !r.days.length);
   const routeLabel = r => r.name + (r.detail ? ' (' + r.detail + ')' : '');
@@ -666,30 +667,31 @@
 
   // ---------- cookie cost calculator ----------
   // Each ingredient: package price for a package amount, and how much one batch uses (same unit).
-  // Prices are typical store prices; edit them to match your receipts.
+  // Prices are Walmart Great Value; edit them to match your receipts.
   const DEFAULT_RECIPES = [
     { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
-      { name: 'Sugar', pack: 3.50, packAmt: 9, unit: 'cups', use: 2 },
-      { name: 'Butter', pack: 4.50, packAmt: 4, unit: 'sticks', use: 1 },
-      { name: 'Milk', pack: 3.50, packAmt: 16, unit: 'cups', use: 0.5 },
-      { name: 'Cocoa powder', pack: 4.00, packAmt: 2.67, unit: 'cups', use: 0.25 },
-      { name: 'Peanut butter', pack: 5.50, packAmt: 4.5, unit: 'cups', use: 0.5 },
-      { name: 'Quick oats', pack: 5.00, packAmt: 14, unit: 'cups', use: 3 },
-      { name: 'Vanilla', pack: 4.00, packAmt: 12, unit: 'tsp', use: 1 }
+      { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 2 },
+      { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 1 },
+      { name: 'Milk (gallon, est.)', pack: 2.88, packAmt: 16, unit: 'cups', use: 0.5 },
+      { name: 'Cocoa powder (GV 8 oz)', pack: 5.17, packAmt: 2.67, unit: 'cups', use: 0.25 },
+      { name: 'Peanut butter (GV 40 oz)', pack: 3.58, packAmt: 4.4, unit: 'cups', use: 0.5 },
+      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 3 },
+      { name: 'Vanilla (2 oz, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 }
     ] },
     { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
-      { name: 'Flour', pack: 3.50, packAmt: 18, unit: 'cups', use: 2.25 },
-      { name: 'Butter', pack: 4.50, packAmt: 4, unit: 'sticks', use: 2 },
-      { name: 'Sugar', pack: 3.50, packAmt: 9, unit: 'cups', use: 0.75 },
-      { name: 'Brown sugar', pack: 3.00, packAmt: 4.5, unit: 'cups', use: 0.75 },
-      { name: 'Eggs', pack: 3.50, packAmt: 12, unit: 'eggs', use: 2 },
-      { name: 'Chocolate chips', pack: 3.50, packAmt: 2, unit: 'cups', use: 2 },
-      { name: 'Vanilla', pack: 4.00, packAmt: 12, unit: 'tsp', use: 1 },
-      { name: 'Baking soda', pack: 1.00, packAmt: 48, unit: 'tsp', use: 1 },
-      { name: 'Salt', pack: 1.00, packAmt: 156, unit: 'tsp', use: 1 }
+      { name: 'Flour (GV 5 lb)', pack: 2.38, packAmt: 18, unit: 'cups', use: 2.25 },
+      { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 2 },
+      { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 0.75 },
+      { name: 'Brown sugar (GV 2 lb)', pack: 2.34, packAmt: 4.5, unit: 'cups', use: 0.75 },
+      { name: 'Eggs (GV dozen)', pack: 1.67, packAmt: 12, unit: 'eggs', use: 2 },
+      { name: 'Chocolate chips (GV 12 oz)', pack: 3.86, packAmt: 2, unit: 'cups', use: 2 },
+      { name: 'Vanilla (2 oz, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 },
+      { name: 'Baking soda (1 lb, est.)', pack: 0.98, packAmt: 94, unit: 'tsp', use: 1 },
+      { name: 'Salt (26 oz, est.)', pack: 0.78, packAmt: 123, unit: 'tsp', use: 1 }
     ] }
   ];
-  data.recipes = data.recipes || JSON.parse(JSON.stringify(DEFAULT_RECIPES));
+  // Walmart (Great Value) prices; replaces the earlier generic prices once.
+  if (!data.recipes || !data.recipesWalmart) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesWalmart = true; }
   data.settings.relicFee = data.settings.relicFee ?? 10;
   const ingCost = g => (Number(g.packAmt) > 0 ? (Number(g.pack) || 0) / Number(g.packAmt) * (Number(g.use) || 0) : 0);
   function recipeMath(r) {
@@ -733,7 +735,7 @@
     }
   });
   $('relicFee').addEventListener('change', e => { data.settings.relicFee = Math.min(100, Math.max(0, Number(e.target.value) || 0)); save(); renderCookies(); });
-  $('ckReset').addEventListener('click', () => { if (confirm('Put both recipes back to the starting ingredients and prices?')) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); save(); renderCookies(); } });
+  $('ckReset').addEventListener('click', () => { if (confirm('Put both recipes back to the starting ingredients and Walmart prices?')) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); save(); renderCookies(); } });
 
   // ---------- render hook ----------
   function renderExtras() {
