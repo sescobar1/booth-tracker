@@ -667,7 +667,7 @@
 
   // ---------- cookie cost calculator ----------
   // Each ingredient: package price for a package amount, and how much one batch uses (same unit).
-  // Shaana's recipes with Walmart prices: Great Value everything except Jif peanut butter.
+  // Shaana's recipes with Walmart prices: Great Value everything except Jiffy peanut butter.
   const DEFAULT_RECIPES = [
     { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
       { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 1 },
@@ -675,8 +675,8 @@
       { name: 'Vanilla (GV, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 },
       { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 2 },
       { name: 'Milk (GV gallon, est.)', pack: 2.88, packAmt: 16, unit: 'cups', use: 0.5 },
-      { name: 'Peanut butter (Jif 40 oz)', pack: 6.97, packAmt: 4.4, unit: 'cups', use: 0.75 },
-      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 3 }
+      { name: 'Peanut butter (Jiffy 40 oz)', pack: 6.97, packAmt: 4.4, unit: 'cups', use: 1 },
+      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 2.25 }
     ] },
     { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
       { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 2 },
@@ -688,11 +688,11 @@
       { name: 'Corn starch (GV 16 oz)', pack: 1.92, packAmt: 168, unit: 'tsp', use: 1 },
       { name: 'Baking soda (GV, est.)', pack: 0.98, packAmt: 94, unit: 'tsp', use: 0.75 },
       { name: 'Salt (GV, est.)', pack: 0.78, packAmt: 123, unit: 'tsp', use: 0.75 },
-      { name: 'Chocolate chips (GV 12 oz bag)', pack: 3.86, packAmt: 2, unit: 'cups', use: 2 }
+      { name: 'Chocolate chips (GV 12 oz bag)', pack: 3.86, packAmt: 1, unit: 'bag', use: 1 }
     ] }
   ];
   // Load Shaana's recipes once; after that, her own edits are kept.
-  if (!data.recipes || !data.recipesMine) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesMine = true; }
+  if (!data.recipes || !data.recipesMine2) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesMine2 = true; }
   data.settings.relicFee = data.settings.relicFee ?? 10;
   const ingCost = g => (Number(g.packAmt) > 0 ? (Number(g.pack) || 0) / Number(g.packAmt) * (Number(g.use) || 0) : 0);
   function recipeMath(r) {
