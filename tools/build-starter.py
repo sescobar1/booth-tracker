@@ -21,6 +21,7 @@ STARTER_CONFIG = """// Settings for this copy of Booth Tracker.
 // The welcome setup asks for your name and booths; change them later under Import & backup -> Your booths.
 window.BOOTH_CONFIG = {
   owner: '',
+  storeName: '',                          // asked in the welcome setup
   storageKey: 'boothTrackerStarter',      // where this copy saves on the device
   docsDb: 'boothTrackerStarterDocs',      // where receipt photos are saved on the device
   startMonth: null,                       // month lists start in January of this year

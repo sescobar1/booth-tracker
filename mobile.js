@@ -1,4 +1,4 @@
-// Phone-first features: quick add, receipts, backup, Relic import, restock,
+// Phone-first features: quick add, receipts, backup, sales import, restock,
 // to-do reminders, reports, mileage, and offline app support.
 (function () {
   const $ = id => document.getElementById(id);
@@ -29,7 +29,7 @@
   if ((data.routesVersion || 0) < (CFG.routesVersion || 0)) {
     // Trips on days that were dropped from a schedule stay logged before the cutoff date (they happened).
     // With everyOtherFrom, only every other week counting from that date is kept; the weeks between are removed.
-    (CFG.keepPastTrips || []).forEach(k => {
+    if ((data.routesVersion || 0) < 5) (CFG.keepPastTrips || []).forEach(k => {
       data.mileage = data.mileage.filter(t => {
         if (t.route !== k.route || t.date >= k.before || !k.days.includes(new Date(t.date + 'T00:00:00').getDay())) return true;
         if (k.everyOtherFrom && Math.round((new Date(k.everyOtherFrom + 'T00:00:00') - new Date(t.date + 'T00:00:00')) / (7 * DAY)) % 2) return false;
@@ -42,7 +42,9 @@
       else data.routes.push({ ...d, days: d.days.slice() });
     }
     data.mileSkips.filter(k => k.startsWith('store|') && new Date(k.slice(6) + 'T00:00:00').getDay() === 5).forEach(k => data.mileSkips.push('storeFri|' + k.slice(6)));
+    (CFG.renameTrips || []).forEach(([from, to]) => data.mileage.forEach(t => { if (t.purpose && t.purpose.startsWith(from)) t.purpose = to + t.purpose.slice(from.length); }));
     data.routesVersion = CFG.routesVersion;
+    save();
   }
   data.amazon = data.amazon || [];
   // Jan–Aug 2026 sales were replaced with the store's own report. Booth changes made line by line in
@@ -118,7 +120,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['week', 'This week', 'Calendar, Sunday recap'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['week', 'This week', 'Calendar, Sunday recap'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Sales import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -128,7 +130,7 @@
     '<div class="sheet-row"><label>Booth<select name="booth"></select></label><label class="q-bought">Quantity<input name="qty" type="number" min="1" value="1" inputmode="numeric"></label></div>' +
     '<div class="q-bought">' + camBtn('receipt') + '</div>' +
     '<label class="q-bought">Sell price each<input name="sellPrice" type="number" min="0" step=".01" inputmode="decimal" placeholder="2× cost"></label>' +
-    '<fieldset class="inv-choice q-bought" id="qInv"><legend>Add this to inventory?</legend><label><input type="radio" name="invDest" value="overall" required> Overall</label><label><input type="radio" name="invDest" value="store"> Store (Relic)</label><label><input type="radio" name="invDest" value="both"> Both</label><label><input type="radio" name="invDest" value="none"> Neither (rent, supplies, fees)</label></fieldset>' +
+    '<fieldset class="inv-choice q-bought" id="qInv"><legend>Add this to inventory?</legend><label><input type="radio" name="invDest" value="overall" required> Overall</label><label><input type="radio" name="invDest" value="store"> Store (' + STORE_SHORT + ')</label><label><input type="radio" name="invDest" value="both"> Both</label><label><input type="radio" name="invDest" value="none"> Neither (rent, supplies, fees)</label></fieldset>' +
     '<div class="unit-preview q-bought" id="qPreview"></div>' +
     '<div class="sheet-actions"><button type="submit" class="button ghost" value="again">Save &amp; add another</button><button type="submit" class="button" value="done">Save</button></div>' +
     '</div></form></dialog>');
@@ -324,7 +326,7 @@
   $('backupNow').addEventListener('click', backupNow);
   $('restoreFile').addEventListener('change', e => { if (e.target.files[0]) restoreFrom(e.target.files[0]); e.target.value = ''; });
 
-  // ---------- Relic import ----------
+  // ---------- sales and inventory import (store report exports) ----------
   function cleanName(n) {
     const s = String(n || '').replace(/\s*,?\s*SIZE\s*-.*$/i, '').replace(/\s+/g, ' ').trim(), w = s.split(' ');
     for (let k = Math.floor(w.length / 2); k > 0; k--)
@@ -354,7 +356,7 @@
   function importRelic(rows) {
     const msg = $('relicMsg');
     const hi = rows.findIndex(r => { const h = r.map(hkey); return (h.includes('BARCODEID') && h.includes('CURRENTSTOCK')) || (h.some(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x)) && h.some(x => ['PAYOUT', 'NETPAYOUT', 'NET'].includes(x))); });
-    if (hi < 0) { msg.textContent = 'I could not find the Relic column headers. Include the header row (DETAIL, PAYOUT, DATE SOLD) or use the inventory export (Barcode ID, Current Stock).'; return; }
+    if (hi < 0) { msg.textContent = 'I could not find the sales report column headers. Include the header row (DETAIL, PAYOUT, DATE SOLD) or use the inventory export (Barcode ID, Current Stock).'; return; }
     const h = rows[hi].map(hkey), col = (...names) => h.findIndex(x => names.includes(x)), body = rows.slice(hi + 1);
     if (h.includes('BARCODEID') && h.includes('CURRENTSTOCK')) {
       const c = { sku: col('BARCODEID'), item: col('ITEMDESCRIPTION', 'DESCRIPTION', 'ITEM'), price: col('PRICE'), flag: col('ITEMFLAG'), qty: col('CURRENTSTOCK'), life: col('LIFETIMESALES'), created: col('DATECREATED') };
@@ -386,7 +388,7 @@
     data.lastRelicImport = todayIso(); save(); render();
     msg.textContent = (added ? 'Added ' + added + ' new sale' + (added === 1 ? '' : 's') + ' (' + perMonth.join(', ') + ').' : 'No new sales to add.') +
       (dupes ? ' Skipped ' + dupes + ' already in the tracker.' : '') + (skippedStatus ? ' Skipped ' + skippedStatus + ' refunds.' : '') + (outside ? ' ' + outside + ' rows were outside the tracker\'s months.' : '');
-    if (added) toast(added + ' Relic sales imported.');
+    if (added) toast(added + ' ' + STORE_SHORT + ' sales imported.');
   }
   $('relicFile').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -417,7 +419,7 @@
   const tagHtml = x => x.status === 'out' ? '<span class="tag out">Out — restock</span>' : '<span class="tag low">Running low</span>';
   function renderRestock() {
     const { need, slow } = restockData();
-    $('restockRows').innerHTML = !data.inventory.length ? '<tr><td colspan="5" class="empty">Import your Relic inventory to see what needs restocking.</td></tr>' :
+    $('restockRows').innerHTML = !data.inventory.length ? '<tr><td colspan="5" class="empty">Import your ' + STORE_SHORT + ' inventory to see what needs restocking.</td></tr>' :
       need.length ? need.map(x => '<tr><td>' + esc(x.item) + '</td><td>' + esc(code(boothFor(x.item))) + '</td><td class="num">' + x.qty + '</td><td class="num">' + x.s30 + '</td><td>' + tagHtml(x) + '</td></tr>').join('') :
       '<tr><td colspan="5" class="empty">Nothing needs restocking right now.</td></tr>';
     $('slowRows').innerHTML = slow.length ? slow.map(x => '<tr><td>' + esc(x.item) + '</td><td>' + esc(code(boothFor(x.item))) + '</td><td class="num">' + money(x.price) + '</td><td class="num">' + x.qty + '</td><td>' + esc(x.created) + '</td></tr>').join('') :
@@ -430,7 +432,7 @@
   // ---------- to-do & reminders ----------
   function renderTodo(need) {
     const items = [], relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
-    if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest Relic sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
+    if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest ' + STORE_SHORT + ' sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
     if (backupAge >= 1) { items.push(['Back up to OneDrive', data.lastBackup ? 'Last backup ' + (backupAge === 1 ? 'yesterday' : backupAge + ' days ago') : 'No backup yet. Your data lives only on this phone', 'backup', 'Back up']); prepareBackup(); }
     (data.batches || []).filter(b => !b.done).forEach(b => {
       const left = Math.round((new Date(b.expires + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / DAY);
@@ -787,7 +789,7 @@
       const num = (f, v, step, extra) => '<input class="cell-input ck" type="number" min="0" step="' + step + '" inputmode="decimal" data-r="' + ri + '" data-f="' + f + '"' + (extra || '') + ' value="' + v + '">';
       return '<article class="panel cookie-card"><h3><input class="cell-input ck ck-name" data-r="' + ri + '" data-f="name" value="' + esc(r.name) + '" aria-label="Recipe name"></h3><div class="panel-body">' +
         '<div class="ck-summary"><div><span>Cost per cookie</span><b>' + money(m.each) + '</b></div><div><span>Profit per cookie</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit) + '</b></div><div><span>Batch costs you</span><b>' + money(m.batchTotal) + '</b></div><div><span>Batch profit</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit * m.n) + '</b></div></div>' +
-        '<p class="helper">Ingredients and cellophane bags ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each' + (Number(r.packaging) ? ', plus ' + money(Number(r.packaging)) + ' other packaging' : '') + '. You get ' + money(m.payout) + ' per cookie after Relic\'s ' + (data.settings.relicFee || 0) + '%' + (fc ? '. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' ' + esc(fcCode) + ' rent' : '') + '.</p>' +
+        '<p class="helper">Ingredients and cellophane bags ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each' + (Number(r.packaging) ? ', plus ' + money(Number(r.packaging)) + ' other packaging' : '') + '. You get ' + money(m.payout) + ' per cookie after ' + STORE_SHORT + '\'s ' + (data.settings.relicFee || 0) + '%' + (fc ? '. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' ' + esc(fcCode) + ' rent' : '') + '.</p>' +
         '<div class="ck-settings"><label>Cookies per batch' + num('perBatch', r.perBatch, '1') + '</label><label>Other packaging per cookie' + num('packaging', r.packaging, '.01') + '</label><label>Sell price' + num('price', r.price, '.05') + '</label><label>Good for (days)' + num('shelf', r.shelf ?? 7, '1') + '</label></div>' +
         '<div class="scroll"><table class="ck-table"><thead><tr><th>Ingredient</th><th class="num">Package price</th><th class="num">Package has</th><th>Unit</th><th class="num">Batch uses</th><th class="num">Cost</th><th></th></tr></thead><tbody>' +
         r.ingredients.map((g, gi) => { const a = ' data-g="' + gi + '"';
@@ -959,13 +961,13 @@
     const t = taxYear($('taxYear').value), line = (l, v, note, cls) => '<tr class="' + (cls || '') + '"><td>' + l + (note ? '<small>' + note + '</small>' : '') + '</td><td class="num">' + v + '</td></tr>';
     const miles = t.miles.reduce((s, x) => s + x.miles, 0);
     $('taxSummary').innerHTML = '<table class="tax-table"><tbody>' +
-      line('Sales (Relic payouts)', money(t.sales), 'Schedule C, gross receipts') +
+      line('Sales (' + STORE_SHORT + ' payouts)', money(t.sales), 'Schedule C, gross receipts') +
       line('Inventory & supplies bought', '−' + money(t.buy), 'Cost of goods and supplies') +
       line('Booth rent', '−' + money(t.rent), 'Rent of business property') +
       line('Mileage deduction', '−' + money(t.deduction), Math.round(miles).toLocaleString() + ' business miles at the IRS rate') +
       line('<b>Business profit (or loss)</b>', '<b class="' + (t.net < 0 ? 'inventory-low' : 'green') + '">' + money(t.net) + '</b>', '', 'tax-total') +
       '</tbody></table>' +
-      (t.work ? '<p class="helper">Work shifts: <b>' + money(t.work) + '</b> (not included above). Ask your tax preparer whether Relic reports this pay on a W-2 or a 1099.</p>' : '');
+      (t.work ? '<p class="helper">Work shifts: <b>' + money(t.work) + '</b> (not included above). Ask your tax preparer whether ' + STORE_SHORT + ' reports this pay on a W-2 or a 1099.</p>' : '');
     $('taxEstimate').innerHTML = t.net > 0 ?
       '<div class="cards tax-cards"><div class="card"><div class="label">Self-employment tax</div><div class="value">' + money(t.se) + '</div><div class="helper">15.3% on 92.35% of profit</div></div><div class="card"><div class="label">Income tax (est.)</div><div class="value">' + money(t.inc) + '</div><div class="helper">' + (data.settings.incomeRate || 0) + '% of profit</div></div><div class="card"><div class="label">Set aside in total</div><div class="value">' + money(t.se + t.inc) + '</div><div class="helper">About ' + Math.round((t.se + t.inc) / t.net * 100) + '% of each month\'s profit</div></div></div>' :
       '<div class="tax-good"><b>No business tax is likely owed for ' + t.y + ' so far.</b> Your mileage deduction (' + money(t.deduction) + ') is larger than your booth profit before mileage (' + money(t.sales - t.buy - t.rent) + '), so the business shows a loss of ' + money(-t.net) + '. Self-employment tax only applies when profit is over $400. Keep your trip log, because it is what supports this.</div>';
@@ -997,7 +999,7 @@
   $('taxCsv').addEventListener('click', () => {
     const t = taxYear($('taxYear').value), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', L = [];
     L.push(['Booth Tracker tax summary', t.y].map(q).join(','), '');
-    [['Sales (Relic payouts)', t.sales], ['Inventory & supplies bought', t.buy], ['Booth rent', t.rent], ['Mileage deduction', t.deduction], ['Business profit (loss)', t.net], ['Work shift income (separate)', t.work], ['Business miles', t.miles.reduce((s, x) => s + x.miles, 0)]].forEach(([a, b]) => L.push([a, Number(b).toFixed(2)].map(q).join(',')));
+    [['Sales (' + STORE_SHORT + ' payouts)', t.sales], ['Inventory & supplies bought', t.buy], ['Booth rent', t.rent], ['Mileage deduction', t.deduction], ['Business profit (loss)', t.net], ['Work shift income (separate)', t.work], ['Business miles', t.miles.reduce((s, x) => s + x.miles, 0)]].forEach(([a, b]) => L.push([a, Number(b).toFixed(2)].map(q).join(',')));
     L.push('', ['Quarter', 'Covers', 'Due', 'Profit', 'Estimated tax', 'Paid'].map(q).join(','));
     t.quarters.forEach(x => L.push([x.q, x.label, x.due, x.net.toFixed(2), x.est.toFixed(2), x.paid.toFixed(2)].map(q).join(',')));
     L.push('', ['Date', 'Trip', 'Miles', 'IRS rate', 'Deduction'].map(q).join(','));
@@ -1053,7 +1055,7 @@
     (data.batches || []).filter(b => !b.done && b.expires === day).forEach(b => ev.push(['cookie', '🍪 Pull ' + b.name.toLowerCase() + ' (made ' + nice(b.made) + ')']));
     const yr = day.slice(0, 4);
     [yr, String(Number(yr) - 1)].forEach(y => QUARTERS(y).filter(q => q.due === day).forEach(q => { const tq = taxYear(y).quarters.find(x => x.q === q.q); if (tq && tq.est > 0 && !tq.paid) ev.push(['tax', '🧾 Estimated tax ' + money(tq.est) + ' due (' + q.q + ')']); }));
-    if (data.lastRelicImport && addDays(data.lastRelicImport, Number(data.settings.relicEvery) || 7) === day) ev.push(['relic', '⬇️ Import Relic sales']);
+    if (data.lastRelicImport && addDays(data.lastRelicImport, Number(data.settings.relicEvery) || 7) === day) ev.push(['relic', '⬇️ Import ' + STORE_SHORT + ' sales']);
     if (day === todayIso() && daysSince(data.lastBackup) >= 1) ev.push(['backup', '☁️ Back up to OneDrive']);
     return ev;
   }
@@ -1077,7 +1079,7 @@
     const days = [0, 0, 0, 0, 0, 0, 0]; sales.forEach(x => days[dow(x.date)] += x.amount); const bestDay = days.indexOf(Math.max(...days));
     const { need } = restockData(), out = need.filter(x => x.status === 'out');
     const card = (l, v, sub) => '<div class="card"><div class="label">' + l + '</div><div class="value">' + v + '</div>' + (sub ? '<div class="helper">' + sub + '</div>' : '') + '</div>';
-    $('recapBody').innerHTML = '<p class="helper">' + nice(start) + ' – ' + nice(end) + (sales.length ? '' : ' · No dated sales yet for this week. Import your Relic sales to fill it in.') + '</p>' +
+    $('recapBody').innerHTML = '<p class="helper">' + nice(start) + ' – ' + nice(end) + (sales.length ? '' : ' · No dated sales yet for this week. Import your ' + STORE_SHORT + ' sales to fill it in.') + '</p>' +
       '<div class="cards recap-cards">' + card('Sales', money(tot), ch == null ? '' : (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs the week before') + card('Items sold', sales.length, tot ? 'Best day: ' + DAYS[bestDay] : '') + card('Miles', Math.round(miles), 'About ' + money(gas) + ' gas') + card('Batches baked', made.length, made.reduce((t, b) => t + b.qty, 0) + ' cookies') + '</div>' +
       '<div class="recap-grid"><div><h4>Top sellers</h4>' + (top.length ? '<ul class="recap-list plain">' + top.map((g, i) => '<li><span class="rl-name">' + (i + 1) + '. ' + esc(g.name) + '</span><span>' + g.n + ' · ' + money(g.amt) + '</span></li>').join('') + '</ul>' : '<p class="helper">No sales this week.</p>') + '</div>' +
       '<div><h4>By booth</h4><ul class="recap-list plain">' + byBooth.map(([c, v]) => '<li><span class="rl-name">' + esc(c) + '</span><span>' + money(v) + '</span></li>').join('') + '</ul></div>' +
@@ -1159,7 +1161,7 @@
     if (!$('restock').classList.contains('active')) return;
     const items = thriftItems(), ch = data.shopList.checked;
     $('thriftList').innerHTML = '<section class="panel summary"><h3>Thrift run list</h3><div class="panel-body"><p class="helper">What is selling out and what sells fast, for Price Break, Goodwill, and the rest. Tick things off as you find them.</p>' +
-      (items.length ? '<ul class="check-list">' + items.map(x => '<li class="' + (ch[x.k] ? 'done' : '') + '"><label><input type="checkbox" class="thrift-check" data-k="' + esc(x.k) + '"' + (ch[x.k] ? ' checked' : '') + '> <span><b>' + esc(x.name) + '</b>' + (x.booth ? ' · ' + esc(x.booth) : '') + '<small>' + esc(x.why) + '</small></span></label>' + (x.custom != null ? '<button type="button" class="del thrift-del" data-i="' + x.custom + '" aria-label="Remove">×</button>' : '') + '</li>').join('') + '</ul>' : '<p class="helper">Nothing on the list yet. Import Relic sales and inventory to fill it in.</p>') +
+      (items.length ? '<ul class="check-list">' + items.map(x => '<li class="' + (ch[x.k] ? 'done' : '') + '"><label><input type="checkbox" class="thrift-check" data-k="' + esc(x.k) + '"' + (ch[x.k] ? ' checked' : '') + '> <span><b>' + esc(x.name) + '</b>' + (x.booth ? ' · ' + esc(x.booth) : '') + '<small>' + esc(x.why) + '</small></span></label>' + (x.custom != null ? '<button type="button" class="del thrift-del" data-i="' + x.custom + '" aria-label="Remove">×</button>' : '') + '</li>').join('') + '</ul>' : '<p class="helper">Nothing on the list yet. Import your ' + STORE_SHORT + ' sales and inventory to fill it in.</p>') +
       '<form class="thrift-add" id="thriftAdd"><input name="item" placeholder="Add something to look for…" aria-label="Add item"><button class="button">Add</button></form>' +
       '<div class="export-row"><button type="button" class="button" id="shareThrift">Share list</button><button type="button" class="button ghost" id="clearThrift">Clear ticked</button></div></div></section>';
   }
@@ -1208,16 +1210,17 @@
   });
   $('boothsEdit').innerHTML = BOOTH_LIST.map(boothRow).join('') || boothRow({});
   $('ownerName').value = OWNER;
+  $('storeNameEdit').value = data.storeName || CFG.storeName || '';
   $('boothsSave').addEventListener('click', () => {
     const list = readBooths($('boothsEdit')), problem = checkBooths(list);
     if (problem) { toast(problem); return; }
-    data.boothList = list; data.owner = $('ownerName').value.trim(); if (!data.rentFrom) data.rentFrom = currentMonth;
+    data.boothList = list; data.owner = $('ownerName').value.trim(); data.storeName = $('storeNameEdit').value.trim() || undefined; if (!data.rentFrom) data.rentFrom = currentMonth;
     save(); location.reload();
   });
   if (CFG.setup && !data.owner && !(data.boothList && data.boothList.length)) {
     document.body.insertAdjacentHTML('beforeend', '<dialog class="sheet" id="setupSheet" aria-labelledby="setupTitle"><form id="setupForm"><div class="sheet-head"><h2 id="setupTitle">Welcome to Booth Tracker!</h2></div><div class="sheet-body">' +
       '<p class="helper">Tell it a little about your booths. You can change this any time under <b>Import &amp; backup → Your booths</b>. Everything you enter stays on this phone.' + (CFG.guideUrl ? ' <a href="' + CFG.guideUrl + '" target="_blank" rel="noopener">How to use it</a>' : '') + '</p>' +
-      '<label>Your first name<input name="owner" required autocomplete="given-name"></label><h3 class="sec-title">Your booths</h3><div id="setupBooths">' + boothRow({}) + '</div>' +
+      '<label>Your first name<input name="owner" required autocomplete="given-name"></label><label>Store your booths are in<input name="store" placeholder="Example: Y\'allternative Market"></label><h3 class="sec-title">Your booths</h3><div id="setupBooths">' + boothRow({}) + '</div>' +
       '<button type="button" class="button ghost" data-bx-add="setupBooths" style="margin-bottom:14px">+ Add another booth</button><button type="submit" class="button" style="width:100%;padding:14px">Start tracking</button></div></form></dialog>');
     const sheet = $('setupSheet');
     sheet.addEventListener('cancel', e => e.preventDefault());
@@ -1225,7 +1228,7 @@
       e.preventDefault();
       const list = readBooths($('setupBooths')), problem = checkBooths(list);
       if (problem) { toast(problem); return; }
-      data.owner = e.target.owner.value.trim(); data.boothList = list; data.rentFrom = currentMonth; save(); location.reload();
+      data.owner = e.target.owner.value.trim(); data.storeName = e.target.store.value.trim() || undefined; data.boothList = list; data.rentFrom = currentMonth; save(); location.reload();
     });
     sheet.showModal();
   }

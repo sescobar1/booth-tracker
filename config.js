@@ -2,6 +2,8 @@
 // The blank starter copy for friends uses starter/config.js instead.
 window.BOOTH_CONFIG = {
   owner: 'Shaana',
+  storeName: "Y'allternative Market",       // the store your booths are in
+  storeShort: "Y'allternative",            // shorter name for tight spots
   storageKey: 'boothMonthlyTracker',      // where this copy saves on the device
   docsDb: 'boothDocuments',               // where receipt photos are saved on the device
   startMonth: '2025-09',                  // first month in the month lists
@@ -34,14 +36,16 @@ window.BOOTH_CONFIG = {
   seedBatches: [{ recipe: 'nobake', made: '2026-09-30' }, { recipe: 'chocchip', made: '2026-09-30' }],
   towns: [['Russellville', 5], ['Dardanelle', 10], ['Atkins', 15], ['Conway', 46], ['Sherwood', 76]],
   // Bump routesVersion when the trips below change so phones pick up the new schedule once.
-  routesVersion: 5,
+  routesVersion: 6,
+  // Trip names already in the log that should read differently (old name, new name).
+  renameTrips: [['Relic store', "Y'allternative"]],
   // Wednesday store trips stopped in October 2026. Before that they were every other Wednesday,
   // counting back from Sept 30, so only those stay in the log.
   keepPastTrips: [{ route: 'store', days: [3], before: '2026-10-03', everyOtherFrom: '2026-09-30' }],
   routes: [
-    { id: 'store', name: 'Relic store', detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, days: [0] },
+    { id: 'store', name: "Y'allternative", detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, days: [0] },
     // Fridays: one loop, Russellville → St. Joe's in Conway (46) → Relic in Sherwood (32) → home (76).
-    { id: 'storeFri', name: "Relic store + St. Joe's", detail: 'Russellville → Conway → Sherwood → home', miles: 154, round: false, days: [5] },
+    { id: 'storeFri', name: "Y'allternative + St. Joe's", detail: 'Russellville → Conway → Sherwood → home', miles: 154, round: false, days: [5] },
     { id: 'pricebreak', name: 'Price Break', detail: 'Russellville', miles: 5, round: true, days: [2, 6] },
     { id: 'conway', name: "St. Joe's", detail: 'Russellville ⇄ Conway', miles: 46, round: true, days: [] },
     { id: 'goodwill', name: 'Goodwill', detail: 'Russellville', miles: 5, round: true, days: [] },
