@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#24536f">
+<title>Booth Tracker Guide</title>
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<style>
+  :root { --navy: #24536f; --paper: #faf7f1; --line: #d9e1e5; --green: #19744c; --soft: #eaf2f6; --ink: #173447; --muted: #5c6b74; --gold: #b67c20; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 system-ui, -apple-system, sans-serif; }
+  header { background: linear-gradient(120deg, #1e536f, #2d6b86); color: #fff; padding: 28px 16px; }
+  header div, main { max-width: 720px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 1.7rem; }
+  header p { margin: 6px 0 0; opacity: .92; }
+  main { padding: 20px 16px 60px; }
+  h2 { font-size: 1.25rem; margin: 30px 0 8px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 12px 0; box-shadow: 0 3px 12px #1932460d; }
+  .big { display: block; text-align: center; background: var(--navy); color: #fff; text-decoration: none; font-weight: 800; font-size: 1.1rem; padding: 16px; border-radius: 12px; margin: 12px 0; }
+  .big.alt { background: #fff; color: var(--navy); border: 2px solid var(--navy); }
+  ol { padding-left: 22px; margin: 6px 0; }
+  li { margin: 8px 0; }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; background: var(--soft); color: var(--navy); }
+  .tag.opt { background: #fff3d6; color: #8a5a00; }
+  .note { background: #eaf6ee; border-left: 4px solid var(--green); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  .warn { background: #fff3d6; border-left: 4px solid var(--gold); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  code { background: var(--soft); border-radius: 6px; padding: 1px 6px; font-size: .92em; word-break: break-all; }
+  b.ui { background: #f1f4f6; border: 1px solid #d5dee3; border-radius: 6px; padding: 0 6px; font-weight: 700; white-space: nowrap; }
+  .muted { color: var(--muted); font-size: .92rem; }
+</style>
+</head>
+<body>
+<header><div>
+  <h1>Booth Tracker</h1>
+  <p>A simple app for your booth: sales, purchases, rent, mileage, receipts, and taxes, all from your phone.</p>
+</div></header>
+<main>
+  <section class="card">
+    <span class="tag">Start here</span>
+    <h2 style="margin-top:8px">Use it right away (no account needed)</h2>
+    <a class="big" href="./">Open Booth Tracker</a>
+    <ol>
+      <li>Open the link above on your phone.</li>
+      <li>A welcome box asks for your <b>first name</b> and your <b>booths</b>: the booth number, what you sell there, and the monthly rent. Tap <b>+ Add another booth</b> for each one.</li>
+      <li>Tap <b>Start tracking</b>. That's it.</li>
+    </ol>
+    <div class="note">Everything you enter is saved <b>only on your phone</b>. Nobody else, including the person who shared this, can see it.</div>
+  </section>
+
+  <h2>Put it on your home screen</h2>
+  <div class="card">
+    <p><b>iPhone (Safari):</b> tap the <b class="ui">Share</b> button (square with an arrow), scroll down, tap <b class="ui">Add to Home Screen</b>, then <b class="ui">Add</b>.</p>
+    <p><b>Android (Chrome):</b> tap the <b class="ui">⋮</b> menu, then <b class="ui">Install app</b> or <b class="ui">Add to Home screen</b>.</p>
+    <p class="muted">It opens full screen like an app and works without signal at the market.</p>
+  </div>
+
+  <h2>Everyday use</h2>
+  <div class="card">
+    <ol>
+      <li><b>Sold something or bought something?</b> Tap the round <b class="ui">+</b> button. Pick the booth, type the item and price, save.</li>
+      <li><b>Got a receipt?</b> On <b class="ui">Bought</b>, tap <b class="ui">📷 Snap a receipt</b>. The photo is saved with the purchase.</li>
+      <li><b>Sell through Relic?</b> Under <b class="ui">More → Import &amp; backup</b>, upload your Relic sales export and it fills in your sold items for you.</li>
+      <li><b>Driving for the business?</b> On <b class="ui">Miles</b>, add the places you go (and the days you go there). Regular trips log themselves; tap <b class="ui">+ Log trip</b> for the others. It keeps your mileage log for taxes.</li>
+      <li><b>Taxes:</b> <b class="ui">More → Taxes</b> shows your business profit, the mileage deduction, and quarterly due dates.</li>
+    </ol>
+  </div>
+
+  <h2>Back up every day</h2>
+  <div class="card">
+    <p>Because your data lives only on your phone, back it up so you never lose it. Each day your <b>To do</b> list shows <b class="ui">Back up</b>. Tap it, then choose <b>OneDrive</b>, <b>Google Drive</b>, or <b>Save to Files</b>.</p>
+    <p class="muted">New phone? Open the app and go to <b>More → Import &amp; backup → Restore from a backup</b>.</p>
+  </div>
+
+  <section class="card">
+    <span class="tag opt">Optional</span>
+    <h2 style="margin-top:8px">Get your own copy on GitHub</h2>
+    <p>You don't need this to use the app. Do this if you want your <b>own web address</b> that doesn't depend on anyone else's site. It's free and takes about 15 minutes. A computer makes it easier.</p>
+    <a class="big alt" href="../booth-tracker-starter.zip" download>Download the Booth Tracker kit (.zip)</a>
+    <ol>
+      <li><b>Make a free GitHub account</b> at <code>github.com/signup</code>. Pick a username you like; it becomes part of your web address.</li>
+      <li><b>Unzip the kit</b> you downloaded above. (On a computer, double-click it. On iPhone, open it in the Files app and tap it.) You'll get a folder with files like <code>index.html</code> and a <code>fonts</code> folder.</li>
+      <li><b>Create a repository</b> (a folder on GitHub): tap <b class="ui">+</b> at the top right → <b class="ui">New repository</b>. Name it <code>booth-tracker</code>, choose <b>Public</b>, check <b>Add a README file</b>, then <b class="ui">Create repository</b>.</li>
+      <li><b>Upload the files:</b> in your new repository tap <b class="ui">Add file</b> → <b class="ui">Upload files</b>. Drag in <b>everything</b> from the unzipped folder, including the <code>fonts</code> folder. Tap <b class="ui">Commit changes</b>.</li>
+      <li><b>Turn on your website:</b> go to <b class="ui">Settings</b> → <b class="ui">Pages</b>. Under <b>Branch</b>, choose <b class="ui">main</b> and <b class="ui">/ (root)</b>, then <b class="ui">Save</b>.</li>
+      <li>Wait a minute or two and refresh. GitHub shows your link: <code>https://YOUR-USERNAME.github.io/booth-tracker/</code></li>
+      <li>Open your link on your phone and <b>add it to your home screen</b>.</li>
+    </ol>
+    <div class="warn"><b>Already started with the shared link?</b> Before switching, tap <b>Back up</b> there. Then, in your own copy, go to <b>More → Import &amp; backup → Restore from a backup</b> and pick that file. All your entries come with you.</div>
+    <p class="muted">Your repository only holds the app itself. Your sales and receipts still stay on your phone, not on GitHub.</p>
+  </section>
+
+  <p class="muted" style="text-align:center;margin-top:30px">Questions? Ask the friend who sent you this link.</p>
+</main>
+</body>
+</html>

@@ -156,6 +156,15 @@ td.rcpt{white-space:nowrap}
 .rcpt-add{border:1px solid #cbd9df;background:#fff;border-radius:8px;padding:4px 8px;font-size:1rem;cursor:pointer}
 .rcpt .doc-jump{margin-left:6px}
 
+/* Your booths editor and welcome setup */
+.bx-row{display:grid;grid-template-columns:.8fr 1.6fr .9fr auto;gap:8px;align-items:end;margin-bottom:8px}
+.bx-row label{font-size:.75rem;font-weight:700;color:#5c6b74}
+.bx-row input{display:block;width:100%;margin-top:4px;border:1px solid #cbd9df;border-radius:7px;padding:9px;font:inherit;font-size:16px;background:#fff}
+.bx-row .bx-del{margin-bottom:6px}
+.owner-name{display:block;font-size:.85rem;color:#31576b;margin:6px 0 12px}
+.owner-name input{max-width:240px;margin-left:6px;padding:7px}
+.sheet-body .bx-row label{margin-bottom:0}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -201,6 +210,8 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  .bx-row{grid-template-columns:1fr 1fr auto}
+  .bx-row label:nth-child(2){grid-column:1/-1;grid-row:1}
   .cards.tax-cards{grid-template-columns:1fr}
   .gas-form,.work-form,.amz-form,.place-form{grid-template-columns:1fr 1fr}
   .cookie-grid{grid-template-columns:1fr}

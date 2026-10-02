@@ -32,3 +32,10 @@ Everything lives on the device you use, so back up regularly: **Import & backup 
 
 - `profit-worksheet-data.json`: every expense and sold item from the Profit Worksheet by month, with booths.
 - `relic-inventory-2026-10-02.csv`: the starting Relic inventory.
+
+## Sharing with a friend (blank starter)
+
+- `config.js` holds this copy's settings: owner, booths and rent, towns, regular trips, recipes, and booth rules.
+- `starter/` is a blank copy with a welcome setup; share `https://sescobar1.github.io/booth-tracker/starter/guide.html`. It saves to its own storage, so it never sees this copy's data.
+- `booth-tracker-starter.zip` is a kit a friend can upload to their own GitHub Pages site (steps are in the guide).
+- After changing `index.html`, `mobile.js`, `mobile.css`, or `sw.js`, run `python3 tools/build-starter.py` to rebuild the starter and kit.

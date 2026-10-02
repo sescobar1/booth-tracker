@@ -2,23 +2,17 @@
 // to-do reminders, reports, mileage, and offline app support.
 (function () {
   const $ = id => document.getElementById(id);
-  const RENT = { L19: 80, W2: 40, FC: 20, C4: 400 };
+  const CFG = window.BOOTH_CONFIG || {};
+  const RENT = Object.fromEntries(BOOTH_LIST.map(b => [b.code, Number(b.rent) || 0]));
   const RENT_TOTAL = Object.values(RENT).reduce((a, b) => a + b, 0);
   const DAY = 864e5;
 
   data.settings = Object.assign({ relicEvery: 7, mileRate: 0.7, mpg: 25, gasPrice: 2.75 }, data.settings || {});
   data.shifts = data.shifts || [];
   data.mileage = data.mileage || [];
-  // Regular trips and places; miles are one way from home (Russellville stores 5, Dardanelle 10, Atkins 15).
-  const DEFAULT_ROUTES = [
-    { id: 'store', name: 'Relic store', detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, days: [0, 3, 5] },
-    { id: 'pricebreak', name: 'Price Break', detail: 'Russellville', miles: 5, round: true, days: [2, 6] },
-    { id: 'conway', name: "St. Joe's", detail: 'Russellville ⇄ Conway', miles: 46, round: true, days: [5] },
-    { id: 'goodwill', name: 'Goodwill', detail: 'Russellville', miles: 5, round: true, days: [] },
-    { id: 'marvas', name: "Marva's", detail: 'Russellville', miles: 5, round: true, days: [] },
-    { id: 'dardanelle', name: 'Dardanelle thrift store', detail: 'Dardanelle', miles: 10, round: true, days: [] },
-    { id: 'atkins', name: 'Atkins thrift store', detail: 'Atkins', miles: 15, round: true, days: [] }
-  ];
+  // Regular trips and places from the settings file; miles are one way from home.
+  const DEFAULT_ROUTES = CFG.routes || [];
+
   data.routes = data.routes || [];
   if (!data.routesV2) {
     for (const d of DEFAULT_ROUTES) {
@@ -290,7 +284,7 @@
       const b = JSON.parse(await file.text());
       if (b.app !== 'booth-tracker' || !b.data) throw new Error('not a backup');
       if (!confirm('Replace everything on this device with the backup from ' + new Date(b.saved).toLocaleString() + '?')) return;
-      localStorage.setItem('boothMonthlyTracker', JSON.stringify(b.data));
+      localStorage.setItem(CFG.storageKey || 'boothMonthlyTracker', JSON.stringify(b.data));
       const docsIn = await Promise.all((b.documents || []).map(async d => { const { dataUrl, ...rest } = d; return { ...rest, blob: await (await fetch(dataUrl)).blob() }; }));
       await docTx('readwrite', s => { s.clear(); docsIn.forEach(d => s.put(d)); });
       msg.textContent = 'Restored. Reloading…';
@@ -495,7 +489,7 @@
   if (!data.irsRates2026) { data.mileage.forEach(t => { t.rate = rateFor(t.date); }); data.irsRates2026 = true; if (data.settings.mileRate === 0.7) data.settings.mileRate = 0.76; }
   function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
   // Fill in scheduled trips from January 1 of this year (one time); the start date can be changed on the page.
-  if (!data.settings.autoFromJan) { data.settings.autoFrom = new Date().getFullYear() + '-01-01'; data.settings.autoFromJan = true; }
+  if (!data.settings.autoFromJan) { data.settings.autoFrom = CFG.mileageFromJan ? new Date().getFullYear() + '-01-01' : weekStart(); data.settings.autoFromJan = true; }
   const scheduled = () => data.routes.filter(r => r.days && r.days.length);
   const places = () => data.routes.filter(r => !r.days || !r.days.length);
   const routeLabel = r => r.name + (r.detail ? ' (' + r.detail + ')' : '');
@@ -537,12 +531,12 @@
     $('routeCards').innerHTML = scheduled().length ? scheduled().map(r => {
       const n = wk.filter(t => t.route === r.id).length, goal = r.days.length;
       const dots = Array.from({ length: Math.max(goal, n) }, (_, i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('');
-      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + gasLine(r) + '</small><small class="days-line">' + r.days.slice().sort().map(d => DAYS[d]).join(' · ') + '</small>' +
+      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + (r.detail ? esc(r.detail) + ' · ' : '') + gasLine(r) + '</small><small class="days-line">' + r.days.slice().sort().map(d => DAYS[d]).join(' · ') + '</small>' +
         '<div class="week-dots">' + dots + '<span>' + n + ' of ' + goal + ' this week</span></div></div><button type="button" class="button ghost log-trip" data-route="' + r.id + '">+ Extra trip</button></div>';
     }).join('') : '<p class="helper">No scheduled trips. Pick days for a place below to log it automatically.</p>';
     $('placeCards').innerHTML = places().length ? places().map(r => {
       const last = data.mileage.filter(t => t.route === r.id).map(t => t.date).sort().pop();
-      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + gasLine(r) + '</small><small class="days-line">' + (last ? 'Last trip ' + (last === today ? 'today' : nice(last)) : 'No trips yet') + '</small></div><button type="button" class="button log-trip" data-route="' + r.id + '">+ Log trip</button></div>';
+      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + (r.detail ? esc(r.detail) + ' · ' : '') + gasLine(r) + '</small><small class="days-line">' + (last ? 'Last trip ' + (last === today ? 'today' : nice(last)) : 'No trips yet') + '</small></div><button type="button" class="button log-trip" data-route="' + r.id + '">+ Log trip</button></div>';
     }).join('') : '<p class="helper">No places yet. Add one below.</p>';
     // summary cards
     const thisMonth = today.slice(0, 7), thisYear = today.slice(0, 4);
@@ -594,6 +588,9 @@
     autoLog(); save(); renderExtras();
   });
   const rf = $('routeForm');
+  const towns = CFG.towns || [];
+  rf.elements.town.innerHTML = towns.map(([t, mi]) => '<option value="' + mi + '" data-town="' + esc(t) + '">' + esc(t) + ' (' + mi + ' mi)</option>').join('') + '<option value="" data-town="">' + (towns.length ? 'Other' : 'Anywhere') + '</option>';
+  if (!towns.length) rf.elements.town.closest('label').hidden = true;
   rf.elements.town.addEventListener('change', () => { if (rf.elements.town.value) rf.elements.miles.value = rf.elements.town.value; });
   rf.elements.miles.value = rf.elements.town.value;
   rf.addEventListener('submit', e => {
@@ -723,33 +720,10 @@
 
   // ---------- cookie cost calculator ----------
   // Each ingredient: package price for a package amount, and how much one batch uses (same unit).
-  // Shaana's recipes with Walmart prices: Great Value everything except Jiffy peanut butter.
-  const DEFAULT_RECIPES = [
-    { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0, price: 2.00, shelf: 7, ingredients: [
-      { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 1 },
-      { name: 'Cocoa (GV 8 oz)', pack: 5.17, packAmt: 2.67, unit: 'cups', use: 0.25 },
-      { name: 'Vanilla (GV, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 },
-      { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 2 },
-      { name: 'Milk (GV gallon, est.)', pack: 2.88, packAmt: 16, unit: 'cups', use: 0.5 },
-      { name: 'Peanut butter (Jiffy 40 oz)', pack: 6.97, packAmt: 4.4, unit: 'cups', use: 1 },
-      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 2.25 },
-      { name: 'Cellophane bags (100 pk)', pack: 7.64, packAmt: 100, unit: 'bags', use: 16 }
-    ] },
-    { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0, price: 2.00, shelf: 7, ingredients: [
-      { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 2 },
-      { name: 'White sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 0.5 },
-      { name: 'Brown sugar (GV 2 lb)', pack: 2.34, packAmt: 4.5, unit: 'cups', use: 1 },
-      { name: 'Vanilla (GV, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 2 },
-      { name: 'Eggs (GV dozen)', pack: 1.67, packAmt: 12, unit: 'eggs', use: 2 },
-      { name: 'Flour (GV 5 lb)', pack: 2.38, packAmt: 18, unit: 'cups', use: 3 },
-      { name: 'Corn starch (GV 16 oz)', pack: 1.92, packAmt: 168, unit: 'tsp', use: 1 },
-      { name: 'Baking soda (GV, est.)', pack: 0.98, packAmt: 94, unit: 'tsp', use: 0.75 },
-      { name: 'Salt (GV, est.)', pack: 0.78, packAmt: 123, unit: 'tsp', use: 0.75 },
-      { name: 'Chocolate chips (GV 12 oz bag)', pack: 3.86, packAmt: 1, unit: 'bag', use: 1 },
-      { name: 'Cellophane bags (100 pk)', pack: 7.64, packAmt: 100, unit: 'bags', use: 16 }
-    ] }
-  ];
-  // Load Shaana's recipes once; after that, her own edits are kept.
+  const DEFAULT_RECIPES = CFG.recipes || [];
+  // The booth baked goods are sold in: the one named in the settings, else one that sounds like food.
+  const cookieBooth = () => BOOTHS.find(b => CFG.cookieBooth && b.startsWith(CFG.cookieBooth + ' ')) || BOOTHS.find(b => /cookie|bak|treat|food|sweet/i.test(b)) || (BOOTHS.length === 1 ? BOOTHS[0] : 'Unassigned');
+  // Load the starting recipes once; after that, edits are kept.
   if (!data.recipes || !data.recipesMine3) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesMine3 = true; }
   data.settings.relicFee = data.settings.relicFee ?? 10;
   data.recipes.forEach(r => { if (r.shelf == null) r.shelf = 7; });
@@ -760,32 +734,33 @@
     const each = batch / n + (Number(r.packaging) || 0), payout = (Number(r.price) || 0) * (1 - (Number(data.settings.relicFee) || 0) / 100);
     return { batch, n, each, payout, profit: payout - each, batchTotal: each * n };
   }
-  // The no-bake and chocolate chip batches Shaana made on Sept 30, entered for her once.
-  if (!data.seedBatches0930) {
-    const made = '2026-09-30';
-    for (const id of ['nobake', 'chocchip']) {
-      const r = data.recipes.find(x => x.id === id);
-      if (!r || data.batches.some(b => b.recipe === id && b.made === made)) continue;
+  // Batches listed in the settings file (made before the tracker existed), added once.
+  if (CFG.seedData && !data.seedBatches0930) {
+    for (const sb of CFG.seedBatches || []) {
+      const r = data.recipes.find(x => x.id === sb.recipe), made = sb.made;
+      if (!r || data.batches.some(b => b.recipe === sb.recipe && b.made === made)) continue;
       const m = recipeMath(r), qty = r.perBatch || 16;
-      data.batches.push({ id: newId(), recipe: id, name: r.name, qty, made, expires: addDays(made, r.shelf ?? 7), done: false });
-      (data.purchases['September 2026'] = data.purchases['September 2026'] || []).push({ item: r.name + ' (baked batch)', booth: BOOTHS[2], qty, amount: r2(m.each * qty), sell: Number(r.price) || undefined, date: made });
+      let mo = monthOf(made); if (!months.includes(mo)) mo = currentMonth;
+      data.batches.push({ id: newId(), recipe: r.id, name: r.name, qty, made, expires: addDays(made, r.shelf ?? 7), done: false });
+      (data.purchases[mo] = data.purchases[mo] || []).push({ item: r.name + ' (baked batch)', booth: cookieBooth(), qty, amount: r2(m.each * qty), sell: Number(r.price) || undefined, date: made });
     }
     data.seedBatches0930 = true; save();
   }
   function renderCookies() {
     if (!$('cookies').classList.contains('active')) return;
-    const fc = RENT.FC;
-    $('cookieCards').innerHTML = data.recipes.map((r, ri) => {
+    const fcCode = code(cookieBooth()), fc = RENT[fcCode] || 0;
+    $('cookieCards').innerHTML = data.recipes.length ? '' : '<p class="helper">No recipes yet. Tap <b>+ Add a recipe</b> to figure the cost of something you make.</p>';
+    $('cookieCards').innerHTML += data.recipes.map((r, ri) => {
       const m = recipeMath(r), rentCookies = m.profit > 0 ? Math.ceil(fc / m.profit) : '—';
       const num = (f, v, step, extra) => '<input class="cell-input ck" type="number" min="0" step="' + step + '" inputmode="decimal" data-r="' + ri + '" data-f="' + f + '"' + (extra || '') + ' value="' + v + '">';
       return '<article class="panel cookie-card"><h3><input class="cell-input ck ck-name" data-r="' + ri + '" data-f="name" value="' + esc(r.name) + '" aria-label="Recipe name"></h3><div class="panel-body">' +
         '<div class="ck-summary"><div><span>Cost per cookie</span><b>' + money(m.each) + '</b></div><div><span>Profit per cookie</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit) + '</b></div><div><span>Batch costs you</span><b>' + money(m.batchTotal) + '</b></div><div><span>Batch profit</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit * m.n) + '</b></div></div>' +
-        '<p class="helper">Ingredients and cellophane bags ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each' + (Number(r.packaging) ? ', plus ' + money(Number(r.packaging)) + ' other packaging' : '') + '. You get ' + money(m.payout) + ' per cookie after Relic\'s ' + (data.settings.relicFee || 0) + '%. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' FC rent.</p>' +
+        '<p class="helper">Ingredients and cellophane bags ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each' + (Number(r.packaging) ? ', plus ' + money(Number(r.packaging)) + ' other packaging' : '') + '. You get ' + money(m.payout) + ' per cookie after Relic\'s ' + (data.settings.relicFee || 0) + '%' + (fc ? '. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' ' + esc(fcCode) + ' rent' : '') + '.</p>' +
         '<div class="ck-settings"><label>Cookies per batch' + num('perBatch', r.perBatch, '1') + '</label><label>Other packaging per cookie' + num('packaging', r.packaging, '.01') + '</label><label>Sell price' + num('price', r.price, '.05') + '</label><label>Good for (days)' + num('shelf', r.shelf ?? 7, '1') + '</label></div>' +
         '<div class="scroll"><table class="ck-table"><thead><tr><th>Ingredient</th><th class="num">Package price</th><th class="num">Package has</th><th>Unit</th><th class="num">Batch uses</th><th class="num">Cost</th><th></th></tr></thead><tbody>' +
         r.ingredients.map((g, gi) => { const a = ' data-g="' + gi + '"';
           return '<tr><td><input class="cell-input ck wide" data-r="' + ri + '"' + a + ' data-f="name" value="' + esc(g.name) + '" aria-label="Ingredient"></td><td class="num">' + num('pack', g.pack, '.01', a) + '</td><td class="num">' + num('packAmt', g.packAmt, '.01', a) + '</td><td><input class="cell-input ck unit" data-r="' + ri + '"' + a + ' data-f="unit" value="' + esc(g.unit) + '" aria-label="Unit"></td><td class="num">' + num('use', g.use, '.01', a) + '</td><td class="num">' + money(ingCost(g)) + '</td><td><button type="button" class="del ck-del" data-r="' + ri + '"' + a + ' aria-label="Remove ' + esc(g.name) + '">×</button></td></tr>'; }).join('') +
-        '</tbody></table></div><div class="ck-actions"><button type="button" class="button ghost ck-add" data-r="' + ri + '">+ Ingredient</button><button type="button" class="button ck-log" data-r="' + ri + '">I baked a batch</button></div></div></article>';
+        '</tbody></table></div><div class="ck-actions"><button type="button" class="button ghost ck-add" data-r="' + ri + '">+ Ingredient</button><button type="button" class="button ghost ck-remove" data-r="' + ri + '">Remove recipe</button><button type="button" class="button ck-log" data-r="' + ri + '">I baked a batch</button></div></div></article>';
     }).join('');
     $('relicFee').value = data.settings.relicFee;
   }
@@ -840,7 +815,7 @@
     data.batches.push({ id: newId(), recipe: r.id, name: r.name, qty, made, expires, done: false });
     if (bf.logCost.checked) {
       let mo = monthOf(made); if (!months.includes(mo)) mo = currentMonth;
-      (data.purchases[mo] = data.purchases[mo] || []).push({ item: r.name + ' (baked batch)', booth: BOOTHS[2], qty, amount: r2(m.each * qty), sell: Number(r.price) || undefined, date: made });
+      (data.purchases[mo] = data.purchases[mo] || []).push({ item: r.name + ' (baked batch)', booth: cookieBooth(), qty, amount: r2(m.each * qty), sell: Number(r.price) || undefined, date: made });
     }
     save(); render(); $('batchSheet').close();
     toast(qty + ' ' + r.name.toLowerCase() + ' saved. They expire ' + nice(expires) + '.');
@@ -898,7 +873,7 @@
       const profits = per.map(st => st[c].sales - st[c].buy - st[c].rent), rent = per.reduce((t, st) => t + st[c].rent, 0), total = profits.reduce((a, b) => a + b, 0);
       const last3 = profits.slice(-3), losing = last3.filter(p => p < 0).length >= 2, n = profits.length;
       const falling = n >= 3 && profits[n - 1] < profits[n - 2] && profits[n - 2] < profits[n - 3] && profits[n - 1] < profits[n - 3] - Math.abs(profits[n - 3]) * 0.25;
-      const status = losing ? ['Losing money', 'out', 'Lost money in ' + last3.filter(p => p < 0).length + ' of the last 3 months'] : falling ? ['Watch', 'low', 'Profit down 2 months in a row'] : ['Doing well', 'fresh', 'Making money'];
+      const status = losing ? ['Losing money', 'out', 'Lost money in ' + last3.filter(p => p < 0).length + ' of the last 3 months'] : falling ? ['Watch', 'low', 'Profit down 2 months in a row'] : profits[n - 1] < 0 ? ['Watch', 'low', 'Lost money last month'] : ['Doing well', 'fresh', 'Making money'];
       return { c, span, profits, perRent: rent ? total / rent : 0, total, status };
     });
   }
@@ -1024,6 +999,46 @@
       printTags(data.overall.filter(x => x.qty > 0 && (!q || itemKey(x.item).includes(q)) && (!bf || x.booth === bf)).map(x => ({ name: x.item, price: x.price || (x.qty ? r2(x.cost / x.qty * 2) : 0), code: code(x.booth), sku: '', n: 1 })).filter(t => t.price > 0));
     }
   });
+
+  // ---------- recipes: add and remove ----------
+  if (!CFG.recipeCards) { const a = document.querySelector('a[href="recipe-cards.html"]'); if (a) a.remove(); }
+  document.addEventListener('click', e => {
+    if (e.target.closest('#ckNew')) { data.recipes.push({ id: newId(), name: 'New recipe', perBatch: 12, packaging: 0, price: 2, shelf: 7, ingredients: [] }); save(); renderCookies(); }
+    const rm = e.target.closest('.ck-remove');
+    if (rm) { const r = data.recipes[Number(rm.dataset.r)]; if (r && confirm('Remove the recipe “' + r.name + '”?')) { data.recipes.splice(Number(rm.dataset.r), 1); save(); renderCookies(); } }
+  });
+
+  // ---------- your booths: welcome setup and editor ----------
+  const boothRow = b => '<div class="bx-row"><label>Booth #<input class="bx-code" value="' + esc(b.code || '') + '" placeholder="A12" autocapitalize="characters"></label><label>What you sell<input class="bx-name" value="' + esc(b.name || '') + '" placeholder="Clothes, candles…"></label><label>Monthly rent<input class="bx-rent" type="number" min="0" step=".01" inputmode="decimal" value="' + (b.rent ?? '') + '" placeholder="0.00"></label><button type="button" class="del bx-del" aria-label="Remove booth">×</button></div>';
+  const readBooths = box => [...box.querySelectorAll('.bx-row')].map(r => ({ code: r.querySelector('.bx-code').value.trim().replace(/\s+/g, '-'), name: r.querySelector('.bx-name').value.trim() || 'Booth', rent: Math.max(0, Number(r.querySelector('.bx-rent').value) || 0) })).filter(b => b.code);
+  const checkBooths = list => !list.length ? 'Add at least one booth number.' : new Set(list.map(b => b.code)).size !== list.length ? 'Each booth needs a different booth number.' : '';
+  document.addEventListener('click', e => {
+    const add = e.target.closest('[data-bx-add]'); if (add) $(add.dataset.bxAdd).insertAdjacentHTML('beforeend', boothRow({}));
+    const del = e.target.closest('.bx-del'); if (del) del.closest('.bx-row').remove();
+  });
+  $('boothsEdit').innerHTML = BOOTH_LIST.map(boothRow).join('') || boothRow({});
+  $('ownerName').value = OWNER;
+  $('boothsSave').addEventListener('click', () => {
+    const list = readBooths($('boothsEdit')), problem = checkBooths(list);
+    if (problem) { toast(problem); return; }
+    data.boothList = list; data.owner = $('ownerName').value.trim(); if (!data.rentFrom) data.rentFrom = currentMonth;
+    save(); location.reload();
+  });
+  if (CFG.setup && !data.owner && !(data.boothList && data.boothList.length)) {
+    document.body.insertAdjacentHTML('beforeend', '<dialog class="sheet" id="setupSheet" aria-labelledby="setupTitle"><form id="setupForm"><div class="sheet-head"><h2 id="setupTitle">Welcome to Booth Tracker!</h2></div><div class="sheet-body">' +
+      '<p class="helper">Tell it a little about your booths. You can change this any time under <b>Import &amp; backup → Your booths</b>. Everything you enter stays on this phone.' + (CFG.guideUrl ? ' <a href="' + CFG.guideUrl + '" target="_blank" rel="noopener">How to use it</a>' : '') + '</p>' +
+      '<label>Your first name<input name="owner" required autocomplete="given-name"></label><h3 class="sec-title">Your booths</h3><div id="setupBooths">' + boothRow({}) + '</div>' +
+      '<button type="button" class="button ghost" data-bx-add="setupBooths" style="margin-bottom:14px">+ Add another booth</button><button type="submit" class="button" style="width:100%;padding:14px">Start tracking</button></div></form></dialog>');
+    const sheet = $('setupSheet');
+    sheet.addEventListener('cancel', e => e.preventDefault());
+    $('setupForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const list = readBooths($('setupBooths')), problem = checkBooths(list);
+      if (problem) { toast(problem); return; }
+      data.owner = e.target.owner.value.trim(); data.boothList = list; data.rentFrom = currentMonth; save(); location.reload();
+    });
+    sheet.showModal();
+  }
 
   // ---------- render hook ----------
   function renderExtras() {
