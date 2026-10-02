@@ -1,0 +1,95 @@
+/* Phone-first additions: quick add, bottom tabs, sheets, reports, print. */
+.quick-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 18px}
+.big-btn{border:0;border-radius:14px;padding:18px 12px;font-size:1.1rem;font-weight:800;color:#fff;box-shadow:0 4px 14px #1932461f}
+.big-btn.sold{background:var(--green)}
+.big-btn.bought{background:var(--navy)}
+.button.ghost{background:#fff;color:var(--navy);border:1px solid #bfd0d9}
+.file-btn{display:inline-block;cursor:pointer}
+.import-link{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff8e9;border:1px solid #ead4aa;border-radius:10px;padding:12px 14px;margin:17px 0}
+.import-box details{margin-top:12px}
+.import-box summary,.more-imports>summary{cursor:pointer;font-weight:700;color:var(--navy);padding:6px 0}
+.more-imports{margin:17px 0}
+.reminders{grid-template-columns:1fr 1fr;background:transparent;padding:0;margin:8px 0 12px}
+
+.todo{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 14px;margin:0 0 18px;box-shadow:0 3px 12px #1932460d}
+.todo h3{font-size:1rem;margin:10px 0 4px}
+.todo-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #edf1f2}
+.todo-item:first-of-type{border-top:0}
+.todo-item b{display:block}
+.todo-item small{color:#64747d}
+.todo-item .button{white-space:nowrap;padding:8px 12px}
+.todo-done{color:var(--green);font-weight:700;padding:12px 0}
+.restock-mini{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #edf1f2;font-size:.92rem}
+.restock-mini:last-child{border-bottom:0}
+.tag{display:inline-block;border-radius:999px;padding:2px 9px;font-size:.75rem;font-weight:700;white-space:nowrap}
+.tag.out{background:#fbe7e0;color:#a44b28}
+.tag.low{background:#fff1d6;color:#8a5a00}
+
+.best-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.best-card{border:1px solid var(--line);border-radius:10px;padding:12px}
+.best-card h4{margin:0 0 6px;font-size:.95rem}
+.best-card ol{margin:0;padding-left:20px;font-size:.88rem}
+.best-card li{padding:3px 0}
+.best-card li span{float:right;color:#4e5f69}
+.year-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.year-cards .card{min-width:0;padding:13px}
+.year-cards .value{font-size:1.3rem;overflow-wrap:anywhere}
+.export-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+
+/* Bottom tab bar, floating add button, sheets */
+.bottom-nav{display:none}
+.fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
+dialog.sheet{border:0;border-radius:16px;padding:0;width:min(520px,100%);max-height:92vh;box-shadow:0 10px 40px #19324640;color:inherit}
+dialog.sheet::backdrop{background:#17344766}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line)}
+.sheet-head h2{font-size:1.1rem}
+.sheet-close{border:0;background:#eef3f5;border-radius:50%;width:34px;height:34px;font-size:1.2rem;color:#31576b}
+.sheet-body{padding:16px 18px 20px;overflow:auto}
+.sheet-body label{display:block;font-size:.8rem;font-weight:700;color:#5c6b74;margin-bottom:12px}
+.sheet-body input:not([type=checkbox]),.sheet-body select{display:block;width:100%;margin-top:5px;border:1px solid #cbd9df;border-radius:9px;padding:12px;font:inherit;font-size:16px;background:#fff}
+.sheet-body .check-label{display:flex;font-size:.9rem;font-weight:600}
+.sheet-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:#eef3f5;border-radius:11px;padding:4px;margin-bottom:16px}
+.seg button{border:0;background:transparent;border-radius:8px;padding:11px;font-weight:700;color:#4e5f69}
+.seg button.on{background:#fff;color:var(--navy);box-shadow:0 1px 4px #19324626}
+.sheet-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.sheet-actions .button{padding:14px;font-size:1rem}
+.more-list{display:grid;gap:8px}
+.more-list button{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);background:#fff;border-radius:11px;padding:15px;font-weight:700;color:#173447;text-align:left}
+.more-list button small{display:block;font-weight:400;color:#64747d;margin-top:2px}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#173447;color:#fff;padding:12px 18px;border-radius:10px;font-weight:600;z-index:50;box-shadow:0 6px 18px #19324650;max-width:calc(100% - 32px);text-align:center}
+
+@media(max-width:760px){
+  header{padding:14px 16px calc(14px);padding-top:max(14px,env(safe-area-inset-top))}
+  header h1{font-size:1.3rem}
+  header .sub{font-size:.85rem}
+  header .month,.top-nav{display:none}
+  body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  main{padding:16px 16px 40px}
+  .bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:4px 4px env(safe-area-inset-bottom);z-index:30;box-shadow:0 -4px 14px #1932460f}
+  .bottom-nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 7px;font-size:.7rem;font-weight:700;color:#6b7b84}
+  .bottom-nav svg{width:24px;height:24px}
+  .bottom-nav button.on{color:var(--navy)}
+  .fab{right:16px;bottom:calc(88px + env(safe-area-inset-bottom))}
+  dialog.sheet{margin:auto auto 0;border-radius:18px 18px 0 0;width:100%;max-width:100%;padding-bottom:env(safe-area-inset-bottom)}
+  .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
+  #dashboard .cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  #dashboard .card{padding:11px 10px;min-width:0}
+  #dashboard .card .label{font-size:.62rem}
+  #dashboard .card .value{font-size:1.05rem;margin-top:5px}
+  body[data-page=dashboard] .fab{display:none}
+  .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .year-cards .value{font-size:1.1rem}
+  .best-grid,.reminders{grid-template-columns:1fr}
+  .toolbar{flex-wrap:wrap}
+  .import-box .button,.import-box .file-btn{margin:4px 0}
+}
+
+@media print{
+  header,nav,.bottom-nav,.fab,.export-row,.toast,#mileForm,dialog,.del{display:none!important}
+  body{background:#fff;padding:0}
+  main{padding:0;max-width:none}
+  .page{display:none!important}
+  .page.active{display:block!important}
+  .panel,.card,.perf-card{box-shadow:none}
+}

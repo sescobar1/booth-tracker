@@ -1,22 +1,25 @@
 # Booth Tracker
 
-A simple, browser-based tracker for booth purchases, market sales, and restocking. It starts with September 2026 data and saves additions in your browser.
+A phone-first tracker for booth sales, purchases, rent, inventory, and restocking. Data is saved on the device you use it on.
 
-## Use
+## Install it on your phone
 
-Open the site, add purchases as you buy inventory, and review the restock list before your next booth refresh.
+Open the site in Safari (iPhone) or Chrome (Android), then choose **Share → Add to Home Screen** (iPhone) or **⋮ → Install app** (Android). It opens full screen and works without signal.
 
-## Data
+## Everyday use
 
-- `profit-worksheet-data.json` holds every expense and sold item from the Profit Worksheet, grouped by month (September 2025 – December 2026).
-- `relic-inventory-2026-10-02.csv` holds the current Relic inventory.
+- **Home** shows this month's numbers, a to-do list (rent due, Relic import, backup, restock), and booth performance.
+- Tap **+ Sold item**, **+ Purchase**, or the round **+** button to add something in seconds. The booth is picked for you from the item name, and you can snap a receipt photo with a purchase.
+- **Import & backup → Import from Relic**: upload the Relic sales export (CSV or Excel). Sales go into the right month and booth, and sales already in the tracker are skipped. Upload the Relic inventory export to refresh your store inventory.
+- **Restock** lists repeat sellers that are out or running low, and slow movers sitting 60+ days without a sale.
+- **Reports** has year totals by booth and month, best sellers per booth, a mileage log, and a CSV download or printable summary for taxes.
+- **Booth editor** moves every line with the same item name to a booth in one step. On **Purchases** and **Sold items**, tick rows and use **Assign selected** for one month.
 
-## Booths and inventory
+## Back up your data
 
-- Use the **Booth editor** tab to move every line with the same item name (across all months, sold and purchased) to a booth in one step.
-- On **Purchases** and **Sold items**, filter the list (for example "squish"), tick the rows or use the select-all box, pick a booth, and click **Assign selected**.
-- Purchases are added to **Overall inventory** automatically (uncheck the box for rent, supplies, and fees). **Store inventory** shows what is listed in your Relic store.
+Everything lives on the device you use, so back up regularly: **Import & backup → Back up now**, then save the file to Files or Google Drive. **Restore from a backup** loads it on any phone or computer.
 
-## Item documents
+## Data files
 
-Use the **Item documents** tab (or the **Docs** column on the Inventory tab) to attach receipts, invoices, photos, or tags to any item. Files are stored in this browser.
+- `profit-worksheet-data.json`: every expense and sold item from the Profit Worksheet by month, with booths.
+- `relic-inventory-2026-10-02.csv`: the starting Relic inventory.
