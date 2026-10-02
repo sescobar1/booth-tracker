@@ -8,11 +8,13 @@ Open the site in Safari (iPhone) or Chrome (Android), then choose **Share → Ad
 
 ## Everyday use
 
-- **Home** shows this month's numbers, a to-do list (rent due, Relic import, backup, restock), and booth performance.
+- **Home** shows this month's numbers, a to-do list (this week's trips, Relic import, backup, restock), and booth performance.
 - Tap **+ Sold item**, **+ Purchase**, or the round **+** button to add something in seconds. The booth is picked for you from the item name, and you can snap a receipt photo with a purchase.
 - **Import & backup → Import from Relic**: upload the Relic sales export (CSV or Excel). Sales go into the right month and booth, and sales already in the tracker are skipped. Upload the Relic inventory export to refresh your store inventory.
 - **Restock** lists repeat sellers that are out or running low, and slow movers sitting 60+ days without a sale.
-- **Reports** has year totals by booth and month, best sellers per booth, a mileage log, and a CSV download or printable summary for taxes.
+- **Mileage** has your regular trips (Relic store in Sherwood 3×/week, Price Break 2×/week, Conway 1×/week). Tap **Log trip** to log the round trip; edit miles or add trips under **Edit my regular trips**.
+- **Purchases** show unit cost and a sell price (2× unit cost by default). Type over any sell price to set your own; it carries into overall and store inventory, where prices are editable too.
+- **Reports** has year totals by booth and month (including the mileage deduction), best sellers per booth, and a CSV download or printable summary for taxes.
 - **Booth editor** moves every line with the same item name to a booth in one step. On **Purchases** and **Sold items**, tick rows and use **Assign selected** for one month.
 
 ## Back up your data

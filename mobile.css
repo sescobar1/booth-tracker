@@ -1,9 +1,10 @@
 /* Phone-first additions: quick add, bottom tabs, sheets, reports, print. */
 [hidden]{display:none!important}
-.quick-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 18px}
+.quick-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
 .big-btn{border:0;border-radius:14px;padding:18px 12px;font-size:1.1rem;font-weight:800;color:#fff;box-shadow:0 4px 14px #1932461f}
 .big-btn.sold{background:var(--green)}
 .big-btn.bought{background:var(--navy)}
+.big-btn.trip{background:#b67c20}
 .button.ghost{background:#fff;color:var(--navy);border:1px solid #bfd0d9}
 .file-btn{display:inline-block;cursor:pointer}
 .import-link{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff8e9;border:1px solid #ead4aa;border-radius:10px;padding:12px 14px;margin:17px 0}
@@ -45,6 +46,22 @@
 .unit-preview{grid-column:1/-1;font-size:.88rem;color:#31576b;margin:-4px 0 10px}
 .unit-preview:empty{display:none}
 .qty-edit{width:64px;text-align:right}
+.sell-edit,.ov-price,.store-price{width:84px;text-align:right}
+.sell-edit.overridden{border-color:#b67c20;background:#fff8e9;font-weight:700}
+.sug{display:block;color:#64747d;font-size:.72rem;margin-top:2px}
+
+/* Mileage */
+.route-list{display:grid;gap:10px;margin-bottom:18px}
+.route-card{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 3px 12px #1932460d}
+.route-info b{font-size:1.05rem}
+.route-info small{display:block;color:#64747d;margin-top:2px}
+.week-dots{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:.8rem;color:#4e5f69}
+.week-dots i{width:12px;height:12px;border-radius:50%;border:2px solid #b9c9d2;display:inline-block}
+.week-dots i.on{background:var(--green);border-color:var(--green)}
+.week-dots span{margin-left:4px}
+.log-trip{white-space:nowrap;padding:12px 14px}
+.edit-routes>summary{padding:15px 17px;font-weight:700;cursor:pointer;color:var(--navy)}
+.cell-input.wide{width:100%;min-width:140px}
 
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
@@ -91,6 +108,8 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  .quick-row .big-btn{min-width:0}
+  .big-btn{padding:16px 6px;font-size:1rem}
   .toolbar{flex-wrap:wrap}
   .import-box .button,.import-box .file-btn{margin:4px 0}
 }

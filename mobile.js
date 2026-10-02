@@ -6,8 +6,14 @@
   const RENT_TOTAL = Object.values(RENT).reduce((a, b) => a + b, 0);
   const DAY = 864e5;
 
-  data.settings = Object.assign({ rentDay: 1, relicEvery: 7, mileRate: 0.7 }, data.settings || {});
+  data.settings = Object.assign({ relicEvery: 7, mileRate: 0.7 }, data.settings || {});
   data.mileage = data.mileage || [];
+  // Regular trips; miles are one way (Russellville–Sherwood 76, Russellville–Conway 46).
+  data.routes = data.routes || [
+    { id: 'store', name: 'Relic store', detail: 'Russellville ⇄ Sherwood', miles: 76, round: true, perWeek: 3 },
+    { id: 'pricebreak', name: 'Price Break', detail: 'Home ⇄ Price Break, Russellville', miles: 5, round: true, perWeek: 2 },
+    { id: 'conway', name: 'Conway', detail: 'Russellville ⇄ Conway', miles: 46, round: true, perWeek: 1 }
+  ];
 
   // ---------- small helpers ----------
   const pad = n => String(n).padStart(2, '0');
@@ -66,7 +72,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['restock', 'Restock', 'What to restock and slow movers'], ['reports', 'Reports', 'Year totals, best sellers, mileage'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['restock', 'Restock', 'What to restock and slow movers'], ['mileage', 'Mileage', 'Log your regular trips in one tap'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -75,6 +81,7 @@
     '<div class="sheet-row"><label><span id="qAmountLabel">Payout</span><input name="amount" required type="number" min="0" step=".01" inputmode="decimal" placeholder="0.00"></label><label>Date<input name="date" type="date" required></label></div>' +
     '<div class="sheet-row"><label>Booth<select name="booth"></select></label><label class="q-bought">Quantity<input name="qty" type="number" min="1" value="1" inputmode="numeric"></label></div>' +
     '<label class="q-bought">Receipt photo<input name="receipt" type="file" accept="image/*,.pdf" capture="environment"></label>' +
+    '<label class="q-bought">Sell price each<input name="sellPrice" type="number" min="0" step=".01" inputmode="decimal" placeholder="2× cost"></label>' +
     '<fieldset class="inv-choice q-bought" id="qInv"><legend>Add this to inventory?</legend><label><input type="radio" name="invDest" value="overall" required> Overall</label><label><input type="radio" name="invDest" value="store"> Store (Relic)</label><label><input type="radio" name="invDest" value="both"> Both</label><label><input type="radio" name="invDest" value="none"> Neither (rent, supplies, fees)</label></fieldset>' +
     '<div class="unit-preview q-bought" id="qPreview"></div>' +
     '<div class="sheet-actions"><button type="submit" class="button ghost" value="again">Save &amp; add another</button><button type="submit" class="button" value="done">Save</button></div>' +
@@ -138,8 +145,10 @@
       (data.sales[m] = data.sales[m] || []).push({ item, booth, amount, date });
     } else {
       const qty = Math.max(1, Number(qf.qty.value) || 1);
-      (data.purchases[m] = data.purchases[m] || []).push({ item, booth, qty, amount, date });
-      addToInventory(qf.invDest.value, item, booth, qty, amount);
+      const sell = Number(qf.sellPrice.value) || 0, override = qf.sellPrice.dataset.touched === '1', rec = { item, booth, qty, amount, date };
+      if (override && sell > 0) rec.sell = Math.round(sell * 100) / 100;
+      (data.purchases[m] = data.purchases[m] || []).push(rec);
+      addToInventory(qf.invDest.value, item, booth, qty, amount, sell, override);
       saveDocs(item, [...qf.receipt.files], 'Receipt', 'Purchase ' + m + ' · ' + money(amount));
     }
     save(); render();
@@ -159,14 +168,37 @@
 
   // Unit cost and suggested sell price while typing a purchase
   function updatePreview(form, id) {
-    const qty = Math.max(1, Number(form.qty.value) || 1), amt = Number(form.amount.value), el = $(id);
-    el.innerHTML = amt > 0 ? 'Unit cost <b>' + money(amt / qty) + '</b> · Suggested sell price <b>' + money(amt / qty * 2) + '</b>' : '';
+    const qty = Math.max(1, Number(form.qty.value) || 1), amt = Number(form.amount.value), el = $(id), sp = form.sellPrice;
+    el.innerHTML = amt > 0 ? 'Unit cost <b>' + money(amt / qty) + '</b> · Suggested sell price (2×) <b>' + money(amt / qty * 2) + '</b>' : '';
+    // Fill in the suggestion until the price is typed over; clearing it brings the suggestion back.
+    if (sp.dataset.touched !== '1') sp.value = amt > 0 ? (amt / qty * 2).toFixed(2) : '';
   }
+  [qf, pform].forEach(f => {
+    f.sellPrice.addEventListener('input', () => { f.sellPrice.dataset.touched = f.sellPrice.value ? '1' : ''; });
+    f.addEventListener('reset', () => { f.sellPrice.dataset.touched = ''; });
+  });
   ['qty', 'amount'].forEach(n => {
     qf[n].addEventListener('input', () => updatePreview(qf, 'qPreview'));
     pform[n].addEventListener('input', () => updatePreview(pform, 'purchasePreview'));
   });
   pform.addEventListener('reset', () => setTimeout(() => updatePreview(pform, 'purchasePreview'), 0));
+
+  // Price overrides: purchase lines, overall inventory, store inventory
+  document.addEventListener('change', e => {
+    const t = e.target, v = Math.round((Number(t.value) || 0) * 100) / 100;
+    if (t.matches('.sell-edit')) {
+      const edits = ((data.rowEdits.purchases = data.rowEdits.purchases || {})[t.dataset.month] = data.rowEdits.purchases[t.dataset.month] || {});
+      const cur = { ...(edits[t.dataset.key] || {}) };
+      if (v > 0) cur.sell = v; else delete cur.sell;
+      edits[t.dataset.key] = cur; save(); render(); toast(v > 0 ? 'Sell price set to ' + money(v) + '.' : 'Back to the suggested price.');
+    } else if (t.matches('.ov-price')) {
+      const x = data.overall.find(o => o.id === t.dataset.id); if (!x) return;
+      if (v > 0) x.price = v; else delete x.price; save(); render();
+    } else if (t.matches('.store-price')) {
+      const x = data.inventory[Number(t.dataset.i)]; if (!x) return;
+      x.price = v; save(); render(); toast('Store price updated.');
+    }
+  });
 
   // Edit the quantity on any purchase line, including past months
   document.addEventListener('change', e => {
@@ -313,15 +345,10 @@
   }
 
   // ---------- to-do & reminders ----------
-  function nextRentDue() {
-    const day = Math.min(28, Math.max(1, Number(data.settings.rentDay) || 1)), now = new Date(), t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    let d = new Date(t.getFullYear(), t.getMonth(), day);
-    if (d < t) d = new Date(t.getFullYear(), t.getMonth() + 1, day);
-    return { iso: isoLocal(d), days: Math.round((d - t) / DAY) };
-  }
   function renderTodo(need) {
-    const items = [], rent = nextRentDue(), relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
-    if (rent.days <= 7) items.push(['Booth rent ' + money(RENT_TOTAL) + ' due ' + nice(rent.iso), rent.days === 0 ? 'Due today' : 'In ' + rent.days + ' day' + (rent.days === 1 ? '' : 's'), 'rentCal', 'Add to calendar']);
+    const items = [], relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
+    const wk = weekTrips(), planned = data.routes.reduce((t, r) => t + (Number(r.perWeek) || 0), 0);
+    if (planned && wk.length < planned) items.push(['Log this week\'s trips', wk.length + ' of ' + planned + ' regular trips logged', 'mileage', 'Log']);
     if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest Relic sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
     if (backupAge >= 7) items.push(['Back up your data', data.lastBackup ? 'Last backup ' + backupAge + ' days ago' : 'No backup yet — your data lives only on this device', 'backup', 'Back up']);
     if (need.length) items.push([need.length + ' item' + (need.length === 1 ? '' : 's') + ' to restock', need.filter(x => x.status === 'out').length + ' out of stock', 'restock', 'View']);
@@ -333,18 +360,9 @@
     if (t === 'relic') go('settings');
     if (t === 'backup') { go('settings'); backupNow(); }
     if (t === 'restock') go('restock');
-    if (t === 'rentCal') rentCalendar();
+    if (t === 'mileage') go('mileage');
   }
-  function rentCalendar() {
-    const rent = nextRentDue(), d = rent.iso.replace(/-/g, ''), day = Math.min(28, Math.max(1, Number(data.settings.rentDay) || 1));
-    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Booth Tracker//EN', 'BEGIN:VEVENT', 'UID:booth-rent-' + d + '@booth-tracker', 'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z',
-      'DTSTART;VALUE=DATE:' + d, 'RRULE:FREQ=MONTHLY;BYMONTHDAY=' + day, 'SUMMARY:Booth rent due (' + money(RENT_TOTAL) + ')',
-      'DESCRIPTION:L19 $80\\, W2 $40\\, FC $20\\, C4 $400', 'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Booth rent due tomorrow', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-    shareOrDownload(new File([ics], 'booth-rent-reminder.ics', { type: 'text/calendar' }), false);
-  }
-  $('rentCalendar').addEventListener('click', rentCalendar);
-  $('rentDay').value = data.settings.rentDay; $('relicEvery').value = data.settings.relicEvery;
-  $('rentDay').addEventListener('change', e => { data.settings.rentDay = Math.min(28, Math.max(1, Number(e.target.value) || 1)); e.target.value = data.settings.rentDay; save(); renderExtras(); });
+  $('relicEvery').value = data.settings.relicEvery;
   $('relicEvery').addEventListener('change', e => { data.settings.relicEvery = Math.max(1, Number(e.target.value) || 7); e.target.value = data.settings.relicEvery; save(); renderExtras(); });
 
   function renderBackupStatus() {
@@ -390,11 +408,64 @@
     }
     $('bestSellers').innerHTML = Object.keys(RENT).map(c => { const top = Object.values(best[c] || {}).sort((a, b) => b.amt - a.amt).slice(0, 5);
       return '<div class="best-card"><h4>' + c + '</h4>' + (top.length ? '<ol>' + top.map(g => '<li>' + esc(g.name) + ' <span>' + g.n + ' · ' + money(g.amt) + '</span></li>').join('') + '</ol>' : '<p class="helper" style="margin:0">No sales in this period.</p>') + '</div>'; }).join('');
-    // mileage
-    $('mileTotal').textContent = money(d.mileDed);
-    $('mileRows').innerHTML = d.miles.length ? d.miles.slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => '<tr><td>' + esc(x.date) + '</td><td>' + esc(x.purpose) + '</td><td class="num">' + x.miles + '</td><td class="num">' + money(x.miles * x.rate) + '</td><td><button type="button" class="del mile-del" data-id="' + x.id + '">Delete</button></td></tr>').join('') :
-      '<tr><td colspan="5" class="empty">No trips logged for ' + y + '.</td></tr>';
   }
+  // ---------- mileage ----------
+  const tripMiles = r => Math.round((Number(r.miles) || 0) * (r.round ? 2 : 1) * 10) / 10;
+  function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
+  function weekTrips() { const s0 = weekStart(); return data.mileage.filter(t => t.route && t.date >= s0); }
+  $('tripDate').value = todayIso();
+  const myears = () => [...new Set([String(new Date().getFullYear()), ...data.mileage.map(t => t.date.slice(0, 4))])].sort().reverse();
+  function renderMileage() {
+    if (!$('mileage').classList.contains('active')) return;
+    const wk = weekTrips();
+    $('routeCards').innerHTML = data.routes.length ? data.routes.map(r => {
+      const n = wk.filter(t => t.route === r.id).length, goal = Number(r.perWeek) || 0;
+      const dots = goal ? Array.from({ length: Math.max(goal, n) }, (_, i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') : '';
+      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + tripMiles(r) + ' mi' + (r.round ? ' round trip' : '') + '</small>' +
+        '<div class="week-dots">' + dots + '<span>' + n + (goal ? ' of ' + goal : '') + ' this week</span></div>' +
+        '</div><button type="button" class="button log-trip" data-route="' + r.id + '">+ Log trip</button></div>';
+    }).join('') : '<p class="helper">No regular trips yet. Add one under “Edit my regular trips”.</p>';
+    const ys = myears(), cur = $('mileYear').value;
+    $('mileYear').innerHTML = ys.map(y => '<option>' + y + '</option>').join(''); $('mileYear').value = ys.includes(cur) ? cur : ys[0];
+    const y = $('mileYear').value, trips = data.mileage.filter(t => t.date.startsWith(y)).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    const miles = trips.reduce((t, x) => t + x.miles, 0), ded = trips.reduce((t, x) => t + x.miles * x.rate, 0);
+    $('mileTotal').textContent = money(ded);
+    $('mileSummary').textContent = trips.length + ' trip' + (trips.length === 1 ? '' : 's') + ' · ' + Math.round(miles * 10) / 10 + ' miles in ' + y + '.';
+    $('mileRows').innerHTML = trips.length ? trips.map(x => '<tr><td>' + esc(x.date) + '</td><td>' + esc(x.purpose) + '</td><td class="num">' + x.miles + '</td><td class="num">' + money(x.miles * x.rate) + '</td><td><button type="button" class="del mile-del" data-id="' + x.id + '">Delete</button></td></tr>').join('') :
+      '<tr><td colspan="5" class="empty">No trips logged for ' + y + '.</td></tr>';
+    $('routeRows').innerHTML = data.routes.map(r => '<tr><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="name" value="' + esc(r.name) + '" aria-label="Trip name"></td><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="detail" value="' + esc(r.detail || '') + '" aria-label="Route"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" step=".1" inputmode="decimal" data-id="' + r.id + '" data-f="miles" value="' + r.miles + '" aria-label="Miles one way"></td><td><input type="checkbox" class="route-edit" data-id="' + r.id + '" data-f="round"' + (r.round ? ' checked' : '') + ' aria-label="Round trip"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" inputmode="numeric" data-id="' + r.id + '" data-f="perWeek" value="' + (r.perWeek || 0) + '" aria-label="Times a week"></td><td><button type="button" class="del route-del" data-id="' + r.id + '">Remove</button></td></tr>').join('');
+  }
+  $('mileYear').addEventListener('change', renderMileage);
+  document.addEventListener('click', e => {
+    const log = e.target.closest('.log-trip'), del = e.target.closest('.mile-del'), rdel = e.target.closest('.route-del');
+    if (log) {
+      const r = data.routes.find(x => x.id === log.dataset.route); if (!r) return;
+      const miles = tripMiles(r), date = $('tripDate').value || todayIso();
+      data.mileage.push({ id: newId(), date, purpose: r.name + ' (' + (r.detail || 'regular trip') + ')', miles, rate: data.settings.mileRate, route: r.id });
+      save(); renderExtras(); toast('Logged ' + miles + ' miles · ' + r.name + ' · ' + money(miles * data.settings.mileRate));
+    }
+    if (del) {
+      const x = data.mileage.find(t => t.id === del.dataset.id);
+      if (x && confirm('Delete the ' + x.miles + '-mile trip on ' + x.date + '?')) { data.mileage = data.mileage.filter(t => t !== x); save(); renderExtras(); }
+    }
+    if (rdel) {
+      const r = data.routes.find(x => x.id === rdel.dataset.id);
+      if (r && confirm('Remove the regular trip “' + r.name + '”? Trips already logged stay in your log.')) { data.routes = data.routes.filter(x => x !== r); save(); renderExtras(); }
+    }
+  });
+  document.addEventListener('change', e => {
+    const t = e.target; if (!t.matches('.route-edit')) return;
+    const r = data.routes.find(x => x.id === t.dataset.id); if (!r) return;
+    const f = t.dataset.f;
+    r[f] = f === 'round' ? t.checked : (f === 'miles' || f === 'perWeek') ? Math.max(0, Number(t.value) || 0) : t.value.trim();
+    save(); renderExtras();
+  });
+  const rf = $('routeForm');
+  rf.addEventListener('submit', e => {
+    e.preventDefault();
+    data.routes.push({ id: newId(), name: rf.elements.name.value.trim(), detail: rf.elements.detail.value.trim(), miles: Number(rf.elements.miles.value) || 0, round: true, perWeek: Math.max(0, Number(rf.elements.perWeek.value) || 0) });
+    save(); rf.reset(); rf.elements.perWeek.value = 1; renderExtras(); toast('Regular trip added.');
+  });
   const mf = $('mileForm');
   mf.date.value = todayIso(); $('mileRate').value = data.settings.mileRate;
   mf.addEventListener('submit', e => {
@@ -402,13 +473,9 @@
     const rate = Number(mf.rate.value) || data.settings.mileRate;
     data.settings.mileRate = rate;
     data.mileage.push({ id: newId(), date: mf.date.value, purpose: mf.purpose.value.trim(), miles: Number(mf.miles.value) || 0, rate });
-    save(); mf.purpose.value = ''; mf.miles.value = ''; renderReports(); toast('Trip added.');
+    save(); mf.purpose.value = ''; mf.miles.value = ''; renderExtras(); toast('Trip added.');
   });
-  document.addEventListener('click', e => {
-    const b = e.target.closest('.mile-del'); if (!b) return;
-    const x = data.mileage.find(t => t.id === b.dataset.id);
-    if (x && confirm('Delete the ' + x.miles + '-mile trip on ' + x.date + '?')) { data.mileage = data.mileage.filter(t => t !== x); save(); renderReports(); }
-  });
+  $('mileRate').addEventListener('change', e => { const r = Number(e.target.value); if (r > 0) { data.settings.mileRate = r; save(); } });
   $('exportYear').addEventListener('click', () => {
     const y = $('repYear').value, q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', lines = [['Date', 'Month', 'Type', 'Item', 'Booth', 'Quantity', 'Amount'].map(q).join(',')];
     for (const m of months.filter(m => m.endsWith(' ' + y)).reverse()) {
@@ -427,6 +494,7 @@
     renderTodo(need);
     renderBackupStatus();
     renderReports();
+    renderMileage();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };
