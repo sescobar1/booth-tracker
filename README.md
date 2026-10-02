@@ -45,3 +45,18 @@ Everything lives on the device you use, so back up regularly: **Import & backup 
 - `starter/` is a blank copy with a welcome setup; share `https://sescobar1.github.io/booth-tracker/starter/guide.html`. It saves to its own storage, so it never sees this copy's data.
 - `booth-tracker-starter.zip` is a kit a friend can upload to their own GitHub Pages site (steps are in the guide).
 - After changing `index.html`, `mobile.js`, `mobile.css`, or `sw.js`, run `python3 tools/build-starter.py` to rebuild the starter and kit.
+
+## Sync between devices (Supabase)
+
+Everything saves on the device first, so the app works without signal. To keep a phone and a
+computer in sync, connect a free [Supabase](https://supabase.com) project:
+
+1. Create a project at supabase.com.
+2. In the project, open **SQL Editor → New query**, paste `supabase-setup.sql`, and tap **Run**.
+3. In **Project Settings → API**, copy the **Project URL** and the **anon public** key.
+4. In the app, go to **More → Import & backup → Sync between devices**, paste both, and tap **Connect**
+   (or put them in `sync` in `config.js` so every device is connected already).
+5. Tap **Create account**, confirm the email, then **Sign in** with the same email and password on each device.
+
+Changes appear on the other devices within a couple of seconds. Receipt photos stay on the device they were taken on.
+The anon key is meant to be public; Row Level Security keeps each person's data private to their sign-in.

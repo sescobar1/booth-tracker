@@ -77,7 +77,7 @@ def kit_sw():
     s = open('sw.js', encoding='utf-8').read()
     s = re.sub(r"const ASSETS = \[.*?\];",
                "const ASSETS = ['./', 'index.html', 'config.js', 'mobile.js', 'mobile.css', 'manifest.webmanifest', 'icon.svg', "
-               "'icon-180.png', 'icon-192.png', 'icon-512.png', 'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2'];", s, flags=re.S)
+               "'icon-180.png', 'icon-192.png', 'icon-512.png', 'sync.js', 'vendor/supabase.js', 'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2'];", s, flags=re.S)
     return s.replace("const CACHE = 'booth-tracker-", "const CACHE = 'booth-starter-")
 
 
@@ -91,7 +91,7 @@ with zipfile.ZipFile('booth-tracker-starter.zip', 'w', zipfile.ZIP_DEFLATED) as 
     z.writestr('config.js', STARTER_CONFIG.replace("  guideUrl: 'starter/guide.html',\n", ''))
     z.writestr('manifest.webmanifest', manifest(''))
     z.writestr('sw.js', kit_sw())
-    for f in ['mobile.js', 'mobile.css', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png',
+    for f in ['mobile.js', 'sync.js', 'vendor/supabase.js', 'mobile.css', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png',
               'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2']:
         z.write(f, f)
     z.writestr('README.md', "# Booth Tracker\n\nA phone-first tracker for booth sales, purchases, rent, mileage, inventory, and taxes.\n"

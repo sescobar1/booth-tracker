@@ -1,6 +1,6 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'booth-tracker-v33';
-const ASSETS = ['./', 'index.html', 'mobile.js', 'mobile.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'profit-worksheet-data.json', 'relic-inventory-2026-10-02.csv', 'recipe-cards.html', 'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2'];
+const CACHE = 'booth-tracker-v34';
+const ASSETS = ['./', 'index.html', 'mobile.js', 'sync.js', 'vendor/supabase.js', 'mobile.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'profit-worksheet-data.json', 'relic-inventory-2026-10-02.csv', 'recipe-cards.html', 'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -11,7 +11,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  // Only this site's files; cloud sync requests always go straight to the network.
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {

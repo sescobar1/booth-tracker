@@ -328,3 +328,6 @@ dialog.sheet::backdrop{background:#17344766}
 
 .auto-copies { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .auto-copies .button { padding: 6px 12px; }
+.sync-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.sync-form input { flex: 1 1 220px; min-width: 0; }
+.linkish { background: none; border: 0; padding: 0; color: var(--navy, #24536f); text-decoration: underline; font: inherit; cursor: pointer; }

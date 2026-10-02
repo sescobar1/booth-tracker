@@ -5,6 +5,9 @@ window.BOOTH_CONFIG = {
   storeName: "Y'allternative Market",       // the store your booths are in
   storeShort: "Y'allternative",            // shorter name for tight spots
   car: { name: '2025 Ford Explorer', mpg: 27 }, // used for gas cost estimates
+  // Supabase project for syncing between devices: { url: 'https://xxxx.supabase.co', key: 'anon public key' }.
+  // Leave null to type it in on each device under Import & backup -> Sync between devices.
+  sync: null,
   storageKey: 'boothMonthlyTracker',      // where this copy saves on the device
   docsDb: 'boothDocuments',               // where receipt photos are saved on the device
   startMonth: '2025-09',                  // first month in the month lists

@@ -85,6 +85,8 @@
     setTimeout(() => t.remove(), 2600);
   }
 
+  window.toast = toast;
+
   async function shareOrDownload(file, preferShare) {
     if (preferShare && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: file.name }); return true; }
