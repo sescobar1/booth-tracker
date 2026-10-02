@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cookie Recipe Cards</title>
+<style>
+  /* Fonts are saved with the site (SIL Open Font License) so the card prints the same offline. */
+  @font-face { font-family: 'Pacifico'; src: url(fonts/pacifico.woff2) format('woff2'); font-display: swap; }
+  @font-face { font-family: 'Patrick Hand'; src: url(fonts/patrick-hand.woff2) format('woff2'); font-display: swap; }
+  /* 5 x 7 inch cards: page 1 is the front (no-bake), page 2 is the back (chocolate chip). */
+  @page { size: 5in 7in; margin: 0; }
+  :root {
+    --ink: #4a3428;
+    --soft: #8a6f5f;
+    --cream: #fffaf2;
+    --pink: #f6c9cf;
+    --mint: #cfe8d6;
+    --choc: #7a4a2e;
+    --gold: #e7b75f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #efe7dc; color: var(--ink); }
+  body { font-family: 'Patrick Hand', 'Comic Sans MS', 'Segoe Print', cursive; }
+  .toolbar { text-align: center; padding: 16px; font: 16px system-ui, sans-serif; }
+  .toolbar button { font: inherit; font-weight: 700; padding: 10px 18px; border: 0; border-radius: 999px; background: var(--choc); color: #fff; cursor: pointer; }
+  .toolbar p { margin: 8px 0 0; color: var(--soft); font-size: 14px; }
+  .card {
+    width: 5in; height: 7in; margin: 0 auto 24px; position: relative; overflow: hidden;
+    background: var(--cream); padding: 0.32in 0.34in 0.3in;
+    box-shadow: 0 6px 20px #4a342833;
+  }
+  .card::before { /* scalloped stitched border */
+    content: ''; position: absolute; inset: 0.14in; border: 2px dashed var(--gold); border-radius: 18px; pointer-events: none;
+  }
+  .band { /* gingham band across the top */
+    position: absolute; left: 0; right: 0; top: 0; height: 0.2in;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.55) 0 8px, transparent 8px 16px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.55) 0 8px, transparent 8px 16px),
+      var(--band);
+  }
+  .nobake { --band: var(--pink); }
+  .chip { --band: var(--mint); }
+  header { text-align: center; margin-top: 0.06in; position: relative; }
+  .kicker { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); }
+  h1 { font-family: 'Pacifico', 'Brush Script MT', cursive; font-weight: 400; font-size: 31px; line-height: 1.15; margin: 2px 0 0; color: var(--choc); }
+  .makes { display: inline-block; margin-top: 4px; padding: 1px 12px; border-radius: 999px; background: var(--band); font-size: 15px; }
+  .cookie { width: 34px; height: 34px; position: absolute; top: 2px; }
+  .cookie.left { left: 0.02in; transform: rotate(-12deg); }
+  .cookie.right { right: 0.02in; transform: rotate(14deg); }
+  h2 { font-family: 'Pacifico', cursive; font-weight: 400; font-size: 17px; color: var(--choc); margin: 10px 0 2px; }
+  ul.ingredients { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 14px; font-size: 16.5px; line-height: 1.28; }
+  ul.ingredients li { break-inside: avoid; padding-left: 15px; position: relative; }
+  ul.ingredients li::before { content: '♥'; position: absolute; left: 0; color: #e58c98; font-size: 12px; top: 3px; }
+  .chip ul.ingredients li::before { color: #6fae84; }
+  ol.steps { margin: 0; padding-left: 21px; font-size: 16px; line-height: 1.26; }
+  ol.steps li { margin-bottom: 2px; }
+  ol.steps li::marker { font-weight: 700; color: var(--choc); }
+  .note { margin-top: 6px; font-size: 15px; background: #fff3d6; border-radius: 10px; padding: 4px 10px; }
+  .fill { display: inline-block; min-width: 0.45in; border-bottom: 1.5px solid var(--soft); }
+  .nobake h2 { margin-top: 16px; font-size: 19px; }
+  .nobake ul.ingredients { font-size: 19px; line-height: 1.45; }
+  .nobake ol.steps { font-size: 19px; line-height: 1.45; }
+  .nobake ol.steps li { margin-bottom: 5px; }
+  footer { position: absolute; left: 0.34in; right: 0.34in; bottom: 0.26in; display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; color: var(--soft); }
+  footer .heart { color: #e58c98; }
+  @media print {
+    html, body { background: none; }
+    .toolbar { display: none; }
+    .card { margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .card:last-child { page-break-after: auto; break-after: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button type="button" onclick="window.print()">Print recipe cards</button>
+  <p>Print on 5×7 card stock, double-sided (flip on long edge). On regular paper, print at actual size and trim along the dashed border.</p>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="cookie">
+      <circle cx="17" cy="17" r="15" fill="#d9a066" stroke="#7a4a2e" stroke-width="1.5"/>
+      <circle cx="11" cy="12" r="2.2" fill="#5b3420"/><circle cx="21" cy="10" r="1.8" fill="#5b3420"/>
+      <circle cx="23" cy="20" r="2.3" fill="#5b3420"/><circle cx="13" cy="22" r="2" fill="#5b3420"/>
+      <circle cx="17" cy="16" r="1.4" fill="#5b3420"/>
+    </g>
+    <g id="nobake-cookie">
+      <circle cx="17" cy="17" r="15" fill="#6b3f26" stroke="#4a2a18" stroke-width="1.5"/>
+      <path d="M8 15c3-3 6 2 9-1s6 1 9-1M9 21c3-2 6 2 9 0s5 1 8-1" stroke="#a87652" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </g>
+  </defs>
+</svg>
+
+<!-- FRONT -->
+<section class="card nobake" aria-label="No-bake cookies recipe card">
+  <div class="band"></div>
+  <header>
+    <svg class="cookie left" viewBox="0 0 34 34" aria-hidden="true"><use href="#nobake-cookie"/></svg>
+    <svg class="cookie right" viewBox="0 0 34 34" aria-hidden="true"><use href="#nobake-cookie"/></svg>
+    <div class="kicker">Shaana's Kitchen</div>
+    <h1>No-Bake Cookies</h1>
+    <span class="makes">Makes 16 cookies</span>
+  </header>
+
+  <h2>You'll need</h2>
+  <ul class="ingredients">
+    <li>1 stick butter</li>
+    <li>2 cups sugar</li>
+    <li>½ cup milk</li>
+    <li>¼ cup cocoa</li>
+    <li>1 tsp vanilla</li>
+    <li>1 cup Jiffy peanut butter</li>
+    <li>2¼ cups oats</li>
+    <li>16 cellophane bags</li>
+  </ul>
+
+  <h2>Let's make them</h2>
+  <ol class="steps">
+    <li>In a saucepan, mix butter, sugar, cocoa &amp; milk.</li>
+    <li>Bring to a boil, stirring until it starts to boil.</li>
+    <li>Let it boil for 2 minutes.</li>
+    <li>Turn off the burner. Stir in vanilla &amp; peanut butter.</li>
+    <li>Gradually add the oats.</li>
+    <li>Drop onto wax paper and let harden.</li>
+    <li>Wrap each cookie in a cellophane bag.</li>
+  </ol>
+
+  <footer><span>FC booth · Cookies</span><span class="heart">♥ ♥ ♥</span></footer>
+</section>
+
+<!-- BACK -->
+<section class="card chip" aria-label="Chocolate chip cookies recipe card">
+  <div class="band"></div>
+  <header>
+    <svg class="cookie left" viewBox="0 0 34 34" aria-hidden="true"><use href="#cookie"/></svg>
+    <svg class="cookie right" viewBox="0 0 34 34" aria-hidden="true"><use href="#cookie"/></svg>
+    <div class="kicker">Shaana's Kitchen</div>
+    <h1>Chocolate Chip Cookies</h1>
+    <span class="makes">Makes 16 palm-size cookies</span>
+  </header>
+
+  <h2>You'll need</h2>
+  <ul class="ingredients">
+    <li>2 sticks butter, cubed</li>
+    <li>½ cup white sugar</li>
+    <li>1 cup brown sugar</li>
+    <li>2 tsp vanilla</li>
+    <li>2 eggs</li>
+    <li>3 cups flour</li>
+    <li>1 tsp corn starch</li>
+    <li>¾ tsp baking soda</li>
+    <li>¾ tsp salt</li>
+    <li>12 oz bag chocolate chips</li>
+    <li>16 cellophane bags</li>
+  </ul>
+
+  <h2>Let's make them</h2>
+  <ol class="steps">
+    <li>Cream together butter, white sugar &amp; brown sugar.</li>
+    <li>Add vanilla &amp; 2 eggs. Mix.</li>
+    <li>In a different bowl, whisk together flour, corn starch, baking soda &amp; salt.</li>
+    <li>Add wet to dry.</li>
+    <li>Add chocolate chips. Save some for the end!</li>
+    <li>Shape palm-size cookies and bake.</li>
+    <li>Press saved chips on top right out of the oven.</li>
+    <li>Cool, then wrap each in a cellophane bag.</li>
+  </ol>
+  <div class="note">Bake at <span class="fill"></span>°F for <span class="fill"></span> minutes</div>
+
+  <footer><span>FC booth · Cookies</span><span class="heart">♥ ♥ ♥</span></footer>
+</section>
+</body>
+</html>

@@ -369,6 +369,10 @@
     const items = [], relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
     if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest Relic sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
     if (backupAge >= 7) items.push(['Back up your data', data.lastBackup ? 'Last backup ' + backupAge + ' days ago' : 'No backup yet — your data lives only on this device', 'backup', 'Back up']);
+    (data.batches || []).filter(b => !b.done).forEach(b => {
+      const left = Math.round((new Date(b.expires + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / DAY);
+      if (left <= 1) items.push(['Pull ' + b.name.toLowerCase() + ' made ' + nice(b.made), left < 0 ? 'Expired ' + nice(b.expires) : left === 0 ? 'They expire today' : 'They expire tomorrow', 'cookies', 'View']);
+    });
     if (need.length) items.push([need.length + ' item' + (need.length === 1 ? '' : 's') + ' to restock', need.filter(x => x.status === 'out').length + ' out of stock', 'restock', 'View']);
     $('todo').innerHTML = '<section class="todo" aria-labelledby="todoTitle"><h3 id="todoTitle">To do</h3>' + (items.length ?
       items.map(([t, s, task, btn]) => '<div class="todo-item"><div><b>' + esc(t) + '</b><small>' + esc(s) + '</small></div><button type="button" class="button" data-task="' + task + '">' + btn + '</button></div>').join('') :
@@ -379,6 +383,7 @@
     if (t === 'backup') { go('settings'); backupNow(); }
     if (t === 'restock') go('restock');
     if (t === 'mileage') go('mileage');
+    if (t === 'cookies') document.getElementById('dashCookies').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   $('relicEvery').value = data.settings.relicEvery;
   $('relicEvery').addEventListener('change', e => { data.settings.relicEvery = Math.max(1, Number(e.target.value) || 7); e.target.value = data.settings.relicEvery; save(); renderExtras(); });
@@ -669,16 +674,17 @@
   // Each ingredient: package price for a package amount, and how much one batch uses (same unit).
   // Shaana's recipes with Walmart prices: Great Value everything except Jiffy peanut butter.
   const DEFAULT_RECIPES = [
-    { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
+    { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0, price: 2.00, shelf: 7, ingredients: [
       { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 1 },
       { name: 'Cocoa (GV 8 oz)', pack: 5.17, packAmt: 2.67, unit: 'cups', use: 0.25 },
       { name: 'Vanilla (GV, est.)', pack: 4.48, packAmt: 12, unit: 'tsp', use: 1 },
       { name: 'Sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 2 },
       { name: 'Milk (GV gallon, est.)', pack: 2.88, packAmt: 16, unit: 'cups', use: 0.5 },
       { name: 'Peanut butter (Jiffy 40 oz)', pack: 6.97, packAmt: 4.4, unit: 'cups', use: 1 },
-      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 2.25 }
+      { name: 'Quick oats (GV 42 oz)', pack: 4.18, packAmt: 14, unit: 'cups', use: 2.25 },
+      { name: 'Cellophane bags (100 pk)', pack: 7.64, packAmt: 100, unit: 'bags', use: 16 }
     ] },
-    { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
+    { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0, price: 2.00, shelf: 7, ingredients: [
       { name: 'Butter (GV 4 sticks)', pack: 2.89, packAmt: 4, unit: 'sticks', use: 2 },
       { name: 'White sugar (GV 4 lb)', pack: 2.97, packAmt: 9, unit: 'cups', use: 0.5 },
       { name: 'Brown sugar (GV 2 lb)', pack: 2.34, packAmt: 4.5, unit: 'cups', use: 1 },
@@ -688,12 +694,15 @@
       { name: 'Corn starch (GV 16 oz)', pack: 1.92, packAmt: 168, unit: 'tsp', use: 1 },
       { name: 'Baking soda (GV, est.)', pack: 0.98, packAmt: 94, unit: 'tsp', use: 0.75 },
       { name: 'Salt (GV, est.)', pack: 0.78, packAmt: 123, unit: 'tsp', use: 0.75 },
-      { name: 'Chocolate chips (GV 12 oz bag)', pack: 3.86, packAmt: 1, unit: 'bag', use: 1 }
+      { name: 'Chocolate chips (GV 12 oz bag)', pack: 3.86, packAmt: 1, unit: 'bag', use: 1 },
+      { name: 'Cellophane bags (100 pk)', pack: 7.64, packAmt: 100, unit: 'bags', use: 16 }
     ] }
   ];
   // Load Shaana's recipes once; after that, her own edits are kept.
-  if (!data.recipes || !data.recipesMine2) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesMine2 = true; }
+  if (!data.recipes || !data.recipesMine3) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); data.recipesMine3 = true; }
   data.settings.relicFee = data.settings.relicFee ?? 10;
+  data.recipes.forEach(r => { if (r.shelf == null) r.shelf = 7; });
+  data.batches = data.batches || [];
   const ingCost = g => (Number(g.packAmt) > 0 ? (Number(g.pack) || 0) / Number(g.packAmt) * (Number(g.use) || 0) : 0);
   function recipeMath(r) {
     const batch = r.ingredients.reduce((t, g) => t + ingCost(g), 0), n = Math.max(1, Number(r.perBatch) || 1);
@@ -708,8 +717,8 @@
       const num = (f, v, step, extra) => '<input class="cell-input ck" type="number" min="0" step="' + step + '" inputmode="decimal" data-r="' + ri + '" data-f="' + f + '"' + (extra || '') + ' value="' + v + '">';
       return '<article class="panel cookie-card"><h3><input class="cell-input ck ck-name" data-r="' + ri + '" data-f="name" value="' + esc(r.name) + '" aria-label="Recipe name"></h3><div class="panel-body">' +
         '<div class="ck-summary"><div><span>Cost per cookie</span><b>' + money(m.each) + '</b></div><div><span>Profit per cookie</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit) + '</b></div><div><span>Batch costs you</span><b>' + money(m.batchTotal) + '</b></div><div><span>Batch profit</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit * m.n) + '</b></div></div>' +
-        '<p class="helper">Ingredients ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each, plus ' + money(Number(r.packaging) || 0) + ' bag/label. You get ' + money(m.payout) + ' per cookie after Relic\'s ' + (data.settings.relicFee || 0) + '%. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' FC rent.</p>' +
-        '<div class="ck-settings"><label>Cookies per batch' + num('perBatch', r.perBatch, '1') + '</label><label>Bag/label per cookie' + num('packaging', r.packaging, '.01') + '</label><label>Sell price' + num('price', r.price, '.05') + '</label></div>' +
+        '<p class="helper">Ingredients and cellophane bags ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each' + (Number(r.packaging) ? ', plus ' + money(Number(r.packaging)) + ' other packaging' : '') + '. You get ' + money(m.payout) + ' per cookie after Relic\'s ' + (data.settings.relicFee || 0) + '%. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' FC rent.</p>' +
+        '<div class="ck-settings"><label>Cookies per batch' + num('perBatch', r.perBatch, '1') + '</label><label>Other packaging per cookie' + num('packaging', r.packaging, '.01') + '</label><label>Sell price' + num('price', r.price, '.05') + '</label><label>Good for (days)' + num('shelf', r.shelf ?? 7, '1') + '</label></div>' +
         '<div class="scroll"><table class="ck-table"><thead><tr><th>Ingredient</th><th class="num">Package price</th><th class="num">Package has</th><th>Unit</th><th class="num">Batch uses</th><th class="num">Cost</th><th></th></tr></thead><tbody>' +
         r.ingredients.map((g, gi) => { const a = ' data-g="' + gi + '"';
           return '<tr><td><input class="cell-input ck wide" data-r="' + ri + '"' + a + ' data-f="name" value="' + esc(g.name) + '" aria-label="Ingredient"></td><td class="num">' + num('pack', g.pack, '.01', a) + '</td><td class="num">' + num('packAmt', g.packAmt, '.01', a) + '</td><td><input class="cell-input ck unit" data-r="' + ri + '"' + a + ' data-f="unit" value="' + esc(g.unit) + '" aria-label="Unit"></td><td class="num">' + num('use', g.use, '.01', a) + '</td><td class="num">' + money(ingCost(g)) + '</td><td><button type="button" class="del ck-del" data-r="' + ri + '"' + a + ' aria-label="Remove ' + esc(g.name) + '">×</button></td></tr>'; }).join('') +
@@ -728,19 +737,77 @@
     const add = e.target.closest('.ck-add'), del = e.target.closest('.ck-del'), log = e.target.closest('.ck-log');
     if (add) { data.recipes[Number(add.dataset.r)].ingredients.push({ name: 'New ingredient', pack: 0, packAmt: 1, unit: 'cups', use: 0 }); save(); renderCookies(); }
     if (del) { const r = data.recipes[Number(del.dataset.r)]; r.ingredients.splice(Number(del.dataset.g), 1); save(); renderCookies(); }
-    if (log) {
-      const r = data.recipes[Number(log.dataset.r)], m = recipeMath(r);
-      if (!confirm('Add a purchase of ' + money(m.batchTotal) + ' for ' + m.n + ' ' + r.name.toLowerCase() + ' to ' + currentMonth + ' (FC booth)?')) return;
-      (data.purchases[currentMonth] = data.purchases[currentMonth] || []).push({ item: r.name + ' (baked batch)', booth: BOOTHS[2], qty: m.n, amount: r2(m.batchTotal), sell: Number(r.price) || undefined, date: todayIso() });
-      save(); render(); toast('Batch cost ' + money(m.batchTotal) + ' added to ' + currentMonth + ' purchases.');
-    }
+    if (log) openBatch(Number(log.dataset.r));
   });
   $('relicFee').addEventListener('change', e => { data.settings.relicFee = Math.min(100, Math.max(0, Number(e.target.value) || 0)); save(); renderCookies(); });
+  // ---------- cookie batches: when made and when they expire ----------
+  document.body.insertAdjacentHTML('beforeend', '<dialog class="sheet" id="batchSheet" aria-labelledby="batchTitle"><form id="batchForm" method="dialog"><div class="sheet-head"><h2 id="batchTitle">I made cookies</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
+    '<div class="seg" role="group" aria-label="Which cookies" id="batchKinds"></div>' +
+    '<div class="sheet-row"><label>How many<input name="qty" type="number" min="1" inputmode="numeric" required></label><label>Made on<input name="made" type="date" required></label></div>' +
+    '<div class="sheet-row"><label>Good for (days)<input name="shelf" type="number" min="1" inputmode="numeric" required></label><label>Expires<input name="expires" type="date" readonly tabindex="-1"></label></div>' +
+    '<label class="check-label"><input type="checkbox" name="logCost" checked> <span id="batchCostLabel">Add the batch cost to this month\'s purchases</span></label>' +
+    '<div class="sheet-actions"><button type="button" class="button ghost" data-close>Cancel</button><button type="submit" class="button">Save batch</button></div></div></form></dialog>');
+  const bf = $('batchForm');
+  let batchRecipe = 0;
+  const expiryOf = (made, days) => addDays(made, Math.max(1, Number(days) || 7));
+  function batchPreview() {
+    const r = data.recipes[batchRecipe]; if (!r) return;
+    bf.expires.value = expiryOf(bf.made.value || todayIso(), bf.shelf.value);
+    const m = recipeMath(r), qty = Math.max(1, Number(bf.qty.value) || m.n);
+    $('batchCostLabel').textContent = 'Add the batch cost (' + money(m.each * qty) + ') to this month\'s purchases';
+  }
+  function pickBatchRecipe(i) {
+    batchRecipe = i; const r = data.recipes[i];
+    $('batchKinds').querySelectorAll('button').forEach(b => b.classList.toggle('on', Number(b.dataset.r) === i));
+    bf.qty.value = r.perBatch || 16; bf.shelf.value = r.shelf ?? 7; batchPreview();
+  }
+  function openBatch(i) {
+    $('batchKinds').innerHTML = data.recipes.map((r, ri) => '<button type="button" data-r="' + ri + '">' + esc(r.name.replace(/ cookies$/i, '')) + '</button>').join('');
+    $('batchKinds').style.gridTemplateColumns = 'repeat(' + data.recipes.length + ',1fr)';
+    bf.reset(); bf.made.value = todayIso(); bf.logCost.checked = true;
+    pickBatchRecipe(i || 0);
+    $('batchSheet').showModal();
+  }
+  $('batchKinds').addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (b) pickBatchRecipe(Number(b.dataset.r)); });
+  ['qty', 'made', 'shelf'].forEach(n => bf[n].addEventListener('input', batchPreview));
+  bf.addEventListener('submit', e => {
+    e.preventDefault();
+    const r = data.recipes[batchRecipe], m = recipeMath(r), qty = Math.max(1, Number(bf.qty.value) || m.n), made = bf.made.value || todayIso();
+    const expires = expiryOf(made, bf.shelf.value);
+    data.batches.push({ id: newId(), recipe: r.id, name: r.name, qty, made, expires, done: false });
+    if (bf.logCost.checked) {
+      let mo = monthOf(made); if (!months.includes(mo)) mo = currentMonth;
+      (data.purchases[mo] = data.purchases[mo] || []).push({ item: r.name + ' (baked batch)', booth: BOOTHS[2], qty, amount: r2(m.each * qty), sell: Number(r.price) || undefined, date: made });
+    }
+    save(); render(); $('batchSheet').close();
+    toast(qty + ' ' + r.name.toLowerCase() + ' saved. They expire ' + nice(expires) + '.');
+  });
+  function batchStatus(b) {
+    const left = Math.round((new Date(b.expires + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / DAY);
+    if (left < 0) return { left, cls: 'out', text: 'Expired ' + nice(b.expires) };
+    if (left === 0) return { left, cls: 'out', text: 'Expires today' };
+    if (left <= 2) return { left, cls: 'low', text: 'Expires ' + (left === 1 ? 'tomorrow' : nice(b.expires)) };
+    return { left, cls: 'fresh', text: 'Good until ' + nice(b.expires) + ' · ' + left + ' days' };
+  }
+  function renderBatches() {
+    const active = data.batches.filter(b => !b.done).sort((a, b) => a.expires.localeCompare(b.expires));
+    $('dashCookies').innerHTML = '<section class="panel summary cookie-batches"><div class="cb-head"><h3>Cookies</h3><button type="button" class="button" data-batch-new>+ I made cookies</button></div><div class="panel-body">' +
+      (active.length ? active.map(b => { const st = batchStatus(b);
+        return '<div class="cb-row"><div><b>' + esc(b.name) + ' · ' + b.qty + '</b><small>Made ' + nice(b.made) + '</small></div><span class="tag ' + st.cls + '">' + esc(st.text) + '</span><button type="button" class="button ghost cb-done" data-id="' + b.id + '">' + (st.left < 0 ? 'Pulled' : 'Sold out') + '</button></div>'; }).join('') :
+        '<p class="helper" style="margin:0">No cookies out right now. Tap <b>+ I made cookies</b> after you bake.</p>') + '</div></section>';
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-batch-new]')) openBatch(0);
+    const d = e.target.closest('.cb-done');
+    if (d) { const b = data.batches.find(x => x.id === d.dataset.id); if (b) { b.done = true; b.doneOn = todayIso(); save(); renderExtras(); toast(b.name + ' cleared.'); } }
+  });
+
   $('ckReset').addEventListener('click', () => { if (confirm('Put both recipes back to the starting ingredients and Walmart prices?')) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); save(); renderCookies(); } });
 
   // ---------- render hook ----------
   function renderExtras() {
     const need = renderRestock();
+    renderBatches();
     renderTodo(need);
     renderBackupStatus();
     renderReports();
