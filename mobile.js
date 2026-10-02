@@ -33,6 +33,8 @@
   data.amazon = data.amazon || [];
 
   // ---------- small helpers ----------
+  // A big "take a photo" button wrapping a file input; works for camera or photo library.
+  const camBtn = name => '<label class="camera-btn"><input name="' + name + '" type="file" accept="image/*,.pdf" capture="environment"><span class="cam-text">📷 Take photo of receipt</span><img class="cam-thumb" alt="Receipt preview" hidden></label>';
   const pad = n => String(n).padStart(2, '0');
   const isoLocal = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   const todayIso = () => isoLocal(new Date());
@@ -92,7 +94,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -100,7 +102,7 @@
     '<label>Item<input name="item" required list="itemNames" autocomplete="off" placeholder="Example: Butter squishy"></label>' +
     '<div class="sheet-row"><label><span id="qAmountLabel">Payout</span><input name="amount" required type="number" min="0" step=".01" inputmode="decimal" placeholder="0.00"></label><label>Date<input name="date" type="date" required></label></div>' +
     '<div class="sheet-row"><label>Booth<select name="booth"></select></label><label class="q-bought">Quantity<input name="qty" type="number" min="1" value="1" inputmode="numeric"></label></div>' +
-    '<label class="q-bought">Receipt photo<input name="receipt" type="file" accept="image/*,.pdf" capture="environment"></label>' +
+    '<div class="q-bought">' + camBtn('receipt') + '</div>' +
     '<label class="q-bought">Sell price each<input name="sellPrice" type="number" min="0" step=".01" inputmode="decimal" placeholder="2× cost"></label>' +
     '<fieldset class="inv-choice q-bought" id="qInv"><legend>Add this to inventory?</legend><label><input type="radio" name="invDest" value="overall" required> Overall</label><label><input type="radio" name="invDest" value="store"> Store (Relic)</label><label><input type="radio" name="invDest" value="both"> Both</label><label><input type="radio" name="invDest" value="none"> Neither (rent, supplies, fees)</label></fieldset>' +
     '<div class="unit-preview q-bought" id="qPreview"></div>' +
@@ -179,7 +181,7 @@
 
   // Receipt photo on the full purchase form
   const pform = $('purchaseForm');
-  pform.querySelector('.inv-choice').insertAdjacentHTML('beforebegin', '<label>Receipt photo<input name="receipt" type="file" accept="image/*,.pdf" capture="environment"></label>');
+  pform.querySelector('.inv-choice').insertAdjacentHTML('beforebegin', '<div class="cam-wrap">' + camBtn('receipt') + '</div>');
   document.addEventListener('submit', e => {
     if (e.target !== pform) return;
     const files = [...pform.receipt.files], item = pform.item.value.trim(), m = pform.month.value, amt = Number(pform.amount.value);
@@ -227,6 +229,29 @@
     const edits = ((data.rowEdits.purchases = data.rowEdits.purchases || {})[m] = data.rowEdits.purchases[m] || {});
     edits[key] = { ...(edits[key] || {}), qty };
     save(); render(); toast('Quantity updated.');
+  });
+
+  // ---------- receipt photos ----------
+  function resetCam(root) { root.querySelectorAll('.camera-btn').forEach(l => { const img = l.querySelector('.cam-thumb'); if (img.src) URL.revokeObjectURL(img.src); img.hidden = true; img.removeAttribute('src'); l.classList.remove('has'); l.querySelector('.cam-text').textContent = '📷 Take photo of receipt'; }); }
+  document.addEventListener('change', e => {
+    const inp = e.target; if (!inp.closest || !inp.closest('.camera-btn')) return;
+    const l = inp.closest('.camera-btn'), f = inp.files[0], img = l.querySelector('.cam-thumb');
+    if (!f) { resetCam(l.parentNode); return; }
+    l.classList.add('has'); l.querySelector('.cam-text').textContent = '✓ Receipt added · tap to retake';
+    if (f.type.startsWith('image/')) { if (img.src) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(f); img.hidden = false; }
+  });
+  [qf, pform].forEach(f => f.addEventListener('reset', () => resetCam(f)));
+  // Snap a receipt first, then fill in the purchase.
+  document.addEventListener('click', e => { if (e.target.closest('[data-snap]')) { openQuick('purchases'); qf.receipt.click(); } });
+  // Add a receipt photo to any purchase line, including past months.
+  document.body.insertAdjacentHTML('beforeend', '<input type="file" id="rcptInput" accept="image/*,.pdf" capture="environment" hidden>');
+  let rcptFor = null;
+  document.addEventListener('click', e => { const b = e.target.closest('.rcpt-add'); if (b) { rcptFor = { item: b.dataset.item, month: b.dataset.month }; $('rcptInput').click(); } });
+  $('rcptInput').addEventListener('change', e => {
+    const files = [...e.target.files]; e.target.value = '';
+    if (!files.length || !rcptFor) return;
+    const it = rcptFor; rcptFor = null;
+    saveDocs(it.item, files, 'Receipt', 'Purchase ' + it.month).then(() => { render(); toast('Receipt saved for ' + it.item + '.'); });
   });
 
   // ---------- backup & restore ----------
@@ -387,6 +412,9 @@
       const left = Math.round((new Date(b.expires + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / DAY);
       if (left <= 1) items.push(['Pull ' + b.name.toLowerCase() + ' made ' + nice(b.made), left < 0 ? 'Expired ' + nice(b.expires) : left === 0 ? 'They expire today' : 'They expire tomorrow', 'cookies', 'View']);
     });
+    if (typeof boothReport === 'function') boothReport().filter(r => r.status[0] === 'Losing money').forEach(r => items.push([r.c + ' booth is losing money', r.status[2], 'reports', 'Review']));
+    const due = typeof nextTaxDue === 'function' ? nextTaxDue() : null;
+    if (due && due.est > 0 && !due.paid && due.days <= 21) items.push(['Estimated tax ' + money(due.est) + ' due ' + nice(due.due), due.q + ' ' + due.yr + ' · in ' + due.days + ' days', 'taxes', 'View']);
     if (need.length) items.push([need.length + ' item' + (need.length === 1 ? '' : 's') + ' to restock', need.filter(x => x.status === 'out').length + ' out of stock', 'restock', 'View']);
     $('todo').innerHTML = '<section class="todo" aria-labelledby="todoTitle"><h3 id="todoTitle">To do</h3>' + (items.length ?
       items.map(([t, s, task, btn]) => '<div class="todo-item"><div><b>' + esc(t) + '</b><small>' + esc(s) + '</small></div><button type="button" class="button" data-task="' + task + '">' + btn + '</button></div>').join('') :
@@ -397,6 +425,8 @@
     if (t === 'backup') backupNow();
     if (t === 'restock') go('restock');
     if (t === 'mileage') go('mileage');
+    if (t === 'reports') go('reports');
+    if (t === 'taxes') go('taxes');
     if (t === 'cookies') document.getElementById('dashCookies').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   $('relicEvery').value = data.settings.relicEvery;
@@ -456,6 +486,13 @@
   const gasOf = t => t.gas != null ? t.gas : gasFor(t.miles);
   const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
   const dow = iso => new Date(iso + 'T00:00:00').getDay();
+  // IRS business standard mileage rates by start date (2026 rose mid-year). Later years use the rate set on the page.
+  const IRS_RATES = [['2025-01-01', 0.70], ['2026-01-01', 0.725], ['2026-07-01', 0.76]];
+  function rateFor(date) {
+    if (date.slice(0, 4) > IRS_RATES[IRS_RATES.length - 1][0].slice(0, 4)) return Number(data.settings.mileRate) || 0.76;
+    let r = IRS_RATES[0][1]; for (const [from, v] of IRS_RATES) if (date >= from) r = v; return r;
+  }
+  if (!data.irsRates2026) { data.mileage.forEach(t => { t.rate = rateFor(t.date); }); data.irsRates2026 = true; if (data.settings.mileRate === 0.7) data.settings.mileRate = 0.76; }
   function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
   // Fill in scheduled trips from January 1 of this year (one time); the start date can be changed on the page.
   if (!data.settings.autoFromJan) { data.settings.autoFrom = new Date().getFullYear() + '-01-01'; data.settings.autoFromJan = true; }
@@ -464,7 +501,7 @@
   const routeLabel = r => r.name + (r.detail ? ' (' + r.detail + ')' : '');
   function tripFor(r, date, auto) {
     const miles = tripMiles(r);
-    return { id: newId(), date, purpose: routeLabel(r), miles, rate: data.settings.mileRate, gas: r2(gasFor(miles)), route: r.id, auto: !!auto };
+    return { id: newId(), date, purpose: routeLabel(r), miles, rate: rateFor(date), gas: r2(gasFor(miles)), route: r.id, auto: !!auto };
   }
   function autoLog() {
     const from = data.settings.autoFrom, to = todayIso(), skips = new Set(data.mileSkips);
@@ -571,7 +608,7 @@
   mf.date.value = todayIso(); $('mileRate').value = data.settings.mileRate;
   mf.addEventListener('submit', e => {
     e.preventDefault();
-    const rate = data.settings.mileRate, miles = Number(mf.miles.value) || 0;
+    const rate = rateFor(mf.date.value || todayIso()), miles = Number(mf.miles.value) || 0;
     data.mileage.push({ id: newId(), date: mf.date.value, purpose: mf.purpose.value.trim(), miles, rate, gas: r2(gasFor(miles)) });
     save(); mf.purpose.value = ''; mf.miles.value = ''; renderExtras(); toast('Trip added.');
   });
@@ -830,6 +867,164 @@
 
   $('ckReset').addEventListener('click', () => { if (confirm('Put both recipes back to the starting ingredients and Walmart prices?')) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); save(); renderCookies(); } });
 
+  // ---------- insights: take-home, goal, booth report card, busiest days ----------
+  data.settings.goal = data.settings.goal ?? 500;
+  const monthPrefix = m => { const [name, y] = m.split(' '); return y + '-' + pad(MONTH_NAMES.indexOf(name) + 1); };
+  const latestSalesMonth = () => months.slice(months.indexOf(currentMonth)).find(m => allRows('sales', m).length) || currentMonth;
+  function monthMoney(m) {
+    const { st, o } = boothStats(m); let sales = 0, buy = o.unBuy, rent = 0;
+    for (const c in st) { sales += st[c].sales; buy += st[c].buy; rent += st[c].rent; }
+    sales += o.unSales;
+    const trips = data.mileage.filter(t => t.date.startsWith(monthPrefix(m)));
+    const gas = trips.reduce((t, x) => t + gasOf(x), 0), deduction = trips.reduce((t, x) => t + x.miles * x.rate, 0);
+    return { sales, buy, rent, work: o.work, profit: sales - buy - rent, gas, deduction, st };
+  }
+  function renderDashInsights() {
+    const dm = latestSalesMonth(), mm = monthMoney(dm), take = mm.profit - mm.gas;
+    $('dashTake').textContent = money(take); $('dashTake').className = 'value ' + (take < 0 ? 'inventory-low' : 'green');
+    $('dashTakeLabel').textContent = dm + ' after gas'; $('dashTakeNote').textContent = 'Gas about ' + money(mm.gas);
+    const goal = Number(data.settings.goal) || 0, cur = monthMoney(currentMonth), pct = goal > 0 ? Math.max(0, Math.min(100, cur.profit / goal * 100)) : 0;
+    $('dashGoal').innerHTML = '<section class="goal" aria-labelledby="goalTitle"><div class="goal-head"><h3 id="goalTitle">' + esc(currentMonth) + ' profit goal</h3><label>Goal $<input type="number" id="goalInput" min="0" step="25" inputmode="numeric" value="' + goal + '" class="cell-input"></label></div>' +
+      '<div class="goal-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + goal + '" aria-valuenow="' + Math.round(cur.profit) + '"><i style="width:' + pct + '%"></i></div>' +
+      '<p class="helper">' + money(cur.profit) + ' of ' + money(goal) + (cur.profit >= goal && goal > 0 ? ' · Goal reached!' : ' · ' + money(Math.max(0, goal - cur.profit)) + ' to go') + '. Rent for the month counts from day 1, so this starts below zero.' + (dm !== currentMonth ? ' Last month (' + esc(dm) + '): ' + money(mm.profit) + '.' : '') + '</p></section>';
+  }
+  document.addEventListener('change', e => { if (e.target.id === 'goalInput') { data.settings.goal = Math.max(0, Number(e.target.value) || 0); save(); renderExtras(); } });
+
+  // Booth report card: last four months ending with the latest month that has sales.
+  function boothReport() {
+    const end = months.indexOf(latestSalesMonth()), span = months.slice(end, end + 4).reverse();
+    const per = span.map(m => monthMoney(m).st);
+    return Object.keys(RENT).map(c => {
+      const profits = per.map(st => st[c].sales - st[c].buy - st[c].rent), rent = per.reduce((t, st) => t + st[c].rent, 0), total = profits.reduce((a, b) => a + b, 0);
+      const last3 = profits.slice(-3), losing = last3.filter(p => p < 0).length >= 2, n = profits.length;
+      const falling = n >= 3 && profits[n - 1] < profits[n - 2] && profits[n - 2] < profits[n - 3] && profits[n - 1] < profits[n - 3] - Math.abs(profits[n - 3]) * 0.25;
+      const status = losing ? ['Losing money', 'out', 'Lost money in ' + last3.filter(p => p < 0).length + ' of the last 3 months'] : falling ? ['Watch', 'low', 'Profit down 2 months in a row'] : ['Doing well', 'fresh', 'Making money'];
+      return { c, span, profits, perRent: rent ? total / rent : 0, total, status };
+    });
+  }
+  function renderReportCard() {
+    const rows = boothReport(), span = rows[0].span;
+    $('reportCard').innerHTML = '<div class="scroll"><table><thead><tr><th>Booth</th><th>Status</th>' + span.map(m => '<th class="num">' + esc(m.slice(0, 3)) + '</th>').join('') + '<th class="num">Per $1 rent</th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td><b>' + r.c + '</b></td><td><span class="tag ' + r.status[1] + '" title="' + esc(r.status[2]) + '">' + r.status[0] + '</span><small class="rc-why">' + esc(r.status[2]) + '</small></td>' + r.profits.map(p => '<td class="num ' + (p < 0 ? 'inventory-low' : '') + '">' + money(p) + '</td>').join('') + '<td class="num">' + money(r.perRent) + '</td></tr>').join('') +
+      '</tbody></table></div><p class="helper">Profit is sales − purchases − rent. "Per $1 rent" is how much profit each rent dollar brought back over these months.</p>';
+  }
+  function renderWeekdays() {
+    const y = $('repYear').value, totals = [0, 0, 0, 0, 0, 0, 0];
+    for (const m of months.filter(x => x.endsWith(' ' + y))) for (const x of allRows('sales', m)) if (x.date && x.booth !== 'Work income') totals[dow(x.date)] += x.amount;
+    const max = Math.max(...totals), order = [1, 2, 3, 4, 5, 6, 0], best = totals.indexOf(max);
+    $('weekdayChart').innerHTML = max ? '<p class="helper">Busiest day: <b>' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][best] + '</b>. Restock the day before so the shelves are full.</p><div class="wd-chart" role="img" aria-label="Sales by day of the week">' +
+      order.map(d => '<div class="wd-row' + (d === best ? ' best' : '') + '" title="' + DAYS[d] + ': ' + money(totals[d]) + '"><span class="wd-day">' + DAYS[d] + '</span><span class="wd-track"><i style="width:' + (totals[d] / max * 100) + '%"></i></span><span class="wd-val">' + money(totals[d]) + '</span></div>').join('') + '</div>' :
+      '<p class="helper">No dated sales for ' + y + ' yet.</p>';
+  }
+
+  // ---------- taxes ----------
+  data.settings.incomeRate = data.settings.incomeRate ?? 15;
+  data.taxPaid = data.taxPaid || {};
+  const SE_RATE = 0.9235 * 0.153;
+  const QUARTERS = y => [
+    { q: 'Q1', label: 'Jan–Mar', months: [1, 2, 3], due: y + '-04-15' },
+    { q: 'Q2', label: 'Apr–May', months: [4, 5], due: y + '-06-15' },
+    { q: 'Q3', label: 'Jun–Aug', months: [6, 7, 8], due: y + '-09-15' },
+    { q: 'Q4', label: 'Sep–Dec', months: [9, 10, 11, 12], due: (Number(y) + 1) + '-01-15' }
+  ];
+  const taxOn = net => net > 0 ? net * (net > 400 ? SE_RATE : 0) + net * (Number(data.settings.incomeRate) || 0) / 100 : 0;
+  function taxYear(y) {
+    // Only months up to now count; planned rent and purchases for later months are left out.
+    const ms = months.filter(m => m.endsWith(' ' + y) && months.indexOf(m) >= months.indexOf(currentMonth)).reverse(), rows = ms.map(m => ({ m, ...monthMoney(m) }));
+    const sum = k => rows.reduce((t, r) => t + r[k], 0);
+    const sales = sum('sales'), buy = sum('buy'), rent = sum('rent'), work = sum('work'), deduction = sum('deduction'), gas = sum('gas');
+    const net = sales - buy - rent - deduction, se = net > 400 ? net * SE_RATE : 0, inc = net > 0 ? net * (Number(data.settings.incomeRate) || 0) / 100 : 0;
+    const quarters = QUARTERS(y).map(q => {
+      const qr = rows.filter(r => q.months.includes(MONTH_NAMES.indexOf(r.m.split(' ')[0]) + 1));
+      const qnet = qr.reduce((t, r) => t + r.sales - r.buy - r.rent - r.deduction, 0);
+      return { ...q, net: qnet, est: taxOn(qnet), paid: Number(((data.taxPaid[y] || {})[q.q]) || 0), has: qr.length };
+    });
+    return { y, rows, sales, buy, rent, work, deduction, gas, net, se, inc, quarters, miles: data.mileage.filter(t => t.date.startsWith(y)) };
+  }
+  const taxYears = [...new Set(months.map(m => m.split(' ')[1]))].sort().reverse();
+  $('taxYear').innerHTML = taxYears.map(y => '<option>' + y + '</option>').join('');
+  $('taxYear').value = taxYears.includes(String(new Date().getFullYear())) ? String(new Date().getFullYear()) : taxYears[0];
+  $('taxYear').addEventListener('change', renderTaxes);
+  $('incomeRate').value = data.settings.incomeRate;
+  $('incomeRate').addEventListener('change', e => { data.settings.incomeRate = Math.min(60, Math.max(0, Number(e.target.value) || 0)); save(); renderExtras(); });
+  function renderTaxes() {
+    if (!$('taxes').classList.contains('active')) return;
+    const t = taxYear($('taxYear').value), line = (l, v, note, cls) => '<tr class="' + (cls || '') + '"><td>' + l + (note ? '<small>' + note + '</small>' : '') + '</td><td class="num">' + v + '</td></tr>';
+    const miles = t.miles.reduce((s, x) => s + x.miles, 0);
+    $('taxSummary').innerHTML = '<table class="tax-table"><tbody>' +
+      line('Sales (Relic payouts)', money(t.sales), 'Schedule C, gross receipts') +
+      line('Inventory & supplies bought', '−' + money(t.buy), 'Cost of goods and supplies') +
+      line('Booth rent', '−' + money(t.rent), 'Rent of business property') +
+      line('Mileage deduction', '−' + money(t.deduction), Math.round(miles).toLocaleString() + ' business miles at the IRS rate') +
+      line('<b>Business profit (or loss)</b>', '<b class="' + (t.net < 0 ? 'inventory-low' : 'green') + '">' + money(t.net) + '</b>', '', 'tax-total') +
+      '</tbody></table>' +
+      (t.work ? '<p class="helper">Work shifts: <b>' + money(t.work) + '</b> (not included above). Ask your tax preparer whether Relic reports this pay on a W-2 or a 1099.</p>' : '');
+    $('taxEstimate').innerHTML = t.net > 0 ?
+      '<div class="cards tax-cards"><div class="card"><div class="label">Self-employment tax</div><div class="value">' + money(t.se) + '</div><div class="helper">15.3% on 92.35% of profit</div></div><div class="card"><div class="label">Income tax (est.)</div><div class="value">' + money(t.inc) + '</div><div class="helper">' + (data.settings.incomeRate || 0) + '% of profit</div></div><div class="card"><div class="label">Set aside in total</div><div class="value">' + money(t.se + t.inc) + '</div><div class="helper">About ' + Math.round((t.se + t.inc) / t.net * 100) + '% of each month\'s profit</div></div></div>' :
+      '<div class="tax-good"><b>No business tax is likely owed for ' + t.y + ' so far.</b> Your mileage deduction (' + money(t.deduction) + ') is larger than your booth profit before mileage (' + money(t.sales - t.buy - t.rent) + '), so the business shows a loss of ' + money(-t.net) + '. Self-employment tax only applies when profit is over $400. Keep your trip log, because it is what supports this.</div>';
+    $('taxEstimate').insertAdjacentHTML('beforeend', '<div class="tax-ask"><b>Ask your preparer about mileage.</b> Driving from home to your own booth can count as commuting, which is not deductible, unless your home is your main place of business (where you bake, price, store inventory, and keep the books). Trips to buy inventory, like Price Break, Goodwill, or St. Joe\'s, are usually business trips. Booth profit before mileage this year: <b>' + money(t.sales - t.buy - t.rent) + '</b>.</div>');
+    const today = todayIso();
+    $('taxQuarters').innerHTML = '<div class="scroll"><table><thead><tr><th>Payment</th><th>Covers</th><th>Due</th><th class="num">Profit</th><th class="num">Estimated tax</th><th class="num">Paid</th></tr></thead><tbody>' +
+      t.quarters.map(q => { const late = !q.paid && q.est > 0 && q.due < today;
+        return '<tr><td><b>' + q.q + '</b></td><td>' + q.label + '</td><td>' + nice(q.due) + (late ? ' <span class="tag out">Past due</span>' : '') + '</td><td class="num ' + (q.net < 0 ? 'inventory-low' : '') + '">' + (q.has ? money(q.net) : '—') + '</td><td class="num">' + (q.has ? money(q.est) : '—') + '</td><td class="num"><input class="cell-input tax-paid" type="number" min="0" step=".01" inputmode="decimal" data-y="' + t.y + '" data-q="' + q.q + '" value="' + (q.paid || '') + '" placeholder="0.00" aria-label="Amount paid for ' + q.q + '"></td></tr>'; }).join('') +
+      '</tbody></table></div><p class="helper">Pay estimated taxes at IRS.gov/payments (Direct Pay, choose 1040-ES) and type what you paid in the Paid column. If a quarter shows $0, there is nothing to send.</p>';
+    $('taxMonths').innerHTML = t.rows.map(r => { const net = r.sales - r.buy - r.rent - r.deduction;
+      return '<tr><td>' + r.m + '</td><td class="num">' + money(r.sales - r.buy - r.rent) + '</td><td class="num">' + money(r.deduction) + '</td><td class="num ' + (net < 0 ? 'inventory-low' : 'green') + '">' + money(net) + '</td><td class="num">' + money(taxOn(net)) + '</td></tr>'; }).join('');
+  }
+  document.addEventListener('change', e => {
+    const t = e.target; if (!t.matches('.tax-paid')) return;
+    (data.taxPaid[t.dataset.y] = data.taxPaid[t.dataset.y] || {})[t.dataset.q] = Math.max(0, Number(t.value) || 0);
+    save(); renderExtras(); toast('Payment saved.');
+  });
+  function nextTaxDue() {
+    const today = todayIso(), y = today.slice(0, 4), list = [...QUARTERS(String(Number(y) - 1)).slice(3), ...QUARTERS(y)];
+    for (const q of list) {
+      const yr = q.q === 'Q4' ? String(Number(q.due.slice(0, 4)) - 1) : q.due.slice(0, 4);
+      if (q.due < today) continue;
+      const days = Math.round((new Date(q.due + 'T00:00:00') - new Date(today + 'T00:00:00')) / DAY);
+      const tq = taxYear(yr).quarters.find(x => x.q === q.q);
+      return { ...tq, yr, days };
+    }
+    return null;
+  }
+  $('taxCsv').addEventListener('click', () => {
+    const t = taxYear($('taxYear').value), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', L = [];
+    L.push(['Booth Tracker tax summary', t.y].map(q).join(','), '');
+    [['Sales (Relic payouts)', t.sales], ['Inventory & supplies bought', t.buy], ['Booth rent', t.rent], ['Mileage deduction', t.deduction], ['Business profit (loss)', t.net], ['Work shift income (separate)', t.work], ['Business miles', t.miles.reduce((s, x) => s + x.miles, 0)]].forEach(([a, b]) => L.push([a, Number(b).toFixed(2)].map(q).join(',')));
+    L.push('', ['Quarter', 'Covers', 'Due', 'Profit', 'Estimated tax', 'Paid'].map(q).join(','));
+    t.quarters.forEach(x => L.push([x.q, x.label, x.due, x.net.toFixed(2), x.est.toFixed(2), x.paid.toFixed(2)].map(q).join(',')));
+    L.push('', ['Date', 'Trip', 'Miles', 'IRS rate', 'Deduction'].map(q).join(','));
+    t.miles.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(x => L.push([x.date, x.purpose, x.miles, x.rate, (x.miles * x.rate).toFixed(2)].map(q).join(',')));
+    shareOrDownload(new File([L.join('\r\n')], 'booth-taxes-' + t.y + '.csv', { type: 'text/csv' }), true);
+  });
+  $('taxPrint').addEventListener('click', () => window.print());
+
+  // ---------- price tags (Avery 5160, 30 per sheet) ----------
+  function printTags(list) {
+    const tags = list.flatMap(t => Array(Math.max(1, t.n)).fill(t)).slice(0, 600);
+    if (!tags.length) { toast('No items to print. Clear the search or add prices first.'); return; }
+    const w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups to print tags.'); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Price tags</title><style>' +
+      '@page{size:letter;margin:0.5in 0.19in}body{margin:0;font-family:system-ui,-apple-system,sans-serif;color:#173447}' +
+      '.bar{padding:12px;font-size:15px}.bar button{font:inherit;font-weight:700;padding:8px 14px;border:0;border-radius:8px;background:#24536f;color:#fff}' +
+      '.sheet{display:grid;grid-template-columns:repeat(3,2.625in);grid-auto-rows:1in;column-gap:.125in}' +
+      '.tag{box-sizing:border-box;padding:.07in .14in;overflow:hidden;display:flex;flex-direction:column;justify-content:center;border:1px dashed #c9d3d8;break-inside:avoid}' +
+      '.n{font-size:10pt;font-weight:600;line-height:1.15;max-height:2.3em;overflow:hidden}.p{font-size:20pt;font-weight:800;line-height:1.1}.m{font-size:7.5pt;color:#5b6a73}' +
+      '@media print{.bar{display:none}.tag{border:0}}</style></head><body><div class="bar">' + tags.length + ' tag' + (tags.length === 1 ? '' : 's') + ' · Avery 5160 labels (30 per sheet) or plain paper. <button onclick="print()">Print</button></div><div class="sheet">' +
+      tags.map(t => '<div class="tag"><div class="n">' + esc(t.name) + '</div><div class="p">' + money(t.price) + '</div><div class="m">' + esc(t.code) + (t.sku ? ' · ' + esc(t.sku) : '') + '</div></div>').join('') + '</div></body></html>');
+    w.document.close();
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-tags]'); if (!b) return;
+    if (b.dataset.tags === 'store') {
+      const q = itemKey($('storeSearch').value), each = $('tagEach').checked;
+      printTags(data.inventory.filter(x => x.qty > 0 && x.price > 0 && (!q || itemKey(x.item + ' ' + x.sku).includes(q))).map(x => ({ name: x.item, price: x.price, code: code(boothFor(x.item)), sku: x.sku, n: each ? Math.min(x.qty, 30) : 1 })));
+    } else {
+      const q = itemKey($('overallSearch').value), bf = $('overallBooth').value;
+      printTags(data.overall.filter(x => x.qty > 0 && (!q || itemKey(x.item).includes(q)) && (!bf || x.booth === bf)).map(x => ({ name: x.item, price: x.price || (x.qty ? r2(x.cost / x.qty * 2) : 0), code: code(x.booth), sku: '', n: 1 })).filter(t => t.price > 0));
+    }
+  });
+
   // ---------- render hook ----------
   function renderExtras() {
     const need = renderRestock();
@@ -841,6 +1036,9 @@
     renderWork();
     renderAmazon();
     renderCookies();
+    renderDashInsights();
+    if ($('reports').classList.contains('active')) { renderReportCard(); renderWeekdays(); }
+    renderTaxes();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };

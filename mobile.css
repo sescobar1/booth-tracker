@@ -114,6 +114,48 @@
 .tag.fresh{background:#e3f3e8;color:var(--green)}
 a.button{display:inline-block;text-decoration:none}
 
+/* Goal, report card, weekday chart, taxes */
+#dashboard .cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+.goal{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 18px;box-shadow:0 3px 12px #1932460d}
+.goal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.goal-head h3{font-size:1rem}
+.goal-head label{font-size:.85rem;color:#4e5f69}
+.goal-head input{width:80px}
+.goal-bar{height:12px;background:#edf1f2;border-radius:8px;overflow:hidden;margin:10px 0 6px}
+.goal-bar i{display:block;height:100%;background:var(--green);border-radius:8px}
+.goal .helper{margin:0}
+.rc-why{display:block;color:#64747d;font-size:.72rem;margin-top:3px}
+.wd-chart{display:grid;gap:6px}
+.wd-row{display:grid;grid-template-columns:42px 1fr 80px;align-items:center;gap:8px;font-size:.88rem}
+.wd-track{height:14px;background:transparent}
+.wd-track i{display:block;height:100%;background:#3c8ab1;border-radius:0 4px 4px 0;min-width:2px}
+.wd-row.best .wd-day,.wd-row.best .wd-val{font-weight:800}
+.wd-val{text-align:right;color:#31576b}
+.tax-table td{padding:10px 12px}
+.tax-table small{display:block;color:#64747d;font-size:.75rem}
+.tax-total td{border-top:2px solid #173447;font-size:1.05rem}
+.tax-cards{margin:0 0 12px}
+.tax-cards .helper{margin:4px 0 0;font-size:.75rem}
+.tax-good{background:#eaf6ee;border-left:4px solid var(--green);border-radius:6px;padding:12px 14px;margin-bottom:12px;line-height:1.45}
+.tax-rate{font-size:.88rem;color:#31576b}
+.tax-ask{background:#fff3d6;border-left:4px solid #b67c20;border-radius:6px;padding:12px 14px;margin-bottom:12px;line-height:1.45}
+.tax-rate input{width:64px}
+.tax-paid{width:90px}
+
+/* Receipt camera, price tags */
+.camera-btn{display:flex;align-items:center;gap:12px;position:relative;border:2px dashed #9fb8c6;border-radius:12px;padding:12px 14px;background:#f7fafb;cursor:pointer;margin-bottom:12px;font-weight:700;color:var(--navy)}
+.camera-btn input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.camera-btn.has{border-style:solid;border-color:var(--green);background:#eaf6ee;color:var(--green)}
+.cam-thumb{width:52px;height:52px;object-fit:cover;border-radius:8px;margin-left:auto}
+.cam-wrap{grid-column:1/-1}
+.cam-wrap .camera-btn{margin:0}
+.snap-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.snap-btn{padding:12px 16px;font-size:1rem}
+.snap-row .helper{margin:0;flex:1;min-width:200px}
+td.rcpt{white-space:nowrap}
+.rcpt-add{border:1px solid #cbd9df;background:#fff;border-radius:8px;padding:4px 8px;font-size:1rem;cursor:pointer}
+.rcpt .doc-jump{margin-left:6px}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -151,7 +193,7 @@ dialog.sheet::backdrop{background:#17344766}
   .fab{right:16px;bottom:calc(88px + env(safe-area-inset-bottom))}
   dialog.sheet{margin:auto auto 0;border-radius:18px 18px 0 0;width:100%;max-width:100%;padding-bottom:env(safe-area-inset-bottom)}
   .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
-  #dashboard .cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  #dashboard .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   #dashboard .card{padding:11px 10px;min-width:0}
   #dashboard .card .label{font-size:.62rem}
   #dashboard .card .value{font-size:1.05rem;margin-top:5px}
@@ -159,6 +201,7 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  .cards.tax-cards{grid-template-columns:1fr}
   .gas-form,.work-form,.amz-form,.place-form{grid-template-columns:1fr 1fr}
   .cookie-grid{grid-template-columns:1fr}
   .ck-settings{grid-template-columns:1fr 1fr}
