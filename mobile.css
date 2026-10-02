@@ -1,4 +1,5 @@
 /* Phone-first additions: quick add, bottom tabs, sheets, reports, print. */
+[hidden]{display:none!important}
 .quick-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 18px}
 .big-btn{border:0;border-radius:14px;padding:18px 12px;font-size:1.1rem;font-weight:800;color:#fff;box-shadow:0 4px 14px #1932461f}
 .big-btn.sold{background:var(--green)}
@@ -35,6 +36,15 @@
 .year-cards .card{min-width:0;padding:13px}
 .year-cards .value{font-size:1.3rem;overflow-wrap:anywhere}
 .export-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+
+/* Purchase inventory choice and price preview */
+.inv-choice{grid-column:1/-1;border:1px solid #cbd9df;border-radius:9px;padding:8px 12px 10px;margin:0 0 12px;background:#fff;display:flex;flex-wrap:wrap;gap:6px 18px}
+.inv-choice legend{font-size:.75rem;font-weight:700;color:#5c6b74;padding:0 4px}
+.form .inv-choice label,.sheet-body .inv-choice label{display:flex;align-items:center;gap:6px;font-size:.9rem;font-weight:600;color:#173447;margin:0}
+.form .inv-choice input[type=radio],.sheet-body .inv-choice input[type=radio]{display:inline-block;width:auto;margin:0;padding:0}
+.unit-preview{grid-column:1/-1;font-size:.88rem;color:#31576b;margin:-4px 0 10px}
+.unit-preview:empty{display:none}
+.qty-edit{width:64px;text-align:right}
 
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}

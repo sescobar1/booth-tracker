@@ -75,7 +75,8 @@
     '<div class="sheet-row"><label><span id="qAmountLabel">Payout</span><input name="amount" required type="number" min="0" step=".01" inputmode="decimal" placeholder="0.00"></label><label>Date<input name="date" type="date" required></label></div>' +
     '<div class="sheet-row"><label>Booth<select name="booth"></select></label><label class="q-bought">Quantity<input name="qty" type="number" min="1" value="1" inputmode="numeric"></label></div>' +
     '<label class="q-bought">Receipt photo<input name="receipt" type="file" accept="image/*,.pdf" capture="environment"></label>' +
-    '<label class="check-label q-bought"><input type="checkbox" name="toInventory" checked> Add to my overall inventory</label>' +
+    '<fieldset class="inv-choice q-bought" id="qInv"><legend>Add this to inventory?</legend><label><input type="radio" name="invDest" value="overall" required> Overall</label><label><input type="radio" name="invDest" value="store"> Store (Relic)</label><label><input type="radio" name="invDest" value="both"> Both</label><label><input type="radio" name="invDest" value="none"> Neither (rent, supplies, fees)</label></fieldset>' +
+    '<div class="unit-preview q-bought" id="qPreview"></div>' +
     '<div class="sheet-actions"><button type="submit" class="button ghost" value="again">Save &amp; add another</button><button type="submit" class="button" value="done">Save</button></div>' +
     '</div></form></dialog>');
 
@@ -111,6 +112,8 @@
     qType = t;
     qf.querySelectorAll('[data-qtype]').forEach(b => b.classList.toggle('on', b.dataset.qtype === t));
     qf.querySelectorAll('.q-bought').forEach(el => el.hidden = t !== 'purchases');
+    $('qInv').disabled = t !== 'purchases';
+    updatePreview(qf, 'qPreview');
     $('qAmountLabel').textContent = t === 'sales' ? 'Payout' : 'Total cost';
     $('quickTitle').textContent = t === 'sales' ? 'Add a sold item' : 'Add a purchase';
   }
@@ -136,7 +139,7 @@
     } else {
       const qty = Math.max(1, Number(qf.qty.value) || 1);
       (data.purchases[m] = data.purchases[m] || []).push({ item, booth, qty, amount, date });
-      if (qf.toInventory.checked) addToOverall(item, booth, qty, amount);
+      addToInventory(qf.invDest.value, item, booth, qty, amount);
       saveDocs(item, [...qf.receipt.files], 'Receipt', 'Purchase ' + m + ' · ' + money(amount));
     }
     save(); render();
@@ -147,13 +150,32 @@
 
   // Receipt photo on the full purchase form
   const pform = $('purchaseForm');
-  const toInvLabel = pform.querySelector('[name=toInventory]').closest('label');
-  toInvLabel.insertAdjacentHTML('beforebegin', '<label>Receipt photo<input name="receipt" type="file" accept="image/*,.pdf" capture="environment"></label>');
+  pform.querySelector('.inv-choice').insertAdjacentHTML('beforebegin', '<label>Receipt photo<input name="receipt" type="file" accept="image/*,.pdf" capture="environment"></label>');
   document.addEventListener('submit', e => {
     if (e.target !== pform) return;
     const files = [...pform.receipt.files], item = pform.item.value.trim(), m = pform.month.value, amt = Number(pform.amount.value);
     if (files.length && item) setTimeout(() => saveDocs(item, files, 'Receipt', 'Purchase ' + m + ' · ' + money(amt)), 0);
   }, true);
+
+  // Unit cost and suggested sell price while typing a purchase
+  function updatePreview(form, id) {
+    const qty = Math.max(1, Number(form.qty.value) || 1), amt = Number(form.amount.value), el = $(id);
+    el.innerHTML = amt > 0 ? 'Unit cost <b>' + money(amt / qty) + '</b> · Suggested sell price <b>' + money(amt / qty * 2) + '</b>' : '';
+  }
+  ['qty', 'amount'].forEach(n => {
+    qf[n].addEventListener('input', () => updatePreview(qf, 'qPreview'));
+    pform[n].addEventListener('input', () => updatePreview(pform, 'purchasePreview'));
+  });
+  pform.addEventListener('reset', () => setTimeout(() => updatePreview(pform, 'purchasePreview'), 0));
+
+  // Edit the quantity on any purchase line, including past months
+  document.addEventListener('change', e => {
+    const t = e.target; if (!t.matches('.qty-edit')) return;
+    const qty = Math.max(1, Math.round(Number(t.value) || 1)), m = t.dataset.month, key = t.dataset.key;
+    const edits = ((data.rowEdits.purchases = data.rowEdits.purchases || {})[m] = data.rowEdits.purchases[m] || {});
+    edits[key] = { ...(edits[key] || {}), qty };
+    save(); render(); toast('Quantity updated.');
+  });
 
   // ---------- backup & restore ----------
   const blobToDataUrl = b => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); r.readAsDataURL(b); });
@@ -224,7 +246,8 @@
       const inv = body.filter(r => r[c.sku] && r[c.item]).map(r => ({ sku: String(r[c.sku]), item: String(r[c.item]).trim(), price: numberValue(r[c.price]), qty: numberValue(r[c.qty]), lifetimeSales: numberValue(r[c.life]), reorder: 0, flag: r[c.flag] || '-', created: isoDate(r[c.created]) }))
         .sort((a, b) => b.created.localeCompare(a.created) || b.sku.localeCompare(a.sku));
       if (!inv.length) { msg.textContent = 'No inventory rows found in that file.'; return; }
-      data.inventory = inv; save(); render();
+      const keep = data.inventory.filter(x => x.manual && !inv.some(y => groupKey(y.item) === groupKey(x.item)));
+      data.inventory = [...keep, ...inv]; save(); render();
       msg.textContent = 'Store inventory updated: ' + inv.length + ' items.';
       return;
     }
