@@ -273,7 +273,7 @@ function viewEvents() {
   const up = data.events.filter(e => e.date >= t).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   const past = data.events.filter(e => e.date < t).sort((a, b) => b.date.localeCompare(a.date));
   $('view').innerHTML =
-    (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
+    (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') + quickLinks() +
     '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
     (data.events.length || !signedIn() ? '' : '<div class="empty"><h2>Welcome!</h2><p>Add an event and the jobs you need filled, then share your sign-up link or QR code.</p></div>') +
     (up.length ? '<h2>Coming up</h2>' + up.map(eventCard).join('') : (data.events.length ? '<p class="helper">No upcoming events. Import sign-ups or add one.</p>' : '')) +
@@ -354,6 +354,13 @@ const JOB_IDEAS = ['Concession Stand', 'Hospitality Room', 'Security', 'Tally Ro
 // A link to one event can open before the list has loaded from the cloud; wait instead of bouncing away.
 function missingEvent() {
   $('view').innerHTML = '<a class="back" href="#events">‹ Events</a><p class="helper">' + (signedIn() ? 'This event was deleted or moved.' : 'Loading… If this doesn\'t change, sign in on the Events tab.') + '</p>';
+}
+
+// Shortcuts to the other places the coordinator works (set under More → Your links).
+const LINKS = [['drive', '📁', 'Google Drive'], ['band', '🟢', 'BAND'], ['facebook', '📘', 'Facebook'], ['signupLink', '📝', 'SignUpGenius']];
+function quickLinks() {
+  const have = LINKS.filter(([k]) => data.settings[k]);
+  return have.length ? '<div class="quick">' + have.map(([k, icon, label]) => '<a href="' + esc(data.settings[k]) + '" target="_blank" rel="noopener">' + icon + ' ' + label + '</a>').join('') + '</div>' : '';
 }
 
 let evFilter = 'all';
@@ -1050,11 +1057,12 @@ async function viewShare(evId) {
     '<div class="share-grid">' +
     '<button type="button" id="shShare">📤<span>Share…</span></button>' +
     '<button type="button" id="shCopy">🔗<span>Copy link</span></button>' +
+    '<button type="button" id="shBand">🟢<span>Post to BAND</span></button>' +
     '<button type="button" id="shFb">📘<span>Post to Facebook</span></button>' +
     '<button type="button" id="shText">💬<span>Text the link</span></button>' +
     '<button type="button" id="shPng">⬇<span>Save QR picture</span></button>' +
     '<button type="button" id="shPrint">🖨<span>Print QR flyer</span></button></div>' +
-    '<p class="helper"><b>BAND:</b> tap Share… and pick BAND, or Copy link and paste it into a post. <b>Facebook:</b> Post to Facebook copies a ready-made message and opens your group so you can paste it.</p>' +
+    '<p class="helper"><b>Post to BAND</b> and <b>Post to Facebook</b> copy the message below and open your BAND or Facebook group. Start a new post and paste.</p>' +
     '<label>Message to go with the link<textarea id="shMsg" rows="3">' + esc(shareText(ev)) + '</textarea></label></div>' +
     '<section class="flyer"><h1>' + esc(data.settings.org || 'Band Boosters') + '</h1><h2>' + (ev ? esc(ev.name) : 'Volunteers Needed!') + '</h2>' +
     (ev ? '<p class="big">' + esc(fmtDate(ev.date, true)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + '</p>' : '<p class="big">Parents, adults, and students</p>') +
@@ -1067,10 +1075,13 @@ async function viewShare(evId) {
     if (navigator.share) navigator.share({ title: data.settings.title || 'Volunteer sign-up', text: $('shMsg').value.replace(url, '').trim(), url }).catch(() => {});
     else copy($('shMsg').value, 'Message and link');
   };
-  $('shFb').onclick = async () => {
-    try { await navigator.clipboard.writeText($('shMsg').value); toast('Message copied. Paste it into your post.'); } catch (e) {}
-    window.open(data.settings.facebook || 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url), '_blank', 'noopener');
+  // Copy first (while the tap still counts as the person's action), then open the group to paste into.
+  const copyAndOpen = async (where, fallback) => {
+    try { await navigator.clipboard.writeText($('shMsg').value); toast('Message copied. Start a post and paste it.'); } catch (e) {}
+    window.open(where || fallback, '_blank', 'noopener');
   };
+  $('shFb').onclick = () => copyAndOpen(data.settings.facebook, 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url));
+  $('shBand').onclick = () => copyAndOpen(data.settings.band, 'https://www.band.us/');
   $('shText').onclick = () => { location.href = 'sms:' + (isIOS() ? '&' : '?') + 'body=' + encodeURIComponent($('shMsg').value); };
   $('shPrint').onclick = () => window.print();
   try {
@@ -1095,6 +1106,9 @@ function viewMore() {
     '<div class="card pad"><h2>Sign-up page</h2><label>Page title<input id="mTitle" value="' + esc(data.settings.title || '') + '" placeholder="Band Booster & Parent Volunteer Opportunities"></label>' +
     '<label>Where volunteers sign up<select id="mWhere"><option value="">My own sign-up page</option><option value="sug"' + (data.settings.signupLink ? ' selected' : '') + '>SignUpGenius</option></select></label>' +
     '<label' + (data.settings.signupLink ? '' : ' hidden') + ' id="mSugWrap">SignUpGenius sign-up link (open your sign-up, tap Share, copy the link)<input id="mSug" type="url" value="' + esc(data.settings.signupLink || '') + '" placeholder="https://www.signupgenius.com/go/…"></label>' +
+    '<h3>Your links</h3><p class="helper">Shortcuts at the top of Events. Only you see these.</p>' +
+    '<label>Google Drive<input id="mDrive" type="url" value="' + esc(data.settings.drive || '') + '" placeholder="https://drive.google.com/…"></label>' +
+    '<label>BAND<input id="mBand" type="url" value="' + esc(data.settings.band || '') + '" placeholder="https://www.band.us/band/…"></label>' +
     '<label>Facebook group link<input id="mFb" type="url" value="' + esc(data.settings.facebook || '') + '" placeholder="https://www.facebook.com/groups/…"></label>' +
     '<label>Welcome note<textarea id="mIntro" rows="2" placeholder="Thank you for supporting the band!">' + esc(data.settings.intro || '') + '</textarea></label>' +
     '<div class="row-actions"><a class="button ghost" href="#share">📣 Share link and QR code</a><a class="button ghost" href="' + esc(signupUrl()) + '" target="_blank" rel="noopener">See the page</a></div></div>' +
@@ -1118,6 +1132,8 @@ function viewMore() {
   $('mFrom').onchange = e => { data.settings.from = e.target.value.trim(); window.save(); };
   $('mTitle').onchange = e => { data.settings.title = e.target.value.trim(); window.save(); };
   $('mFb').onchange = e => { data.settings.facebook = e.target.value.trim(); window.save(); };
+  $('mDrive').onchange = e => { data.settings.drive = e.target.value.trim(); window.save(); };
+  $('mBand').onchange = e => { data.settings.band = e.target.value.trim(); window.save(); };
   $('mWhere').onchange = e => { $('mSugWrap').hidden = !e.target.value; if (!e.target.value) { data.settings.signupLink = ''; $('mSug').value = ''; window.save(); } };
   $('mSug').onchange = e => {
     const v = e.target.value.trim();

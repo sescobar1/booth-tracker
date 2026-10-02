@@ -178,3 +178,6 @@ body.public { padding-bottom: 32px; }
 .intro a { font-weight: 600; word-break: break-word; }
 .pub-foot { text-align: center; padding: 8px 16px 24px; font-size: .85rem; }
 .pub-foot a { color: var(--muted); }
+.share-grid > :last-child:nth-child(3n+1) { grid-column: 1 / -1; min-height: 56px; flex-direction: row; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.quick a { background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 8px 14px; text-decoration: none; font-weight: 600; font-size: .9rem; color: var(--navy); }
