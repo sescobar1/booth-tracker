@@ -5,9 +5,9 @@ window.BOOTH_CONFIG = {
   storeName: "Y'allternative Market",       // the store your booths are in
   storeShort: "Y'allternative",            // shorter name for tight spots
   car: { name: '2025 Ford Explorer', mpg: 27 }, // used for gas cost estimates
-  // Supabase project for syncing between devices: { url: 'https://xxxx.supabase.co', key: 'anon public key' }.
-  // Leave null to type it in on each device under Import & backup -> Sync between devices.
-  sync: null,
+  // Supabase project for syncing between devices. The anon key is meant to be public;
+  // Row Level Security keeps the data private to the signed-in account.
+  sync: { url: 'https://mxcwtyubndlsudejizld.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im14Y3d0eXVibmRsc3VkZWppemxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5NjY0NDQsImV4cCI6MjEwNjU0MjQ0NH0.brgHxbLjCdKmQyH0i3gj4UdKiQqhOJFGyhifK3FU5t8' },
   storageKey: 'boothMonthlyTracker',      // where this copy saves on the device
   docsDb: 'boothDocuments',               // where receipt photos are saved on the device
   startMonth: '2025-09',                  // first month in the month lists

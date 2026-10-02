@@ -145,7 +145,7 @@
       const email = $('syncEmail').value.trim(), password = $('syncPass').value;
       if (!email || password.length < 6) { toast('Enter your email and a password of at least 6 characters.'); return; }
       setStatus(id === 'syncIn' ? 'Signing in…' : 'Creating your account…');
-      const r = id === 'syncIn' ? await sb.auth.signInWithPassword({ email, password }) : await sb.auth.signUp({ email, password });
+      const r = id === 'syncIn' ? await sb.auth.signInWithPassword({ email, password }) : await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.href.split('#')[0] } });
       if (r.error) { setStatus(r.error.message); return; }
       if (r.data.session) signedIn(r.data.session.user);
       else setStatus('Check your email and tap the link to confirm, then come back and sign in.');

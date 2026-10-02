@@ -13,8 +13,8 @@ alter table public.booth_data enable row level security;
 drop policy if exists "Own booth data" on public.booth_data;
 create policy "Own booth data" on public.booth_data
   for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Send live updates to your other signed-in devices.
 alter publication supabase_realtime add table public.booth_data;
