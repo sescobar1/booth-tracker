@@ -200,6 +200,12 @@ td.rcpt{white-space:nowrap}
 .pi{display:block;background:#fff8e9;border:1px solid #ead4aa;border-radius:8px;padding:8px 10px;line-height:1.4}
 .pi.none{background:none;border:0;padding:0;color:#8a979e}
 
+/* Daily and weekly totals in Sold items */
+tr.wk-row td{background:#24536f;color:#fff;font-weight:800;padding:9px 12px}
+tr.day-row td{background:#eaf2f6;color:#173447;font-weight:700;padding:7px 12px}
+tr.wk-row td span,tr.day-row td span{float:right;font-weight:700}
+.b-code{display:none}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -245,6 +251,9 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  #sales .c-date,#purchases .c-date{display:none}
+  .b-full{display:none}.b-code{display:inline}
+  tr.wk-row td,tr.day-row td{font-size:.86rem}
   .cards.recap-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .recap-grid{grid-template-columns:1fr}
   .bx-row{grid-template-columns:1fr 1fr auto}
