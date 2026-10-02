@@ -331,3 +331,36 @@ dialog.sheet::backdrop{background:#17344766}
 .sync-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .sync-form input { flex: 1 1 220px; min-width: 0; }
 .linkish { background: none; border: 0; padding: 0; color: var(--navy, #24536f); text-decoration: underline; font: inherit; cursor: pointer; }
+.big-btn.buycheck{grid-column:1/-1;background:#6a4c93}
+.sell-tabs{flex-wrap:wrap}
+.buy-form{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.buy-form label{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:.9rem}
+.buy-form label{min-width:0}
+.buy-form input{font-size:1rem;padding:10px;border:1px solid #cfd9de;border-radius:10px;min-width:0;width:100%;box-sizing:border-box}
+.verdict{display:inline-block;font-size:1.25rem;font-weight:800;padding:8px 16px;border-radius:12px;margin:4px 0 8px}
+.verdict.buy{background:#e3f4ea;color:#19744c}
+.verdict.maybe{background:#fff3d6;color:#8a5a00}
+.verdict.pass{background:#fbe4e4;color:#a33}
+.verdict.unknown{background:#eaf2f6;color:#24536f}
+.why{margin:0 0 10px;padding-left:20px;line-height:1.45}
+.why li{margin:4px 0}
+.buy-hits{margin:6px 0 10px;font-size:.9rem}
+.buy-hits summary{cursor:pointer;color:#24536f;font-weight:700}
+.comp-links{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0}
+.comp-links span{font-size:.85rem;color:#5c6b74;width:100%}
+.comp-links .button{padding:6px 12px;text-decoration:none}
+.age-cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+.chips{display:flex;gap:6px;margin:8px 0}
+.age-list{list-style:none;padding:0;margin:0 0 12px}
+.age-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #edf1f2}
+.age-list li small{display:block;color:#5c6b74}
+.age-list .button{white-space:nowrap;padding:6px 10px;flex-shrink:0}
+.md-done,.md-res{font-size:.82rem;color:#5c6b74;white-space:nowrap}
+.md-res.ok{color:#19744c;font-weight:700}
+.md-res.bad{color:#a33}
+#sell h4{margin:14px 0 4px}
+@media (max-width:760px){
+  .buy-form{grid-template-columns:1fr 1fr}
+  .buy-form .buy-what{grid-column:1/-1}
+  .age-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

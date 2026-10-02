@@ -129,7 +129,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['week', 'This week', 'Calendar, Sunday recap'], ['holiday', 'Holiday prep', 'Key dates and last year\'s holiday sellers'], ['whatif', 'What if…', 'Try a change and see your take-home'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Sales import, backup, reminders']]
+    [['sell', 'Selling smarts', 'Should I buy? Aging stock, pricing, markdowns'], ['week', 'This week', 'Calendar, Sunday recap'], ['holiday', 'Holiday prep', 'Key dates and last year\'s holiday sellers'], ['whatif', 'What if…', 'Try a change and see your take-home'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Sales import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -253,7 +253,7 @@
       if (v > 0) x.price = v; else delete x.price; save(); render();
     } else if (t.matches('.store-price')) {
       const x = data.inventory[Number(t.dataset.i)]; if (!x) return;
-      x.price = v; save(); render(); toast('Store price updated.');
+      const was = Number(x.price) || 0; logMarkdown(x, was, v); x.price = v; save(); render(); toast(v > 0 && v < was ? 'Price lowered. It\'s logged under Selling smarts → Markdowns.' : 'Store price updated.');
     }
   });
 
@@ -428,6 +428,9 @@
         .sort((a, b) => b.created.localeCompare(a.created) || b.sku.localeCompare(a.sku));
       if (!inv.length) { msg.textContent = 'No inventory rows found in that file.'; return; }
       const keep = data.inventory.filter(x => x.manual && !inv.some(y => groupKey(y.item) === groupKey(x.item)));
+      // Prices lowered in the store since the last upload count as markdowns.
+      const before = Object.fromEntries(data.inventory.filter(x => x.sku).map(x => [x.sku, Number(x.price) || 0]));
+      inv.forEach(x => { if (before[x.sku] > x.price && x.price > 0) logMarkdown(x, before[x.sku], x.price); });
       data.inventory = [...keep, ...inv]; save(); render();
       msg.textContent = 'Store inventory updated: ' + inv.length + ' items.';
       return;
@@ -1258,6 +1261,183 @@
     form.addEventListener('reset', () => { box.innerHTML = ''; });
   });
 
+  // ---------- selling smarts: should I buy, aging stock, price check, markdowns ----------
+  data.markdowns = data.markdowns || [];
+  const FEE = () => (Number(data.settings.relicFee) || 0) / 100;
+  const tagFor = net => net / (1 - FEE() || 1);
+  const ageDays = iso => iso ? Math.max(0, Math.round((new Date(todayIso() + 'T00:00:00') - new Date(iso + 'T00:00:00')) / DAY)) : null;
+  const median = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+  // Price tags end in .00 or .50.
+  const roundTag = (p, up) => Math.max(0.5, (up ? Math.ceil : Math.round)(p * 2) / 2);
+  const STOP = new Set(['the', 'and', 'for', 'with', 'set', 'pack', 'new', 'size', 'small', 'large', 'medium', 'xl']);
+  const words = s => groupKey(s).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w)).map(w => w.replace(/(ies)$/, 'y').replace(/([^s])s$/, '$1'));
+  // An item matches when it has every word of the search (plurals count).
+  function matcher(q) {
+    const ws = words(q); if (!ws.length) return null;
+    return name => { const have = words(name); return ws.every(w => have.some(h => h === w || (w.length >= 4 && h.startsWith(w)))); };
+  }
+  const storeStock = () => data.inventory.filter(x => (Number(x.qty) || 0) > 0);
+  function salesStats(hits) {
+    const amts = hits.map(x => x.amount).sort((a, b) => a - b), at = f => amts[Math.min(amts.length - 1, Math.floor(f * amts.length))];
+    const dates = hits.map(x => x.date).filter(Boolean).sort(), last = dates[dates.length - 1] || null;
+    const recent = dates.filter(d => ageDays(d) <= 90);
+    const every = recent.length > 1 ? Math.max(1, Math.round((ageDays(recent[0]) - ageDays(recent[recent.length - 1])) / (recent.length - 1))) : null;
+    return { n: hits.length, typical: at(0.5), lo: at(0.1), hi: at(0.9), last, every, recent: recent.length };
+  }
+
+  // 1. Should I buy it?
+  function renderBuyCheck() {
+    const box = $('buyResult'); if (!box) return;
+    const q = $('buyItem').value.trim(), cost = Number($('buyCost').value) || 0, qty = Math.max(1, Number($('buyQty').value) || 1);
+    const enc = encodeURIComponent(q);
+    const links = q ? '<div class="comp-links"><span>Check online sold prices:</span>' +
+      [['eBay sold', 'https://www.ebay.com/sch/i.html?_nkw=' + enc + '&LH_Sold=1&LH_Complete=1'], ['Mercari sold', 'https://www.mercari.com/search/?keyword=' + enc + '&itemStatuses=2'], ['FB Marketplace', 'https://www.facebook.com/marketplace/search/?query=' + enc], ['Google', 'https://www.google.com/search?tbm=shop&q=' + enc]]
+        .map(([t, u]) => '<a class="button ghost" href="' + u + '" target="_blank" rel="noopener">' + t + '</a>').join('') + '</div>' : '';
+    const m = matcher(q);
+    if (!m) { box.innerHTML = '<p class="helper">Type what you found, like <b>squishmallow</b> or <b>flannel shirt</b>. Tap the 🎤 on your keyboard to say it instead.</p>'; return; }
+    let hits = salesFlat().filter(x => m(x.item)), have = storeStock().filter(x => m(x.item)), close = '';
+    // Nothing exact: fall back to items sharing one of the words, like any lamp for "unicorn lamp".
+    if (!hits.length) {
+      const ws = words(q).filter(w => w.length >= 4), part = name => { const h = words(name); return ws.filter(w => h.some(k => k === w || k.startsWith(w))); };
+      const near = salesFlat().filter(x => part(x.item).length);
+      if (ws.length > 1 && near.length) { hits = near; have = storeStock().filter(x => part(x.item).length); close = [...new Set(near.flatMap(x => part(x.item)))].join('” or “'); }
+    }
+    const units = have.reduce((t, x) => t + (Number(x.qty) || 0), 0), oldest = have.reduce((o, x) => Math.max(o, ageDays(x.created) || 0), 0);
+    let verdict, why = [];
+    if (!hits.length) {
+      verdict = ['unknown', '❓ No sales history'];
+      why.push('You haven\'t sold anything like this yet. Check the online prices below. Consignment buyers usually pay about half of eBay sold prices, so pay no more than about a sixth of eBay to double your money.');
+    } else {
+      const s = salesStats(hits), maxPay = s.typical / 2;
+      const slow = !s.recent || (s.last && ageDays(s.last) > 45), stocked = units >= 3 && slow;
+      let level = !cost ? 1 : s.typical >= cost * 2 ? 2 : s.typical >= cost * 1.5 ? 1 : 0;
+      if (stocked || (slow && level === 2)) level = Math.max(0, level - 1);
+      if (close) { level = Math.min(level, 1); why.push('No exact matches, so this uses items with “' + esc(close) + '”.'); }
+      verdict = [['pass', '✋ Pass'], ['maybe', '🤔 Maybe'], ['buy', '✅ Buy it']][level];
+      if (!cost) verdict = ['maybe', '💡 Pay up to ' + money(maxPay)];
+      why.push('You\'ve sold <b>' + s.n + '</b> like this. You usually get <b>' + money(s.typical) + '</b>' + (s.n >= 3 && s.lo !== s.hi ? ' (' + money(s.lo) + '–' + money(s.hi) + ')' : '') + ' after the store\'s cut, from about a <b>' + money(tagFor(s.typical)) + '</b> price tag.');
+      why.push(s.last ? 'Last sold ' + nice(s.last) + (s.every ? ' · sells about every <b>' + s.every + ' day' + (s.every === 1 ? '' : 's') + '</b> lately' : s.recent ? '' : ' · none in the last 90 days') + '.' : '');
+      if (cost) {
+        const each = s.typical - cost;
+        why.push('At ' + money(cost) + ' each you\'d make about <b>' + money(each) + '</b> each' + (qty > 1 ? ' (' + money(each * qty) + ' for ' + qty + ')' : '') + ' · ' + Math.round(each / cost * 100) + '% return.');
+      }
+      why.push('Pay up to <b>' + money(maxPay) + '</b> each to double your money.');
+      if (units) why.push((stocked ? '⚠️ ' : '') + 'You already have <b>' + units + '</b> in the store' + (oldest ? ', the oldest listed ' + oldest + ' days ago' : '') + '.' + (stocked ? ' They\'re not moving, so wait on more.' : ''));
+    }
+    box.innerHTML = '<div class="verdict ' + verdict[0] + '">' + verdict[1] + '</div><ul class="why">' + why.filter(Boolean).map(w => '<li>' + w + '</li>').join('') + '</ul>' +
+      (hits.length ? '<details class="buy-hits"><summary>See the ' + Math.min(hits.length, 15) + ' most recent sales</summary><ul>' + hits.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15).map(x => '<li>' + esc(x.item) + ' · ' + money(x.amount) + (x.date ? ' · ' + nice(x.date) : '') + '</li>').join('') + '</ul></details>' : '') +
+      links + (cost ? '<button type="button" class="button" id="buyBought">I bought it: add to purchases</button>' : '');
+  }
+  let buyTm;
+  ['buyItem', 'buyCost', 'buyQty'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(buyTm); buyTm = setTimeout(renderBuyCheck, 200); }));
+  document.addEventListener('click', e => {
+    if (e.target.id === 'buyBought') {
+      const q = $('buyItem').value.trim(), cost = Number($('buyCost').value) || 0, qty = Math.max(1, Number($('buyQty').value) || 1);
+      openQuick('purchases'); qf.item.value = q; qf.qty.value = qty; qf.amount.value = (cost * qty).toFixed(2);
+      qf.item.dispatchEvent(new Event('input', { bubbles: true })); qf.amount.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    const tab = e.target.closest('[data-sell]');
+    if (tab) { data.sellTab = tab.dataset.sell; renderSell(); }
+    const age = e.target.closest('[data-age]');
+    if (age) { data.ageMin = Number(age.dataset.age); renderAging(); }
+  });
+
+  // Log a price drop so the Markdowns tab can show whether it worked.
+  function logMarkdown(x, from, to) {
+    if (!(to < from)) return;
+    data.markdowns.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), sku: x.sku || '', item: x.item, booth: code(boothFor(x.item)), from, to, date: todayIso(), qtyAt: Number(x.qty) || 0, lifeAt: Number(x.lifetimeSales) || 0, listed: x.created || '' });
+  }
+
+  // 4. Aging stock
+  const cutFor = days => days >= 90 ? 0.3 : days >= 60 ? 0.2 : days >= 30 ? 0.1 : 0;
+  function renderAging() {
+    const box = $('agingBody'); if (!box) return;
+    const min = data.ageMin || 60, stock = storeStock().map(x => ({ x, age: ageDays(x.created) })).filter(r => r.age != null);
+    if (!stock.length) { box.innerHTML = '<p class="helper">Upload your ' + STORE_SHORT + ' inventory export under Import &amp; backup to see how long things have been sitting.</p>'; return; }
+    const band = (a, b) => stock.filter(r => r.age >= a && r.age < b);
+    const cards = [['Under 30 days', band(0, 30)], ['30–59 days', band(30, 60)], ['60–89 days', band(60, 90)], ['90+ days', band(90, 1e9)]];
+    const booths = {};
+    stock.filter(r => r.age >= 60).forEach(r => { const b = code(boothFor(r.x.item)); booths[b] = (booths[b] || 0) + 1; });
+    const recentMd = sku => data.markdowns.find(d => d.sku && d.sku === sku && ageDays(d.date) < 21);
+    const list = stock.filter(r => r.age >= min).sort((a, b) => b.age - a.age);
+    box.innerHTML = '<div class="cards age-cards">' + cards.map(([l, rows]) => '<div class="card"><div class="label">' + l + '</div><div class="value">' + rows.length + '</div><div class="helper">' + money(rows.reduce((t, r) => t + (Number(r.x.price) || 0) * (Number(r.x.qty) || 0), 0)) + ' in tags</div></div>').join('') + '</div>' +
+      (Object.keys(booths).length ? '<p class="helper">Sitting 60+ days by booth: ' + Object.entries(booths).sort((a, b) => b[1] - a[1]).map(([b, n]) => '<b>' + esc(b) + '</b> ' + n).join(' · ') + '</p>' : '') +
+      '<div class="chips">' + [30, 60, 90].map(d => '<button type="button" class="month-tab' + (d === min ? ' active' : '') + '" data-age="' + d + '">' + d + '+ days</button>').join('') + '</div>' +
+      (list.length ? '<ul class="age-list">' + list.slice(0, 80).map(({ x, age }) => {
+        const price = Number(x.price) || 0, to = roundTag(price * (1 - cutFor(age))), md = recentMd(x.sku);
+        return '<li><div><b>' + esc(x.item) + '</b><small>' + esc(code(boothFor(x.item))) + ' · ' + money(price) + ' · ' + age + ' days · ' + (Number(x.qty) || 0) + ' left' + (x.lifetimeSales ? ' · sold ' + x.lifetimeSales + ' before' : '') + '</small></div>' +
+          (md ? '<span class="md-done">Marked down ' + nice(md.date) + '</span>' : to < price ? '<button type="button" class="button ghost md-btn" data-i="' + data.inventory.indexOf(x) + '" data-to="' + to + '">Mark down to ' + money(to) + '</button>' : '') + '</li>';
+      }).join('') + '</ul>' + (list.length > 80 ? '<p class="helper">Showing the oldest 80 of ' + list.length + '.</p>' : '') : '<p class="helper">Nothing has been in the store ' + min + '+ days. 🎉</p>') +
+      '<p class="helper">Suggested markdowns: 10% off at 30 days, 20% at 60, 30% at 90. Marking down here updates the tracker. Change the price in ' + STORE_SHORT + ' too so the tag matches. Days count from when the item was added in ' + STORE_SHORT + '.</p>';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.md-btn'); if (!b) return;
+    const x = data.inventory[Number(b.dataset.i)]; if (!x) return;
+    const to = Number(b.dataset.to); logMarkdown(x, Number(x.price) || 0, to); x.price = to; save(); render();
+    toast(x.item + ' marked down to ' + money(to) + '. Change it in ' + STORE_SHORT + ' too.');
+  });
+
+  // 5. Price check: what could sell for more, and what's priced too high
+  function renderPriceCheck() {
+    const box = $('priceCheckBody'); if (!box) return;
+    const groups = {};
+    salesFlat().forEach(x => { if (!x.k) return; (groups[x.k] = groups[x.k] || []).push(x); });
+    const up = [], down = [];
+    const seen = new Set();
+    storeStock().forEach(x => {
+      const price = Number(x.price) || 0, key = groupKey(x.item) + '|' + price; if (!price || seen.has(key)) return; seen.add(key);
+      const hits = groups[groupKey(x.item)]; if (!hits) return;
+      const s = salesStats(hits), tag = tagFor(s.typical), age = ageDays(x.created) || 0;
+      const sold60 = hits.filter(h => h.date && ageDays(h.date) <= 60).length;
+      if (sold60 >= 3 && price <= tag * 1.05) up.push({ x, s, sold60, to: roundTag(Math.max(price * 1.15, price + 0.5), true) });
+      else if (age >= 45 && (!s.last || ageDays(s.last) > 45) && price > tag * 1.15) down.push({ x, s, age, to: roundTag(tag) });
+    });
+    up.sort((a, b) => b.sold60 - a.sold60); down.sort((a, b) => b.age - a.age);
+    const row = (r, note, btn) => '<li><div><b>' + esc(r.x.item) + '</b><small>' + esc(code(boothFor(r.x.item))) + ' · now ' + money(r.x.price) + ' · ' + note + '</small></div>' + btn + '</li>';
+    box.innerHTML = '<h4>📈 Could charge more</h4>' + (up.length ? '<p class="helper">These sell fast at your current price. Try a little more on the next ones you put out.</p><ul class="age-list">' +
+      up.slice(0, 25).map(r => row(r, 'sold ' + r.sold60 + ' in 60 days · usually ' + money(tagFor(r.s.typical)) + ' tag', '<button type="button" class="button ghost pc-btn" data-i="' + data.inventory.indexOf(r.x) + '" data-to="' + r.to + '">Try ' + money(r.to) + '</button>')).join('') + '</ul>' : '<p class="helper">Nothing is selling so fast that it needs a higher price right now.</p>') +
+      '<h4>📉 Priced higher than it sells for</h4>' + (down.length ? '<p class="helper">Listed 45+ days with no sale, and priced above what these usually sell for.</p><ul class="age-list">' +
+      down.slice(0, 25).map(r => row(r, r.age + ' days · usually sells for ' + money(tagFor(r.s.typical)) + ' tag', '<button type="button" class="button ghost md-btn" data-i="' + data.inventory.indexOf(r.x) + '" data-to="' + r.to + '">Lower to ' + money(r.to) + '</button>')).join('') + '</ul>' : '<p class="helper">Nothing is priced above what it usually sells for. 👍</p>') +
+      '<p class="helper">Compares each store item with what the same item has sold for (price tag ≈ your payout plus the store\'s ' + Math.round(FEE() * 100) + '% cut). Items you haven\'t sold before aren\'t listed. Use <b>Should I buy?</b> to look up anything.</p>';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.pc-btn'); if (!b) return;
+    const x = data.inventory[Number(b.dataset.i)]; if (!x) return;
+    x.price = Number(b.dataset.to); save(); render(); toast(x.item + ' now ' + money(x.price) + '. Change it in ' + STORE_SHORT + ' too.');
+  });
+
+  // 6. Markdowns: did lowering the price get it sold?
+  function markdownResult(d) {
+    const cur = d.sku ? data.inventory.find(x => x.sku === d.sku) : null, m = matcher(d.item);
+    const sale = salesFlat().filter(x => x.date && x.date >= d.date && (groupKey(x.item) === groupKey(d.item) || (m && m(x.item)))).sort((a, b) => a.date.localeCompare(b.date))[0];
+    const sold = sale || (cur && ((Number(cur.lifetimeSales) || 0) > d.lifeAt || (Number(cur.qty) || 0) < d.qtyAt)) || (d.sku && !cur && data.inventory.length);
+    return sold ? { sold: true, days: sale ? ageDays(d.date) - ageDays(sale.date) : null, amount: sale ? sale.amount : null } : { sold: false, days: ageDays(d.date) };
+  }
+  function renderMarkdowns() {
+    const box = $('markdownBody'); if (!box) return;
+    const md = data.markdowns;
+    if (!md.length) { box.innerHTML = '<p class="helper">No markdowns yet. When you lower a price (from Aging stock, Price check, or the store price on Inventory), it\'s logged here so you can see if it got the item sold.</p>'; return; }
+    const res = md.map(d => ({ d, r: markdownResult(d) })), done = res.filter(x => x.r.sold), old = res.filter(x => x.r.sold || x.r.days >= 30);
+    const daysKnown = done.filter(x => x.r.days != null), cut = md.reduce((t, d) => t + (d.from - d.to) / d.from, 0) / md.length;
+    const byCut = [[0, 0.15, 'Up to 15% off'], [0.15, 0.25, '15–25% off'], [0.25, 1.01, 'Over 25% off']].map(([a, b, l]) => { const g = old.filter(x => { const c = (x.d.from - x.d.to) / x.d.from; return c >= a && c < b; }); return g.length ? l + ': <b>' + Math.round(g.filter(x => x.r.sold).length / g.length * 100) + '%</b> sold (' + g.length + ')' : ''; }).filter(Boolean);
+    box.innerHTML = '<div class="cards age-cards">' +
+      '<div class="card"><div class="label">Markdowns</div><div class="value">' + md.length + '</div><div class="helper">average ' + Math.round(cut * 100) + '% off</div></div>' +
+      '<div class="card"><div class="label">Sold after</div><div class="value">' + done.length + '</div><div class="helper">' + (old.length ? Math.round(old.filter(x => x.r.sold).length / old.length * 100) + '% within a month' : 'check back in a few weeks') + '</div></div>' +
+      '<div class="card"><div class="label">Days to sell</div><div class="value">' + (daysKnown.length ? Math.round(daysKnown.reduce((t, x) => t + x.r.days, 0) / daysKnown.length) : '—') + '</div><div class="helper">after the markdown</div></div></div>' +
+      (byCut.length ? '<p class="helper">What worked: ' + byCut.join(' · ') + '</p>' : '') +
+      '<ul class="age-list">' + res.slice(0, 60).map(({ d, r }) => '<li><div><b>' + esc(d.item) + '</b><small>' + esc(d.booth || '') + ' · ' + money(d.from) + ' → ' + money(d.to) + ' (−' + Math.round((d.from - d.to) / d.from * 100) + '%) · ' + nice(d.date) + '</small></div><span class="md-res ' + (r.sold ? 'ok' : r.days >= 30 ? 'bad' : '') + '">' +
+        (r.sold ? '✓ Sold' + (r.days != null ? ' in ' + r.days + ' day' + (r.days === 1 ? '' : 's') : '') : r.days >= 30 ? 'Not sold · ' + r.days + ' days' : 'Waiting · ' + r.days + ' day' + (r.days === 1 ? '' : 's')) + '</span></li>').join('') + '</ul>' +
+      '<p class="helper">Sold is checked against your sales and the latest ' + STORE_SHORT + ' inventory upload.</p>';
+  }
+
+  function renderSell() {
+    if (!$('sell').classList.contains('active')) return;
+    const t = data.sellTab || 'buy';
+    document.querySelectorAll('[data-sell]').forEach(b => b.classList.toggle('active', b.dataset.sell === t));
+    document.querySelectorAll('.sell-pane').forEach(p => { p.hidden = p.id !== 'sell-' + t; });
+    if (t === 'buy') renderBuyCheck(); else if (t === 'aging') renderAging(); else if (t === 'price') renderPriceCheck(); else renderMarkdowns();
+  }
+
   // ---------- holiday prep: last year's Oct–Dec sales and this year's key dates ----------
   const SEASONAL = /hallow|christ|xmas|santa|ornament|fall|pumpkin|thanks|gift|stocking|snow|elf|reindeer|holiday|witch|ghost|spooky|candy|winter|turkey|flannel|sweater|sweatshirt|hoodie|scarf|beanie/i;
   function holidayDates(y) {
@@ -1422,6 +1602,7 @@
     renderThrift();
     renderHoliday();
     renderWhatIf();
+    renderSell();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };

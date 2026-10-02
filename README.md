@@ -60,3 +60,12 @@ computer in sync, connect a free [Supabase](https://supabase.com) project:
 
 Changes appear on the other devices within a couple of seconds. Receipt photos stay on the device they were taken on.
 The anon key is meant to be public; Row Level Security keeps each person's data private to their sign-in.
+
+## Selling smarts
+
+**More → Selling smarts** (or **🔍 Should I buy it?** on the dashboard):
+
+- **Should I buy?** Type what you found and the price. It shows what similar items sold for at your booths, how fast they sell, how many you already have in the store, the most to pay to double your money, and a Buy / Maybe / Pass call, plus links to eBay, Mercari, Facebook Marketplace and Google prices.
+- **Aging stock:** store items by days since they were listed (30 / 60 / 90+), with a suggested markdown for each.
+- **Price check:** items that sell fast enough to charge more, and items priced above what they usually sell for.
+- **Markdowns:** every price drop (from these tools, the Inventory page, or a lower price in a new store inventory upload) and whether the item sold afterward.
