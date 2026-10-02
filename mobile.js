@@ -1298,7 +1298,8 @@
   // 1. Should I buy it?
   function renderBuyCheck() {
     const box = $('buyResult'); if (!box) return;
-    const q = $('buyItem').value.trim(), cost = Number($('buyCost').value) || 0, qty = Math.max(1, Number($('buyQty').value) || 1);
+    if (!buyChecked) { box.innerHTML = '<p class="helper">Type what you found, the total purchase price, and how many, then tap <b>Check it</b>. Tap the 🎤 on your keyboard to say it instead.</p>'; return; }
+    const q = $('buyItem').value.trim(), total = Number($('buyCost').value) || 0, qty = Math.max(1, Number($('buyQty').value) || 1), cost = Math.round(total / qty * 100) / 100;
     const enc = encodeURIComponent(q);
     const links = q ? '<div class="comp-links"><span>Check online sold prices:</span>' +
       [['eBay sold', 'https://www.ebay.com/sch/i.html?_nkw=' + enc + '&LH_Sold=1&LH_Complete=1'], ['Mercari sold', 'https://www.mercari.com/search/?keyword=' + enc + '&itemStatuses=2'], ['FB Marketplace', 'https://www.facebook.com/marketplace/search/?query=' + enc], ['Google', 'https://www.google.com/search?tbm=shop&q=' + enc]]
@@ -1334,16 +1335,24 @@
       why.push('Pay up to <b>' + money(maxPay) + '</b> each to double your money.');
       if (units) why.push((stocked ? '⚠️ ' : '') + 'You already have <b>' + units + '</b> in the store' + (oldest ? ', the oldest listed ' + oldest + ' days ago' : '') + '.' + (stocked ? ' They\'re not moving, so wait on more.' : ''));
     }
+    if (total) why.unshift('Purchase price <b>' + money(total) + '</b>' + (qty > 1 ? ' for ' + qty + ' = <b>' + money(cost) + ' each</b>' : '') + '.');
     box.innerHTML = '<div class="verdict ' + verdict[0] + '">' + verdict[1] + '</div><ul class="why">' + why.filter(Boolean).map(w => '<li>' + w + '</li>').join('') + '</ul>' +
       (hits.length ? '<details class="buy-hits"><summary>See the ' + Math.min(hits.length, 15) + ' most recent sales</summary><ul>' + hits.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15).map(x => '<li>' + esc(x.item) + ' · ' + money(x.amount) + (x.date ? ' · ' + nice(x.date) : '') + '</li>').join('') + '</ul></details>' : '') +
       links + '<div class="buy-actions"><button type="button" class="button ghost" id="buyBest">💲 Find the best price</button>' + (cost ? '<button type="button" class="button" id="buyBought">I bought it: add to purchases</button>' : '') + '</div>';
   }
   let buyTm;
-  ['buyItem', 'buyCost', 'buyQty'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(buyTm); buyTm = setTimeout(renderBuyCheck, 200); }));
+  var buyChecked = false;
+  $('buyForm').addEventListener('submit', e => {
+    e.preventDefault();
+    if (!$('buyItem').value.trim()) { toast('Type what you found first.'); $('buyItem').focus(); return; }
+    buyChecked = true; renderBuyCheck(); document.activeElement && document.activeElement.blur();
+    $('buyResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  ['buyItem', 'buyCost', 'buyQty'].forEach(id => $(id).addEventListener('input', () => { if (buyChecked) { buyChecked = false; renderBuyCheck(); } }));
   document.addEventListener('click', e => {
     if (e.target.id === 'buyBought') {
-      const q = $('buyItem').value.trim(), cost = Number($('buyCost').value) || 0, qty = Math.max(1, Number($('buyQty').value) || 1);
-      openQuick('purchases'); qf.item.value = q; qf.qty.value = qty; qf.amount.value = (cost * qty).toFixed(2);
+      const q = $('buyItem').value.trim(), total = Number($('buyCost').value) || 0, qty = Math.max(1, Number($('buyQty').value) || 1);
+      openQuick('purchases'); qf.item.value = q; qf.qty.value = qty; qf.amount.value = total.toFixed(2);
       qf.item.dispatchEvent(new Event('input', { bubbles: true })); qf.amount.dispatchEvent(new Event('input', { bubbles: true }));
     }
     const tab = e.target.closest('[data-sell]');
@@ -1457,7 +1466,7 @@
     const del = e.target.closest('.best-del');
     if (del) { data.priceLog = data.priceLog.filter(p => p.id !== del.dataset.id); save(); renderBestPrice(); }
     if (e.target.id === 'buyBest') {
-      $('bestItem').value = $('buyItem').value; $('bestCost').value = $('buyCost').value; data.sellTab = 'best'; renderSell(); window.scrollTo(0, 0);
+      $('bestItem').value = $('buyItem').value; $('bestCost').value = $('buyCost').value ? (Number($('buyCost').value) / Math.max(1, Number($('buyQty').value) || 1)).toFixed(2) : ''; data.sellTab = 'best'; renderSell(); window.scrollTo(0, 0);
     }
   });
 

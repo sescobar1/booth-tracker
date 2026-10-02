@@ -382,3 +382,4 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
   header{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}
   .refresh-btn{padding:7px 11px;font-size:.85rem}
 }
+.buy-submit{grid-column:1/-1;font-size:1.05rem;padding:12px}
