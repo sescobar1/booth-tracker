@@ -830,8 +830,9 @@ function drawImport() {
   const evOpts = (grp) => {
     const near = data.events.slice().sort((a, b) => (grp.date ? Math.abs(new Date(a.date) - new Date(grp.date)) - Math.abs(new Date(b.date) - new Date(grp.date)) : b.date.localeCompare(a.date)));
     const match = imp.target || (grp.date && (data.events.find(e => e.date === grp.date && grp.event && e.name.toLowerCase() === grp.event.toLowerCase()) || data.events.find(e => e.date === grp.date) || {}).id) || '';
-    grp.choice = grp.choice != null ? grp.choice : match;
-    return '<option value="">➕ New event</option>' + near.map(e => '<option value="' + e.id + '"' + (grp.choice === e.id ? ' selected' : '') + '>' + esc(fmtDate(e.date) + ' – ' + e.name) + '</option>').join('');
+    // A phone list with no dates (from Import → Another list) goes to People only unless an event is picked.
+    grp.choice = grp.choice != null ? grp.choice : (match || (imp.source === 'List' && !grp.date ? NO_EVENT : ''));
+    return '<option value="' + NO_EVENT + '"' + (grp.choice === NO_EVENT ? ' selected' : '') + '>📇 People list only (no event)</option><option value=""' + (grp.choice === '' ? ' selected' : '') + '>➕ New event</option>' + near.map(e => '<option value="' + e.id + '"' + (grp.choice === e.id ? ' selected' : '') + '>' + esc(fmtDate(e.date) + ' – ' + e.name) + '</option>').join('');
   };
   const mapUI = imp.mode === 'table' ? '<details class="card pad"' + (imp.map.first == null && imp.map.name == null ? ' open' : '') + '><summary>Columns found in the file (tap to fix)</summary><div class="grid2">' +
     FIELDS.map(([k, label]) => '<label>' + label + '<select data-map="' + k + '"><option value="">—</option>' + imp.headers.map((h, i) => '<option value="' + i + '"' + (imp.map[k] === i ? ' selected' : '') + '>' + esc(h || 'Column ' + (i + 1)) + '</option>').join('') + '</select></label>').join('') +
@@ -841,7 +842,7 @@ function drawImport() {
     '<label>These volunteers are<select id="iType"><option value="adult"' + (defType === 'adult' ? ' selected' : '') + '>Adults</option><option value="student"' + (defType === 'student' ? ' selected' : '') + '>Students</option></select></label>' +
     groups.map((g, gi) => '<div class="card pad"><h3>' + (g.date ? esc(fmtDate(g.date, true)) : 'No date in the list') + (g.event ? ' · ' + esc(g.event) : '') + ' <small>(' + g.entries.length + ')</small></h3>' +
       '<label>Put these in<select data-group="' + gi + '">' + evOpts(g) + '</select></label>' +
-      '<div class="newev" data-newev="' + gi + '"' + (g.choice ? ' hidden' : '') + '><div class="grid2"><label>Event name<input data-nname="' + gi + '" list="evIdeas2" value="' + esc(g.newName != null ? g.newName : (g.event || '')) + '" placeholder="Football game concessions"></label>' +
+      '<div class="newev" data-newev="' + gi + '"' + (g.choice !== '' ? ' hidden' : '') + '><div class="grid2"><label>Event name<input data-nname="' + gi + '" list="evIdeas2" value="' + esc(g.newName != null ? g.newName : (g.event || '')) + '" placeholder="Football game concessions"></label>' +
       '<label>Date<input type="date" data-ndate="' + gi + '" value="' + esc(g.newDate || g.date || '') + '"></label></div></div>' +
       '<div class="pick">' + g.entries.map(e => { const i = imp.entries.indexOf(e); return '<label class="check"><input type="checkbox" data-inc="' + i + '"' + (e.include ? ' checked' : '') + '> ' + esc((e.first + ' ' + e.last).trim()) +
         ' <span class="sub">' + esc([e.role, fmtRange(e.start, e.end), e.phone ? fmtPhone(e.phone) : '', findPerson(e) ? 'already in People' : ''].filter(Boolean).join(' · ')) + '</span></label>'; }).join('') + '</div></div>').join('') +
@@ -852,7 +853,7 @@ function drawImport() {
     imp.entries = entriesFromTable(); drawImport();
   });
   $('iType').onchange = e => { imp.type = e.target.value; };
-  document.querySelectorAll('[data-group]').forEach(s => s.onchange = () => { const g = groups[Number(s.dataset.group)]; g.choice = s.value; document.querySelector('[data-newev="' + s.dataset.group + '"]').hidden = !!s.value; });
+  document.querySelectorAll('[data-group]').forEach(s => s.onchange = () => { const g = groups[Number(s.dataset.group)]; g.choice = s.value; document.querySelector('[data-newev="' + s.dataset.group + '"]').hidden = s.value !== ''; });
   document.querySelectorAll('[data-nname]').forEach(i => i.oninput = () => { groups[Number(i.dataset.nname)].newName = i.value; });
   document.querySelectorAll('[data-ndate]').forEach(i => i.oninput = () => { groups[Number(i.dataset.ndate)].newDate = i.value; });
   document.querySelectorAll('[data-inc]').forEach(c => c.onchange = () => { imp.entries[Number(c.dataset.inc)].include = c.checked; $('iGo').textContent = 'Add ' + imp.entries.filter(e => e.include).length + ' volunteers'; });
@@ -860,6 +861,7 @@ function drawImport() {
   $('iGo').onclick = runImport;
 }
 
+const NO_EVENT = 'people-only';
 function runImport() {
   const groups = imp.groups;
   for (const g of groups) {
@@ -868,9 +870,17 @@ function runImport() {
       if (!name || !date) { toast('Give each new event a name and date.'); return; }
     }
   }
-  let added = 0, already = 0, newPeople = 0, lastEv = null;
+  let added = 0, already = 0, newPeople = 0, phones = 0, lastEv = null;
   groups.forEach(g => {
     const inc = g.entries.filter(e => e.include); if (!inc.length) return;
+    if (g.choice === NO_EVENT) {
+      inc.forEach(e => {
+        const before = findPerson(e), had = before && digits(before.phone);
+        const { isNew } = upsertPerson(Object.assign({}, e, { type: imp.type }));
+        if (isNew) newPeople++; else if (!had && digits(e.phone)) phones++;
+      });
+      return;
+    }
     let ev = g.choice && event(g.choice);
     if (!ev) {
       ev = { id: uid(), name: (g.newName != null ? g.newName : g.event).trim(), date: g.newDate || g.date, start: g.start || '', end: '', location: g.location || '', notes: '', isPublic: true };
@@ -891,8 +901,9 @@ function runImport() {
   window.save();
   const usedGroups = groups.filter(g => g.entries.some(e => e.include)).length;
   imp = null;
-  toast('Added ' + added + ' sign-ups' + (newPeople ? ' (' + newPeople + ' new people)' : '') + (already ? '. ' + already + ' were already there.' : '.'));
-  location.hash = usedGroups === 1 && lastEv ? 'event/' + lastEv.id : 'events';
+  if (!lastEv) toast('People list updated: ' + newPeople + ' new people, ' + phones + ' phone numbers added.');
+  else toast('Added ' + added + ' sign-ups' + (newPeople ? ', ' + newPeople + ' new people' : '') + (phones ? ', ' + phones + ' phone numbers' : '') + (already ? '. ' + already + ' were already there.' : '.'));
+  location.hash = usedGroups === 1 && lastEv ? 'event/' + lastEv.id : !lastEv ? 'people' : 'events';
 }
 
 // ---------- Update from SignUpGenius ----------
