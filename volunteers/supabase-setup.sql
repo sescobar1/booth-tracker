@@ -1,0 +1,4 @@
+-- Band Volunteers database setup. Already applied to the Booth Tracker Supabase project as the
+-- "band_volunteers" migration; kept here for reference. Tables: vol_settings, vol_events,
+-- vol_jobs, vol_people, vol_signups (owner-only via Row Level Security), plus the public
+-- sign-up functions vol_board, vol_signup, vol_mine, vol_cancel.
