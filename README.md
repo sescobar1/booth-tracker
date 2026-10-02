@@ -21,6 +21,8 @@ Open the site in Safari (iPhone) or Chrome (Android), then choose **Share → Ad
 - **Baking plan** (Cookie costs): how many batches to bake from the last 4 weeks of cookie sales and fresh cookies still out, plus a shareable Walmart shopping list.
 - **Thrift run list** (Restock): sold-out and hot-selling items to look for, with your own additions and a share button.
 - **Pricing helper**: typing an item in any purchase or sale form shows what it usually sells for, how fast, and what to pay to double your money.
+- **Holiday prep** (More): this season's key dates (Halloween, Thanksgiving, Black Friday, Small Business Saturday, Christmas) with prep tips, plus last October–December's best sellers and how many to have ready.
+- **What if…** (More): try dropping a booth, changing prices or cookie price, or changing trips per week, and see the change in monthly take-home.
 - **Taxes** shows business profit for taxes (sales, purchases, rent, IRS mileage deduction), what to set aside, quarterly estimated payment dates with a Paid column, and a CSV for your tax preparer.
 - **Receipts**: tap **📷 Snap a receipt** on Purchases, or the 📷 on any purchase line (even past months), to save a receipt photo with it.
 - **Price tags**: Inventory → **Print price tags** prints Avery 5160 labels (30 per sheet) with item, price, booth, and SKU.

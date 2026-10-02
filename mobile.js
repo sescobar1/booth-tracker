@@ -120,7 +120,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['week', 'This week', 'Calendar, Sunday recap'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Sales import, backup, reminders']]
+    [['week', 'This week', 'Calendar, Sunday recap'], ['holiday', 'Holiday prep', 'Key dates and last year\'s holiday sellers'], ['whatif', 'What if…', 'Try a change and see your take-home'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Sales import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -879,6 +879,8 @@
   // ---------- insights: take-home, goal, booth report card, busiest days ----------
   data.settings.goal = data.settings.goal ?? 500;
   const monthPrefix = m => { const [name, y] = m.split(' '); return y + '-' + pad(MONTH_NAMES.indexOf(name) + 1); };
+  // Finished months with sales, newest first (the current month is still in progress).
+  const fullMonths = n => months.slice(months.indexOf(currentMonth) + 1).filter(m => allRows('sales', m).length).slice(0, n);
   const latestSalesMonth = () => months.slice(months.indexOf(currentMonth)).find(m => allRows('sales', m).length) || currentMonth;
   function monthMoney(m) {
     const { st, o } = boothStats(m); let sales = 0, buy = o.unBuy, rent = 0;
@@ -901,7 +903,7 @@
 
   // Booth report card: last four months ending with the latest month that has sales.
   function boothReport() {
-    const end = months.indexOf(latestSalesMonth()), span = months.slice(end, end + 4).reverse();
+    const span = fullMonths(4).reverse();
     const per = span.map(m => monthMoney(m).st);
     return Object.keys(RENT).map(c => {
       const profits = per.map(st => st[c].sales - st[c].buy - st[c].rent), rent = per.reduce((t, st) => t + st[c].rent, 0), total = profits.reduce((a, b) => a + b, 0);
@@ -1192,6 +1194,110 @@
     form.addEventListener('reset', () => { box.innerHTML = ''; });
   });
 
+  // ---------- holiday prep: last year's Oct–Dec sales and this year's key dates ----------
+  const SEASONAL = /hallow|christ|xmas|santa|ornament|fall|pumpkin|thanks|gift|stocking|snow|elf|reindeer|holiday|witch|ghost|spooky|candy|winter|turkey|flannel|sweater|sweatshirt|hoodie|scarf|beanie/i;
+  function holidayDates(y) {
+    const nth = (m, wd, n) => { const d = new Date(y, m, 1); d.setDate(1 + (wd - d.getDay() + 7) % 7 + (n - 1) * 7); return isoLocal(d); };
+    const thanks = nth(10, 4, 4);
+    return [
+      [y + '-10-31', 'Halloween', 'Have Halloween and fall items out by ' + nice(y + '-10-10') + '.'],
+      [thanks, 'Thanksgiving', 'Fall decor sells through mid-November, then switch to Christmas.'],
+      [addDays(thanks, 1), 'Black Friday', 'Busiest shopping weekend. Restock the day before.'],
+      [addDays(thanks, 2), 'Small Business Saturday', 'Shoppers look for local booths. Put gift-ready items up front.'],
+      [y + '-12-25', 'Christmas', 'Gift sets and stocking stuffers out by ' + nice(y + '-11-20') + '; last big restock about ' + nice(y + '-12-18') + '.']
+    ];
+  }
+  function renderHoliday() {
+    if (!$('holiday').classList.contains('active')) return;
+    const y = new Date().getFullYear(), ly = y - 1, today = todayIso();
+    $('holDates').innerHTML = holidayDates(y).map(([d, name, tip]) => {
+      const days = Math.round((new Date(d + 'T00:00:00') - new Date(today + 'T00:00:00')) / DAY);
+      return '<div class="hol-date' + (days < 0 ? ' past' : '') + '"><div class="hd-when"><b>' + nice(d) + '</b><small>' + (days < 0 ? 'Passed' : days === 0 ? 'Today' : days + ' day' + (days === 1 ? '' : 's') + ' away') + '</small></div><div><b>' + name + '</b><small>' + esc(tip) + '</small></div></div>';
+    }).join('');
+    const span = ['October', 'November', 'December'].map(n => n + ' ' + ly).filter(m => months.includes(m));
+    const avgNow = (() => { const ms = fullMonths(3); return ms.length ? ms.reduce((t, m) => t + monthMoney(m).sales, 0) / ms.length : 0; })();
+    if (!span.length || !span.some(m => allRows('sales', m).length)) { $('holMonths').innerHTML = '<p class="helper">No sales from October–December ' + ly + ' in the tracker, so there is nothing to compare yet. Next year this fills in from this year\'s sales.</p>'; $('holTop').innerHTML = ''; return; }
+    const all = {};
+    $('holMonths').innerHTML = '<div class="cards hol-cards">' + span.map(m => {
+      const rows = allRows('sales', m).filter(x => x.booth !== 'Work income'), tot = rows.reduce((t, x) => t + x.amount, 0);
+      rows.forEach(x => { const k = groupKey(x.item).replace(/s$/, ''), g = all[k] = all[k] || { name: x.item, n: 0, amt: 0, months: {} }; const q = Number(x.qty) || 1; g.n += q; g.amt += x.amount; g.months[m] = (g.months[m] || 0) + q; });
+      const ch = avgNow ? Math.round((tot - avgNow) / avgNow * 100) : null;
+      return '<div class="card"><div class="label">' + m + '</div><div class="value">' + money(tot) + '</div><div class="helper">' + rows.length + ' items' + (ch == null ? '' : ' · ' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs your recent months') + '</div></div>';
+    }).join('') + '</div><p class="helper">Your recent months average ' + money(avgNow) + ' in sales.</p>';
+    const top = Object.values(all).sort((a, b) => b.amt - a.amt).slice(0, 12), seasonal = Object.values(all).filter(g => SEASONAL.test(g.name)).sort((a, b) => b.amt - a.amt).slice(0, 10);
+    const row = g => { const want = Math.ceil(g.n * 1.25); return '<li><div class="hol-item"><b>' + esc(g.name) + '</b><small>Sold ' + g.n + ' for ' + money(g.amt) + ' · ' + span.map(m => (g.months[m] || 0)).join(' / ') + ' by month · have about <b>' + want + '</b> ready</small></div><button type="button" class="button ghost hol-add" data-name="' + esc(g.name) + '">+ Thrift list</button></li>'; };
+    $('holTop').innerHTML = '<h4>Last year\'s best sellers, October–December</h4><ul class="hol-list">' + top.map(row).join('') + '</ul>' +
+      (seasonal.length ? '<h4>Seasonal and cold-weather items</h4><ul class="hol-list">' + seasonal.map(row).join('') + '</ul>' : '') +
+      '<p class="helper">"Have about" is last year\'s count plus 25%, so you don\'t sell out early. Tap <b>+ Thrift list</b> to add an item to your shopping list.</p>';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.hol-add'); if (!b) return;
+    if (!data.shopList.custom.includes(b.dataset.name)) { data.shopList.custom.push(b.dataset.name); save(); }
+    b.textContent = '✓ On list'; b.disabled = true; toast(b.dataset.name + ' added to your thrift list.');
+  });
+
+  // ---------- what-if planner ----------
+  const wi = { booths: {}, routes: {}, cookiePrice: null };
+  function whatIfBase() {
+    const ms = fullMonths(3), n = ms.length || 1, base = {};
+    BOOTH_CODES.forEach(c => base[c] = { sales: 0, buy: 0, rent: 0 });
+    let other = 0;
+    ms.forEach(m => { const { st, o } = boothStats(m); for (const c in st) { base[c].sales += st[c].sales / n; base[c].buy += st[c].buy / n; base[c].rent += st[c].rent / n; } other += o.unBuy / n; });
+    return { ms, base, other };
+  }
+  const perMonth = 52 / 12, gasPerMile = () => (Number(data.settings.gasPrice) || 0) / (Number(data.settings.mpg) || 25);
+  function whatIfCalc() {
+    const { ms, base, other } = whatIfBase(), fee = (Number(data.settings.relicFee) || 0) / 100, cb = code(cookieBooth()), r0 = data.recipes[0];
+    const oldCookie = r0 ? Number(r0.price) || 2 : 2, newCookie = wi.cookiePrice != null ? wi.cookiePrice : oldCookie;
+    const now = { sales: 0, buy: other, rent: 0, gas: 0 }, plan = { sales: 0, buy: other, rent: 0, gas: 0 };
+    for (const c of BOOTH_CODES) {
+      const b = base[c], o = wi.booths[c] || { keep: true, pct: 0, moveKeep: 70 };
+      now.sales += b.sales; now.buy += b.buy; now.rent += b.rent;
+      let s = b.sales;
+      if (c === cb && newCookie !== oldCookie && oldCookie) s = s / (oldCookie * (1 - fee)) * newCookie * (1 - fee);
+      s *= 1 + (Number(o.pct) || 0) / 100;
+      if (o.keep) { plan.sales += s; plan.buy += b.buy; plan.rent += b.rent; }
+      else { const k = (Number(o.moveKeep) || 0) / 100; plan.sales += s * k; plan.buy += b.buy * k; }
+    }
+    data.routes.filter(r => (r.days || []).length).forEach(r => {
+      const miles = tripMiles(r) * perMonth * gasPerMile();
+      now.gas += r.days.length * miles;
+      plan.gas += (wi.routes[r.id] != null ? wi.routes[r.id] : r.days.length) * miles;
+    });
+    const take = x => x.sales - x.buy - x.rent - x.gas;
+    return { ms, now, plan, take };
+  }
+  function renderWhatIf() {
+    if (!$('whatif').classList.contains('active')) return;
+    const { base } = whatIfBase(), cb = code(cookieBooth()), r0 = data.recipes[0];
+    if (!$('wiControls').dataset.built) {
+      $('wiControls').innerHTML = '<h4>Booths</h4><div class="wi-booths">' + BOOTH_LIST.map(b => '<div class="wi-booth" data-c="' + esc(b.code) + '"><label class="wi-keep"><input type="checkbox" class="wi-in" data-k="keep" checked> <b>' + esc(b.code) + '</b> ' + esc(b.name) + ' <small>$' + (Number(b.rent) || 0) + ' rent</small></label>' +
+        (b.code === cb && r0 ? '<label>Cookie price $<input type="number" class="cell-input wi-cookie" min="0" step=".25" inputmode="decimal" value="' + (Number(r0.price) || 2).toFixed(2) + '"></label>' : '<label>Change prices <input type="number" class="cell-input wi-in" data-k="pct" step="5" inputmode="numeric" value="0"> %</label>') +
+        '<label class="wi-move" hidden>Keep <input type="number" class="cell-input wi-in" data-k="moveKeep" min="0" max="100" step="10" inputmode="numeric" value="70"> % of its sales by moving items to another booth</label></div>').join('') + '</div>' +
+        '<h4>Trips each week</h4><div class="wi-routes">' + data.routes.filter(r => (r.days || []).length).map(r => '<label>' + esc(r.name) + ' <input type="number" class="cell-input wi-route" data-id="' + esc(r.id) + '" min="0" max="7" step="1" inputmode="numeric" value="' + r.days.length + '"> <small>' + tripMiles(r) + ' mi each</small></label>').join('') + '</div>' +
+        '<button type="button" class="button ghost" id="wiReset">Reset</button>';
+      $('wiControls').dataset.built = '1';
+    }
+    const { ms, now, plan, take } = whatIfCalc(), d = take(plan) - take(now), line = (l, a, b, neg) => '<tr><td>' + l + '</td><td class="num">' + (neg ? '−' : '') + money(a) + '</td><td class="num">' + (neg ? '−' : '') + money(b) + '</td><td class="num ' + ((neg ? a - b : b - a) >= 0 ? 'green' : 'inventory-low') + '">' + ((neg ? a - b : b - a) >= 0 ? '+' : '−') + money(Math.abs(b - a)) + '</td></tr>';
+    $('wiResult').innerHTML = '<div class="wi-headline ' + (d >= 0 ? 'up' : 'down') + '"><span>With these changes you\'d keep</span><b>' + (d >= 0 ? '+' : '−') + money(Math.abs(d)) + ' a month</b><span>' + (d >= 0 ? '+' : '−') + money(Math.abs(d * 12)) + ' a year</span></div>' +
+      '<div class="wi-table"><table><thead><tr><th></th><th class="num">Now</th><th class="num">New</th><th class="num">Change</th></tr></thead><tbody>' +
+      line('Sales', now.sales, plan.sales) + line('Purchases', now.buy, plan.buy, true) + line('Booth rent', now.rent, plan.rent, true) + line('Gas (est.)', now.gas, plan.gas, true) +
+      '<tr class="tax-total"><td><b>Take-home</b></td><td class="num"><b>' + money(take(now)) + '</b></td><td class="num"><b>' + money(take(plan)) + '</b></td><td class="num"><b class="' + (d >= 0 ? 'green' : 'inventory-low') + '">' + (d >= 0 ? '+' : '−') + money(Math.abs(d)) + '</b></td></tr></tbody></table></div>' +
+      '<p class="helper">"Now" is your average for ' + ms.join(', ') + ' with your current trip schedule. Price changes assume you sell the same number of items. Gas uses the miles per gallon and gas price on the Miles page.</p>';
+  }
+  document.addEventListener('input', e => {
+    const t = e.target, row = t.closest('.wi-booth');
+    if (t.matches('.wi-in') && row) {
+      const c = row.dataset.c, o = wi.booths[c] = wi.booths[c] || { keep: true, pct: 0, moveKeep: 70 };
+      o[t.dataset.k] = t.type === 'checkbox' ? t.checked : Number(t.value) || 0;
+      row.querySelector('.wi-move').hidden = o.keep; row.classList.toggle('dropped', !o.keep);
+    } else if (t.matches('.wi-cookie')) wi.cookiePrice = Number(t.value) || 0;
+    else if (t.matches('.wi-route')) wi.routes[t.dataset.id] = Math.max(0, Number(t.value) || 0);
+    else return;
+    renderWhatIf();
+  });
+  document.addEventListener('click', e => { if (e.target.closest('#wiReset')) { wi.booths = {}; wi.routes = {}; wi.cookiePrice = null; delete $('wiControls').dataset.built; renderWhatIf(); } });
+
   // ---------- recipes: add and remove ----------
   if (!CFG.recipeCards) { const a = document.querySelector('a[href="recipe-cards.html"]'); if (a) a.remove(); }
   document.addEventListener('click', e => {
@@ -1250,6 +1356,8 @@
     renderWeek();
     renderBakePlan();
     renderThrift();
+    renderHoliday();
+    renderWhatIf();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };

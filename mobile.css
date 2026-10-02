@@ -206,6 +206,35 @@ tr.day-row td{background:#eaf2f6;color:#173447;font-weight:700;padding:7px 12px}
 tr.wk-row td span,tr.day-row td span{float:right;font-weight:700}
 .b-code{display:none}
 
+/* Holiday prep and what-if planner */
+.hol-dates{display:grid;gap:0}
+.hol-date{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #edf1f2}
+.hol-date:last-child{border-bottom:0}
+.hol-date small{display:block;color:#64747d;font-size:.82rem}
+.hol-date.past{opacity:.55}
+.cards.hol-cards{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:6px}
+.hol-cards .card{min-width:0}.hol-cards .helper{margin:4px 0 0;font-size:.78rem}
+.hol-list{list-style:none;padding:0;margin:0 0 12px}
+.hol-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #edf1f2}
+.hol-item small{display:block;color:#64747d;font-size:.82rem}
+.hol-add{white-space:nowrap;padding:7px 10px;font-size:.85rem}
+.wi-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.wi-grid .panel.summary{margin-top:0}
+.wi-booth{border-bottom:1px solid #edf1f2;padding:9px 0;display:grid;gap:6px}
+.wi-booth label{font-size:.88rem;color:#31576b}
+.wi-booth .cell-input,.wi-routes .cell-input{width:70px}
+.wi-booth.dropped .wi-keep{text-decoration:line-through;color:#8a979e}
+.wi-keep small{color:#64747d}
+.wi-routes{display:grid;gap:8px;margin-bottom:12px}
+.wi-routes label{font-size:.9rem}
+.wi-headline{border-radius:12px;padding:14px;margin-bottom:12px;display:grid;gap:2px;text-align:center}
+.wi-headline.up{background:#eaf6ee;color:var(--green)}.wi-headline.down{background:#fbe7e0;color:#a44b28}
+.wi-headline b{font-size:1.6rem}
+.wi-headline span{font-size:.88rem}
+.wi-table{overflow-x:auto}
+.wi-table td,.wi-table th{padding:9px 6px;white-space:nowrap}
+.wi-table td:first-child{white-space:normal}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -251,6 +280,11 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  .wi-grid{grid-template-columns:1fr}
+  .wi-table table{font-size:.84rem}.wi-table td:first-child{padding-left:0}
+  .wi-table .tax-total td{font-size:.9rem}
+  .cards.hol-cards{grid-template-columns:1fr 1fr 1fr;gap:6px}.hol-cards .value{font-size:1.05rem}.hol-cards .card{padding:10px 8px}
+  .hol-date{grid-template-columns:92px 1fr}
   #sales .c-date,#purchases .c-date{display:none}
   .b-full{display:none}.b-code{display:inline}
   tr.wk-row td,tr.day-row td{font-size:.86rem}
