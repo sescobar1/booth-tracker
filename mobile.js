@@ -24,6 +24,17 @@
     data.routesV2 = true;
   }
   data.mileSkips = data.mileSkips || [];
+  // When the settings file's trips change (routesVersion goes up), apply the new schedule once.
+  // A Friday store trip marked "Didn't go" carries over to the combined Friday trip.
+  if ((data.routesVersion || 0) < (CFG.routesVersion || 0)) {
+    for (const d of DEFAULT_ROUTES) {
+      const r = data.routes.find(x => x.id === d.id);
+      if (r) Object.assign(r, { name: d.name, detail: d.detail, miles: d.miles, round: d.round, days: d.days.slice() });
+      else data.routes.push({ ...d, days: d.days.slice() });
+    }
+    data.mileSkips.filter(k => k.startsWith('store|') && new Date(k.slice(6) + 'T00:00:00').getDay() === 5).forEach(k => data.mileSkips.push('storeFri|' + k.slice(6)));
+    data.routesVersion = CFG.routesVersion;
+  }
   data.amazon = data.amazon || [];
 
   // ---------- small helpers ----------
