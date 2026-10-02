@@ -12,7 +12,8 @@ Open the site in Safari (iPhone) or Chrome (Android), then choose **Share → Ad
 - Tap **+ Sold item**, **+ Purchase**, or the round **+** button to add something in seconds. The booth is picked for you from the item name, and you can snap a receipt photo with a purchase.
 - **Import & backup → Import from Relic**: upload the Relic sales export (CSV or Excel). Sales go into the right month and booth, and sales already in the tracker are skipped. Upload the Relic inventory export to refresh your store inventory.
 - **Restock** lists repeat sellers that are out or running low, and slow movers sitting 60+ days without a sale.
-- **Mileage** has your regular trips (Relic store in Sherwood 3×/week, Price Break 2×/week, Conway 1×/week). Tap **Log trip** to log the round trip; edit miles or add trips under **Edit my regular trips**.
+- **Work** logs your shifts (date, hours, pay) and shows work income by month and year, including the shifts from your worksheet.
+- **Mileage** has your regular trips (Relic store in Sherwood 3×/week, Price Break 2×/week, Conway 1×/week). Tap **Log trip** to log the round trip; each trip shows estimated gas cost (set your MPG and gas price under **Your car**) and the tax deduction; edit miles or add trips under **Edit my regular trips**.
 - **Purchases** show unit cost and a sell price (2× unit cost by default). Type over any sell price to set your own; it carries into overall and store inventory, where prices are editable too.
 - **Reports** has year totals by booth and month (including the mileage deduction), best sellers per booth, and a CSV download or printable summary for taxes.
 - **Booth editor** moves every line with the same item name to a booth in one step. On **Purchases** and **Sold items**, tick rows and use **Assign selected** for one month.

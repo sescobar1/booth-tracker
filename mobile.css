@@ -62,6 +62,10 @@
 .log-trip{white-space:nowrap;padding:12px 14px}
 .edit-routes>summary{padding:15px 17px;font-weight:700;cursor:pointer;color:var(--navy)}
 .cell-input.wide{width:100%;min-width:140px}
+.mile-cards .helper{margin:4px 0 0;font-size:.78rem}
+.gas-form{grid-template-columns:repeat(3,minmax(0,1fr));background:transparent;padding:0;margin:8px 0}
+.work-form{grid-template-columns:1fr 1.6fr .7fr .9fr auto}
+#work .cards .helper{margin:4px 0 0;font-size:.78rem}
 
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
@@ -93,7 +97,7 @@ dialog.sheet::backdrop{background:#17344766}
   header .month,.top-nav{display:none}
   body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
   main{padding:16px 16px 40px}
-  .bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:4px 4px env(safe-area-inset-bottom);z-index:30;box-shadow:0 -4px 14px #1932460f}
+  .bottom-nav{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:4px 4px env(safe-area-inset-bottom);z-index:30;box-shadow:0 -4px 14px #1932460f}
   .bottom-nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 7px;font-size:.7rem;font-weight:700;color:#6b7b84}
   .bottom-nav svg{width:24px;height:24px}
   .bottom-nav button.on{color:var(--navy)}
@@ -108,6 +112,11 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  .gas-form,.work-form{grid-template-columns:1fr 1fr}
+  .cards.mile-cards,#work .cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .mile-cards .card,#work .cards .card{padding:11px 9px;min-width:0}
+  .mile-cards .value,#work .cards .value{font-size:1.05rem}
+  .mile-cards .label,#work .cards .label{font-size:.62rem}
   .quick-row .big-btn{min-width:0}
   .big-btn{padding:16px 6px;font-size:1rem}
   .toolbar{flex-wrap:wrap}

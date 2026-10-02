@@ -6,7 +6,8 @@
   const RENT_TOTAL = Object.values(RENT).reduce((a, b) => a + b, 0);
   const DAY = 864e5;
 
-  data.settings = Object.assign({ relicEvery: 7, mileRate: 0.7 }, data.settings || {});
+  data.settings = Object.assign({ relicEvery: 7, mileRate: 0.7, mpg: 25, gasPrice: 2.75 }, data.settings || {});
+  data.shifts = data.shifts || [];
   data.mileage = data.mileage || [];
   // Regular trips; miles are one way (Russellville–Sherwood 76, Russellville–Conway 46).
   data.routes = data.routes || [
@@ -26,6 +27,7 @@
   const code = b => String(b || '').split(' ')[0];
 
   function toast(msg) {
+    document.querySelectorAll('.toast').forEach(x => x.remove());
     const t = document.createElement('div');
     t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg;
     document.body.appendChild(t);
@@ -57,10 +59,12 @@
     sold: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
     buy: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a1 1 0 0 0 1 .8h9.6a1 1 0 0 0 1-.8L21 7H6"/>',
     stock: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+    car: '<path d="M5 17h14M3 17v-4l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v4"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/><path d="M4 12h16"/>',
+    work: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
     more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'
   };
   const svg = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
-  const tabs = [['dashboard', 'Home', 'home'], ['sales', 'Sold', 'sold'], ['purchases', 'Bought', 'buy'], ['inventory', 'Stock', 'stock'], ['more', 'More', 'more']];
+  const tabs = [['dashboard', 'Home', 'home'], ['sales', 'Sold', 'sold'], ['purchases', 'Bought', 'buy'], ['mileage', 'Miles', 'car'], ['work', 'Work', 'work'], ['more', 'More', 'more']];
   const bottom = document.createElement('div');
   bottom.className = 'bottom-nav'; bottom.setAttribute('role', 'navigation'); bottom.setAttribute('aria-label', 'Main');
   bottom.innerHTML = tabs.map(([p, l, i]) => '<button type="button" data-nav="' + p + '">' + svg(icons[i]) + '<span>' + l + '</span></button>').join('');
@@ -72,7 +76,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['restock', 'Restock', 'What to restock and slow movers'], ['mileage', 'Mileage', 'Log your regular trips in one tap'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['inventory', 'Inventory', 'Overall and store stock'], ['restock', 'Restock', 'What to restock and slow movers'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -89,7 +93,7 @@
 
   function syncTabs(page) {
     document.body.dataset.page = page;
-    const tab = ['dashboard', 'sales', 'purchases', 'inventory'].includes(page) ? page : 'more';
+    const tab = ['dashboard', 'sales', 'purchases', 'mileage', 'work'].includes(page) ? page : 'more';
     bottom.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.nav === tab));
   }
   function go(page) {
@@ -395,7 +399,7 @@
     const y = $('repYear').value, d = yearData(y), t = d.tot, costs = t.buy + t.other + t.rent, profit = t.sales + t.work - costs;
     const card = (l, v, cls) => '<div class="card"><div class="label">' + l + '</div><div class="value ' + (cls || '') + '">' + v + '</div></div>';
     $('yearSummary').innerHTML = '<div class="year-cards">' + card(y + ' sales', money(t.sales)) + card('Purchases', money(t.buy + t.other)) + card('Booth rent', money(t.rent)) + card('Profit', money(profit), profit < 0 ? 'inventory-low' : 'green') + '</div>' +
-      '<div class="year-cards">' + card('Work income', money(t.work)) + card('Mileage deduction', money(d.mileDed)) + card('Profit after mileage', money(profit - d.mileDed), profit - d.mileDed < 0 ? 'inventory-low' : 'green') + card('Months', d.ms.length) + '</div>' +
+      '<div class="year-cards">' + card('Work income', money(t.work)) + card('Mileage deduction', money(d.mileDed)) + card('Profit after mileage', money(profit - d.mileDed), profit - d.mileDed < 0 ? 'inventory-low' : 'green') + card('Gas cost (est.)', money(d.miles.reduce((t, x) => t + gasOf(x), 0))) + '</div>' +
       '<div class="panel summary"><h3>By booth — ' + y + '</h3><div class="scroll"><table><thead><tr><th>Booth</th><th class="num">Sales</th><th class="num">Purchases</th><th class="num">Rent</th><th class="num">Profit</th></tr></thead><tbody>' +
       Object.entries(d.booths).map(([c, s]) => { const p = s.sales - s.buy - s.rent; return '<tr><td>' + c + '</td><td class="num">' + money(s.sales) + '</td><td class="num">' + money(s.buy) + '</td><td class="num">' + money(s.rent) + '</td><td class="num ' + (p < 0 ? 'inventory-low' : 'green') + '">' + money(p) + '</td></tr>'; }).join('') +
       '</tbody></table></div></div><div class="panel summary"><h3>By month — ' + y + '</h3><div class="scroll"><table><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Costs</th><th class="num">Profit</th></tr></thead><tbody>' +
@@ -411,6 +415,8 @@
   }
   // ---------- mileage ----------
   const tripMiles = r => Math.round((Number(r.miles) || 0) * (r.round ? 2 : 1) * 10) / 10;
+  const gasFor = miles => miles / (Number(data.settings.mpg) || 25) * (Number(data.settings.gasPrice) || 0);
+  const gasOf = t => t.gas != null ? t.gas : gasFor(t.miles);
   function weekStart() { const d = new Date(), day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return isoLocal(d); }
   function weekTrips() { const s0 = weekStart(); return data.mileage.filter(t => t.route && t.date >= s0); }
   $('tripDate').value = todayIso();
@@ -421,7 +427,7 @@
     $('routeCards').innerHTML = data.routes.length ? data.routes.map(r => {
       const n = wk.filter(t => t.route === r.id).length, goal = Number(r.perWeek) || 0;
       const dots = goal ? Array.from({ length: Math.max(goal, n) }, (_, i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') : '';
-      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + tripMiles(r) + ' mi' + (r.round ? ' round trip' : '') + '</small>' +
+      return '<div class="route-card"><div class="route-info"><b>' + esc(r.name) + '</b><small>' + esc(r.detail || '') + ' · ' + tripMiles(r) + ' mi' + (r.round ? ' round trip' : '') + ' · about ' + money(gasFor(tripMiles(r))) + ' gas</small>' +
         '<div class="week-dots">' + dots + '<span>' + n + (goal ? ' of ' + goal : '') + ' this week</span></div>' +
         '</div><button type="button" class="button log-trip" data-route="' + r.id + '">+ Log trip</button></div>';
     }).join('') : '<p class="helper">No regular trips yet. Add one under “Edit my regular trips”.</p>';
@@ -429,10 +435,15 @@
     $('mileYear').innerHTML = ys.map(y => '<option>' + y + '</option>').join(''); $('mileYear').value = ys.includes(cur) ? cur : ys[0];
     const y = $('mileYear').value, trips = data.mileage.filter(t => t.date.startsWith(y)).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
     const miles = trips.reduce((t, x) => t + x.miles, 0), ded = trips.reduce((t, x) => t + x.miles * x.rate, 0);
-    $('mileTotal').textContent = money(ded);
+    $('mileTotal').textContent = money(ded); $('mileGas').textContent = money(trips.reduce((t, x) => t + gasOf(x), 0));
+    const sum = list => [list.reduce((t, x) => t + gasOf(x), 0), list.reduce((t, x) => t + x.miles, 0), list.reduce((t, x) => t + x.miles * x.rate, 0)];
+    const thisMonth = isoLocal(new Date()).slice(0, 7), thisYear = thisMonth.slice(0, 4);
+    [['Week', data.mileage.filter(t => t.date >= weekStart())], ['Month', data.mileage.filter(t => t.date.startsWith(thisMonth))], ['Year', data.mileage.filter(t => t.date.startsWith(thisYear))]].forEach(([k, list]) => {
+      const [g, mi, d] = sum(list); $('mc' + k).textContent = money(g); $('mc' + k + 'Mi').textContent = Math.round(mi * 10) / 10 + ' mi · ' + money(d) + ' deduction';
+    });
     $('mileSummary').textContent = trips.length + ' trip' + (trips.length === 1 ? '' : 's') + ' · ' + Math.round(miles * 10) / 10 + ' miles in ' + y + '.';
-    $('mileRows').innerHTML = trips.length ? trips.map(x => '<tr><td>' + esc(x.date) + '</td><td>' + esc(x.purpose) + '</td><td class="num">' + x.miles + '</td><td class="num">' + money(x.miles * x.rate) + '</td><td><button type="button" class="del mile-del" data-id="' + x.id + '">Delete</button></td></tr>').join('') :
-      '<tr><td colspan="5" class="empty">No trips logged for ' + y + '.</td></tr>';
+    $('mileRows').innerHTML = trips.length ? trips.map(x => '<tr><td>' + esc(x.date) + '</td><td>' + esc(x.purpose) + '</td><td class="num">' + x.miles + '</td><td class="num">' + money(gasOf(x)) + '</td><td class="num">' + money(x.miles * x.rate) + '</td><td><button type="button" class="del mile-del" data-id="' + x.id + '">Delete</button></td></tr>').join('') :
+      '<tr><td colspan="6" class="empty">No trips logged for ' + y + '.</td></tr>';
     $('routeRows').innerHTML = data.routes.map(r => '<tr><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="name" value="' + esc(r.name) + '" aria-label="Trip name"></td><td><input class="cell-input route-edit wide" data-id="' + r.id + '" data-f="detail" value="' + esc(r.detail || '') + '" aria-label="Route"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" step=".1" inputmode="decimal" data-id="' + r.id + '" data-f="miles" value="' + r.miles + '" aria-label="Miles one way"></td><td><input type="checkbox" class="route-edit" data-id="' + r.id + '" data-f="round"' + (r.round ? ' checked' : '') + ' aria-label="Round trip"></td><td class="num"><input class="cell-input route-edit" type="number" min="0" inputmode="numeric" data-id="' + r.id + '" data-f="perWeek" value="' + (r.perWeek || 0) + '" aria-label="Times a week"></td><td><button type="button" class="del route-del" data-id="' + r.id + '">Remove</button></td></tr>').join('');
   }
   $('mileYear').addEventListener('change', renderMileage);
@@ -441,8 +452,9 @@
     if (log) {
       const r = data.routes.find(x => x.id === log.dataset.route); if (!r) return;
       const miles = tripMiles(r), date = $('tripDate').value || todayIso();
-      data.mileage.push({ id: newId(), date, purpose: r.name + ' (' + (r.detail || 'regular trip') + ')', miles, rate: data.settings.mileRate, route: r.id });
-      save(); renderExtras(); toast('Logged ' + miles + ' miles · ' + r.name + ' · ' + money(miles * data.settings.mileRate));
+      const gas = Math.round(gasFor(miles) * 100) / 100;
+      data.mileage.push({ id: newId(), date, purpose: r.name + ' (' + (r.detail || 'regular trip') + ')', miles, rate: data.settings.mileRate, gas, route: r.id });
+      save(); renderExtras(); toast('Logged ' + miles + ' miles · ' + r.name + ' · about ' + money(gas) + ' gas');
     }
     if (del) {
       const x = data.mileage.find(t => t.id === del.dataset.id);
@@ -470,12 +482,56 @@
   mf.date.value = todayIso(); $('mileRate').value = data.settings.mileRate;
   mf.addEventListener('submit', e => {
     e.preventDefault();
-    const rate = Number(mf.rate.value) || data.settings.mileRate;
-    data.settings.mileRate = rate;
-    data.mileage.push({ id: newId(), date: mf.date.value, purpose: mf.purpose.value.trim(), miles: Number(mf.miles.value) || 0, rate });
+    const rate = data.settings.mileRate, miles = Number(mf.miles.value) || 0;
+    data.mileage.push({ id: newId(), date: mf.date.value, purpose: mf.purpose.value.trim(), miles, rate, gas: Math.round(gasFor(miles) * 100) / 100 });
     save(); mf.purpose.value = ''; mf.miles.value = ''; renderExtras(); toast('Trip added.');
   });
-  $('mileRate').addEventListener('change', e => { const r = Number(e.target.value); if (r > 0) { data.settings.mileRate = r; save(); } });
+  $('mileRate').addEventListener('change', e => { const r = Number(e.target.value); if (r > 0) { data.settings.mileRate = r; save(); renderExtras(); } });
+  $('mpg').value = data.settings.mpg; $('gasPrice').value = data.settings.gasPrice;
+  $('mpg').addEventListener('change', e => { const v = Number(e.target.value); if (v > 0) { data.settings.mpg = v; save(); renderExtras(); } });
+  $('gasPrice').addEventListener('change', e => { const v = Number(e.target.value); if (v >= 0) { data.settings.gasPrice = v; save(); renderExtras(); } });
+
+  // ---------- work shifts ----------
+  const wf = $('workForm');
+  wf.date.value = todayIso();
+  const lastPay = () => { const s0 = data.shifts[data.shifts.length - 1]; return s0 ? s0.amount : 75; };
+  wf.amount.value = lastPay();
+  function workRows() {
+    const out = [];
+    for (const m of months) for (const x of allRows('sales', m)) if (x.booth === 'Work income') out.push({ ...x, month: m });
+    return out;
+  }
+  function renderWork() {
+    if (!$('work').classList.contains('active')) return;
+    const all = workRows(), nowYear = String(new Date().getFullYear());
+    const ys = [...new Set([nowYear, ...all.map(x => (x.date || x.month.split(' ')[1]).slice(0, 4))])].sort().reverse(), cur = $('workYear').value;
+    $('workYear').innerHTML = ys.map(y => '<option>' + y + '</option>').join(''); $('workYear').value = ys.includes(cur) ? cur : ys[0];
+    const y = $('workYear').value, inYear = all.filter(x => x.month.endsWith(' ' + y)), mon = all.filter(x => x.month === currentMonth), yr = all.filter(x => x.month.endsWith(' ' + nowYear));
+    const tot = l => l.reduce((t, x) => t + x.amount, 0), plural = n => n + ' shift' + (n === 1 ? '' : 's');
+    $('wkMonth').textContent = money(tot(mon)); $('wkMonthN').textContent = plural(mon.length) + ' in ' + currentMonth;
+    $('wkYear').textContent = money(tot(yr)); $('wkYearN').textContent = plural(yr.length) + ' in ' + nowYear;
+    $('wkAvg').textContent = money(yr.length ? tot(yr) / yr.length : 0);
+    const hrs = yr.reduce((t, x) => t + (Number(x.hours) || 0), 0);
+    $('wkHours').textContent = hrs ? hrs + ' hours logged · ' + money(tot(yr.filter(x => x.hours)) / hrs) + ' per hour' : 'Add hours to see pay per hour';
+    $('workRows').innerHTML = inYear.length ? inYear.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(x => '<tr><td>' + esc(x.date || '—') + '</td><td>' + esc(x.item) + '</td><td class="num">' + (x.hours || '—') + '</td><td class="num">' + money(x.amount) + '</td><td>' +
+      (x.key[0] === 'w' ? '<button type="button" class="del shift-del" data-id="' + x.key.slice(1) + '">Delete</button>' : '<span class="helper" style="margin:0">Worksheet</span>') + '</td></tr>').join('') :
+      '<tr><td colspan="5" class="empty">No shifts logged for ' + y + '.</td></tr>';
+    $('workMonths').innerHTML = months.filter(m => m.endsWith(' ' + y)).map(m => { const l = all.filter(x => x.month === m); return '<tr><td>' + m + '</td><td class="num">' + l.length + '</td><td class="num">' + money(tot(l)) + '</td></tr>'; }).join('');
+    $('shiftNames').innerHTML = ['Working Sunday', 'Working Saturday', 'Working Friday', 'Working Tuesday', 'Vendor work night'].map(n => '<option value="' + n + '">').join('');
+  }
+  $('workYear').addEventListener('change', renderWork);
+  wf.addEventListener('submit', e => {
+    e.preventDefault();
+    const date = wf.date.value || todayIso(); let m = monthOf(date); if (!months.includes(m)) m = currentMonth;
+    const amount = Math.round((Number(wf.amount.value) || 0) * 100) / 100;
+    data.shifts.push({ id: newId(), date, month: m, item: wf.item.value.trim() || 'Work shift', hours: Number(wf.hours.value) || undefined, amount });
+    save(); render(); wf.item.value = ''; wf.hours.value = ''; toast('Shift added: ' + money(amount) + ' in ' + m + '.');
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.shift-del'); if (!b) return;
+    const x = data.shifts.find(t => t.id === b.dataset.id);
+    if (x && confirm('Delete the ' + money(x.amount) + ' shift on ' + x.date + '?')) { data.shifts = data.shifts.filter(t => t !== x); save(); render(); }
+  });
   $('exportYear').addEventListener('click', () => {
     const y = $('repYear').value, q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', lines = [['Date', 'Month', 'Type', 'Item', 'Booth', 'Quantity', 'Amount'].map(q).join(',')];
     for (const m of months.filter(m => m.endsWith(' ' + y)).reverse()) {
@@ -495,6 +551,7 @@
     renderBackupStatus();
     renderReports();
     renderMileage();
+    renderWork();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };
