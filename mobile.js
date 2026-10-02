@@ -330,6 +330,61 @@
       setTimeout(() => location.reload(), 600);
     } catch (e) { msg.textContent = 'That file is not a Booth Tracker backup.'; }
   }
+  // ---------- automatic copies ----------
+  // A copy of everything is kept on this phone automatically: one per day for the last 14 days,
+  // updated a few seconds after each change. It undoes mistakes and bad imports without a file.
+  const AUTO_DB = (CFG.storageKey || 'boothMonthlyTracker') + 'AutoCopies', AUTO_KEEP = 14;
+  function autoTx(mode, fn) {
+    return new Promise((ok, no) => {
+      const req = indexedDB.open(AUTO_DB, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('copies', { keyPath: 'day' });
+      req.onerror = () => no(req.error);
+      req.onsuccess = () => {
+        const tx = req.result.transaction('copies', mode), st = tx.objectStore('copies');
+        let out; const r = fn(st); if (r) r.onsuccess = () => { out = r.result; };
+        tx.oncomplete = () => { req.result.close(); ok(out); };
+        tx.onerror = () => { req.result.close(); no(tx.error); };
+      };
+    });
+  }
+  let autoTimer = null;
+  function autoCopy() {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(async () => {
+      try {
+        await autoTx('readwrite', s => s.put({ day: todayIso(), saved: new Date().toISOString(), data: JSON.stringify(data) }));
+        const days = (await autoTx('readonly', s => s.getAllKeys())) || [];
+        const old = days.sort().slice(0, Math.max(0, days.length - AUTO_KEEP));
+        if (old.length) await autoTx('readwrite', s => { old.forEach(d => s.delete(d)); });
+        if ($('page-settings') && !$('page-settings').hidden) renderAutoCopies();
+      } catch (e) {}
+    }, 3000);
+  }
+  const saveBeforeAuto = window.save;
+  window.save = function () { saveBeforeAuto(); autoCopy(); };
+  autoCopy();
+  // Ask the phone not to clear this site's storage when space runs low.
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  async function renderAutoCopies() {
+    const box = $('autoCopies'); if (!box) return;
+    let list = [];
+    try { list = ((await autoTx('readonly', s => s.getAll())) || []).sort((a, b) => b.day.localeCompare(a.day)); } catch (e) {}
+    if (!list.length) { box.innerHTML = '<div class="helper">The first automatic copy is saved a few seconds after you open the app.</div>'; return; }
+    box.innerHTML = '<div class="helper">Saved automatically on this phone. Last copy: ' + new Date(list[0].saved).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '.</div>' +
+      '<div class="auto-copies">' + list.map(c => '<button type="button" class="button ghost" data-auto="' + c.day + '">' + (c.day === todayIso() ? 'Today' : nice(c.day)) + '</button>').join('') + '</div>' +
+      '<div class="helper">Tap a day to go back to how things were at the end of that day.</div>';
+  }
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-auto]'); if (!b) return;
+    try {
+      const c = await autoTx('readonly', s => s.get(b.dataset.auto));
+      if (!c || !confirm('Go back to your data from ' + new Date(c.saved).toLocaleString() + '? Changes made after that are replaced. (Receipt photos are not affected.)')) return;
+      clearTimeout(autoTimer);
+      localStorage.setItem(CFG.storageKey || 'boothMonthlyTracker', c.data);
+      toast('Restored. Reloading…'); setTimeout(() => location.reload(), 600);
+    } catch (err) { toast('That copy could not be opened.'); }
+  });
+
   $('backupNow').addEventListener('click', backupNow);
   $('restoreFile').addEventListener('change', e => { if (e.target.files[0]) restoreFrom(e.target.files[0]); e.target.value = ''; });
 
@@ -1351,7 +1406,7 @@
     const need = renderRestock();
     renderBatches();
     renderTodo(need);
-    renderBackupStatus();
+    renderBackupStatus(); renderAutoCopies();
     renderReports();
     renderMileage();
     renderWork();

@@ -325,3 +325,6 @@ dialog.sheet::backdrop{background:#17344766}
   .page.active{display:block!important}
   .panel,.card,.perf-card{box-shadow:none}
 }
+
+.auto-copies { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.auto-copies .button { padding: 6px 12px; }
