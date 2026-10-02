@@ -114,6 +114,7 @@ function jobFor(evId, role, create) {
 const signedIn = () => !!(window.volSync && window.volSync.user());
 // Link to the public sign-up page, for the whole season or one event.
 function signupUrl(evId) {
+  if (data.settings.signupLink) return data.settings.signupLink;
   const u = new URL('signup.html', location.href.split('#')[0]);
   const me = signedIn() ? window.volSync.user().id : CFG.ownerId;
   if (me && me !== CFG.ownerId) u.searchParams.set('o', me);
@@ -209,9 +210,9 @@ function fillMessage(text, ev, slot, p) {
 // ---------- routing ----------
 function route() {
   const [tab, id] = (location.hash.slice(1) || 'events').split('/');
-  const tabOf = { event: 'events', checkin: 'events', sheet: 'events', import: 'more' };
+  const tabOf = { event: 'events', checkin: 'events', sheet: 'events', import: 'more', sug: 'events' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { events: viewEvents, event: viewEvent, checkin: viewCheckin, sheet: viewSheet, people: viewPeople, import: viewImport, more: viewMore, share: viewShare };
+  const views = { events: viewEvents, event: viewEvent, checkin: viewCheckin, sheet: viewSheet, people: viewPeople, import: viewImport, more: viewMore, share: viewShare, sug: viewSug };
   (views[tab] || viewEvents)(id);
   window.scrollTo(0, 0);
 }
@@ -248,7 +249,7 @@ function viewEvents() {
   const past = data.events.filter(e => e.date < t).sort((a, b) => b.date.localeCompare(a.date));
   $('view').innerHTML =
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="row-actions"><button type="button" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
+    '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
     (data.events.length || !signedIn() ? '' : '<div class="empty"><h2>Welcome!</h2><p>Add an event and the jobs you need filled, then share your sign-up link or QR code.</p></div>') +
     (up.length ? '<h2>Coming up</h2>' + up.map(eventCard).join('') : (data.events.length ? '<p class="helper">No upcoming events. Import sign-ups or add one.</p>' : '')) +
     (past.length ? '<details class="past"><summary>Past events (' + past.length + ')</summary>' + past.map(eventCard).join('') + '</details>' : '');
@@ -856,6 +857,134 @@ function runImport() {
   location.hash = usedGroups === 1 && lastEv ? 'event/' + lastEv.id : 'events';
 }
 
+// ---------- Update from SignUpGenius ----------
+// Volunteers keep signing up on SignUpGenius. Copying the sign-up page (select all, copy) and pasting
+// it here brings in new sign-ups and phone numbers, updates spot counts, and flags cancellations.
+const DAYS = /^(mon|tues|wednes|thurs|fri|satur|sun)day$/i;
+const SLOTS = /^(\d+)\s+of\s+(\d+)\s+slots?\s+filled/i;
+const PHONE_LINE = /^\+?[\d\s().-]{10,}$/;
+function parseSug(text) {
+  const lines = text.replace(/\t/g, '\n').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const events = []; let ev = null, job = null, stage = '';
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i], next = lines[i + 1] || '';
+    if (/^©|want no ads|^view plans|^dates (are )?shown|^date$|^location$|^available slot$/i.test(l)) continue;
+    const dm = l.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dm) { ev = { date: dm[3] + '-' + pad(dm[1]) + '-' + pad(dm[2]), start: '', end: '', name: '', location: '', jobs: [] }; events.push(ev); job = null; stage = 'time';
+      const rest = l.slice(dm[0].length).trim(); if (rest) lines.splice(i + 1, 0, rest); continue; }
+    if (!ev) continue;
+    if (SLOTS.test(next)) { const m = next.match(SLOTS); job = { role: l.replace(/\s+volunteers?$/i, '').trim() || 'Volunteer', need: Number(m[2]), filled: Number(m[1]), people: [] }; ev.jobs.push(job); i++; stage = 'people'; continue; }
+    if (stage === 'time') {
+      const times = l.match(/\d{1,2}(:\d{2})?\s*[ap]\.?m/gi);
+      if (times) { times.forEach(t => { if (!ev.start) ev.start = parseTime(t); else if (!ev.end) ev.end = parseTime(t); }); continue; }
+      if (DAYS.test(l)) continue;
+      const at = l.split(/\s+@\s*/);
+      ev.name = at[0].trim(); ev.location = (at[1] || '').trim(); stage = 'title'; continue;
+    }
+    if (stage === 'people' && job) {
+      if (PHONE_LINE.test(l) && digits(l)) { const p = job.people[job.people.length - 1]; if (p && !p.phone) p.phone = digits(l); continue; }
+      if (/^[A-Z]{1,3}$/.test(l)) continue;
+      if (/^(sign ?up|swap|cancel|edit|comment)/i.test(l)) continue;
+      const truncated = /(\.\.\.|…)$/.test(l);
+      const { first, last } = splitName(l.replace(/(\.\.\.|…)$/, '').trim());
+      job.people.push({ first, last, phone: '', truncated });
+    }
+  }
+  return events.filter(e => e.date);
+}
+// SignUpGenius cuts long names short ("Samantha Mitche..."), so match on phone, then on the start of the name.
+function findSugPerson(x) {
+  const d = digits(x.phone);
+  if (d) { const hit = data.people.find(p => digits(p.phone) === d); if (hit) return hit; }
+  const f = x.first.toLowerCase(), l = x.last.toLowerCase();
+  return data.people.find(p => (p.first || '').toLowerCase() === f && (x.truncated ? (p.last || '').toLowerCase().startsWith(l) : (p.last || '').toLowerCase() === l)) || null;
+}
+let sugPlan = null;
+function planSug(parsed) {
+  return parsed.map(pe => {
+    const sameDay = data.events.filter(e => e.date === pe.date);
+    const ev = sameDay.find(e => e.name.toLowerCase() === pe.name.toLowerCase()) || (sameDay.length === 1 ? sameDay[0] : null);
+    const jobs = pe.jobs.map(pj => {
+      const job = ev && jobFor(ev.id, pj.role, false);
+      const listed = pj.people.map(x => {
+        const p = findSugPerson(x);
+        const slot = p && job && data.slots.find(s => s.jobId === job.id && s.personId === p.id);
+        return { x, p, slot, phoneNew: !!(p && x.phone && digits(p.phone) !== x.phone) };
+      });
+      const keep = new Set(listed.filter(r => r.slot).map(r => r.slot.id));
+      const gone = job ? data.slots.filter(s => s.jobId === job.id && s.source === 'SignUpGenius' && !keep.has(s.id)).map(s => ({ s, p: person(s.personId), remove: !s.inAt })) : [];
+      return { pj, job, listed, gone };
+    });
+    return { pe, ev, jobs };
+  });
+}
+function viewSug() {
+  if (!sugPlan) {
+    $('view').innerHTML = '<a class="back" href="#events">‹ Events</a><h1>Update from SignUpGenius</h1>' +
+      '<ol class="steps"><li>Open your sign-up on SignUpGenius (on your phone or computer).</li>' +
+      '<li>Select everything on the page: on a computer press <b>Ctrl+A</b> (or ⌘A), on a phone press and hold, then <b>Select All</b>.</li>' +
+      '<li>Copy, then paste it below.</li></ol>' +
+      '<textarea id="sugText" rows="9" placeholder="10/08/2026&#10;4:15pm-&#10;9:30pm&#10;Thursday&#10;RJHS vs. Beebe @Cyclone Stadium Concession Stand&#10;Concession Stand Volunteer&#10;3 of 16 slots filled&#10;…"></textarea>' +
+      '<div class="row-actions"><button type="button" id="sugGo">Check what changed</button></div>' +
+      '<p class="helper">New sign-ups and phone numbers are added, spot counts are updated, and you choose whether to remove anyone who is no longer on SignUpGenius.</p>';
+    $('sugGo').onclick = () => {
+      const parsed = parseSug($('sugText').value);
+      if (!parsed.length) { toast('No sign-ups found. Copy the whole SignUpGenius page, including the dates.'); return; }
+      sugPlan = planSug(parsed); viewSug();
+    };
+    return;
+  }
+  let adds = 0, phones = 0, gone = 0, newEvents = 0;
+  const body = sugPlan.map((pl, ei) => {
+    if (!pl.ev) newEvents++;
+    return '<div class="card pad"><h3>' + esc(fmtDate(pl.pe.date)) + ' · ' + esc(pl.ev ? pl.ev.name : pl.pe.name) + (pl.ev ? '' : ' <span class="chip gold">new event</span>') + '</h3>' +
+      pl.jobs.map((pj, ji) => {
+        const rows = pj.listed.map(r => {
+          if (!r.slot) adds++; if (r.phoneNew) phones++;
+          const nm = r.p ? fullName(r.p) : (r.x.first + ' ' + r.x.last).trim() + (r.x.truncated ? '…' : '');
+          const tag = !r.slot ? '<span class="chip gold">new sign-up</span>' : r.phoneNew ? '<span class="chip">new phone</span>' : '<span class="sub">already here</span>';
+          return '<div class="sugrow">' + esc(nm) + (r.x.phone ? ' <span class="sub">' + esc(fmtPhone(r.x.phone)) + '</span>' : '') + ' ' + tag + '</div>';
+        }).join('');
+        const goneRows = pj.gone.map((g, gi) => { if (g.remove) gone++; return '<label class="check"><input type="checkbox" data-gone="' + ei + '.' + ji + '.' + gi + '"' + (g.remove ? ' checked' : '') + '> Remove ' + esc(fullName(g.p)) + ' <span class="sub">(no longer on SignUpGenius' + (g.s.inAt ? ', already checked in' : '') + ')</span></label>'; }).join('');
+        const needChange = pj.job && pj.job.need !== pj.pj.need ? ' <span class="chip">needs ' + pj.job.need + ' → ' + pj.pj.need + '</span>' : '';
+        return '<p><b>' + esc(pj.pj.role) + '</b> · ' + pj.pj.filled + ' of ' + pj.pj.need + needChange + '</p>' + rows + goneRows;
+      }).join('') + '</div>';
+  }).join('');
+  $('view').innerHTML = '<a class="back" href="#events">‹ Events</a><h1>What changed</h1>' +
+    '<p class="helper" id="sugSum"></p>' + body +
+    '<div class="row-actions"><button type="button" id="sugApply">Update my list</button><button type="button" class="ghost" id="sugBack">Start over</button></div>';
+  $('sugSum').textContent = [adds + ' new sign-ups', phones + ' new phone numbers', gone + ' to remove', newEvents ? newEvents + ' new events' : ''].filter(Boolean).join(' · ');
+  document.querySelectorAll('[data-gone]').forEach(c => c.onchange = () => { const [a, b, g] = c.dataset.gone.split('.').map(Number); sugPlan[a].jobs[b].gone[g].remove = c.checked; });
+  $('sugBack').onclick = () => { sugPlan = null; viewSug(); };
+  $('sugApply').onclick = applySug;
+}
+function applySug() {
+  let added = 0, removed = 0;
+  sugPlan.forEach(pl => {
+    let ev = pl.ev;
+    if (!ev) { ev = { id: uid(), name: pl.pe.name || 'Band event', date: pl.pe.date, start: pl.pe.start, end: pl.pe.end, location: pl.pe.location, notes: '', isPublic: true }; data.events.push(ev); }
+    pl.jobs.forEach(pj => {
+      const job = pj.job || jobFor(ev.id, pj.pj.role, true);
+      job.need = Math.max(pj.pj.need, filledOf(job.id));
+      pj.listed.forEach(r => {
+        let p = r.p;
+        if (!p) { p = { id: uid(), first: r.x.first, last: r.x.last, phone: r.x.phone, email: '', type: 'adult', parent: '', notes: '' }; data.people.push(p); }
+        else if (r.x.phone) p.phone = r.x.phone;
+        if (!data.slots.some(s => s.jobId === job.id && s.personId === p.id)) {
+          data.slots.push({ id: uid(), eventId: ev.id, jobId: job.id, personId: p.id, role: job.role, start: '', end: '', source: 'SignUpGenius', inAt: null, outAt: null }); added++;
+        }
+      });
+      const drop = new Set(pj.gone.filter(g => g.remove).map(g => g.s.id));
+      removed += drop.size;
+      data.slots = data.slots.filter(s => !drop.has(s.id));
+    });
+  });
+  window.save();
+  sugPlan = null;
+  toast('Updated: ' + added + ' added, ' + removed + ' removed.');
+  location.hash = 'events';
+}
+
 // ---------- Share link and QR code ----------
 function loadQr() {
   return new Promise((ok, no) => {
@@ -883,7 +1012,7 @@ async function viewShare(evId) {
   const url = signupUrl(ev && ev.id);
   const upcoming = data.events.filter(e => e.date >= today() && e.isPublic !== false).sort((a, b) => a.date.localeCompare(b.date));
   $('view').innerHTML = '<div class="no-print">' + (ev ? '<a class="back" href="#event/' + ev.id + '">‹ ' + esc(ev.name) + '</a>' : '') +
-    '<h1>Share your sign-up page</h1>' +
+    '<h1>Share your sign-up link</h1>' + (data.settings.signupLink ? '<p class="helper">This shares your SignUpGenius link. Change it under More → Sign-up page.</p>' : '') +
     (signedIn() ? '' : '<p class="chip warn">Sign in (More → Account) so new events and jobs show on the page.</p>') +
     '<label>Link for<select id="shWhich"><option value="">The whole season (all upcoming events)</option>' + upcoming.map(e => '<option value="' + e.id + '"' + (ev && ev.id === e.id ? ' selected' : '') + '>' + esc(fmtDate(e.date) + ' – ' + e.name) + '</option>').join('') + '</select></label>' +
     '<div class="linkbox"><input id="shUrl" readonly value="' + esc(url) + '"></div>' +
@@ -933,6 +1062,8 @@ function viewMore() {
     '<label>Sign texts as<input id="mFrom" value="' + esc(data.settings.from) + '" placeholder="Shaana, Volunteer Coordinator"></label></div></div>' +
     '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {job} {location} {from} {link}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
     '<div class="card pad"><h2>Sign-up page</h2><label>Page title<input id="mTitle" value="' + esc(data.settings.title || '') + '" placeholder="Band Booster & Parent Volunteer Opportunities"></label>' +
+    '<label>Where volunteers sign up<select id="mWhere"><option value="">My own sign-up page</option><option value="sug"' + (data.settings.signupLink ? ' selected' : '') + '>SignUpGenius</option></select></label>' +
+    '<label' + (data.settings.signupLink ? '' : ' hidden') + ' id="mSugWrap">SignUpGenius sign-up link (open your sign-up, tap Share, copy the link)<input id="mSug" type="url" value="' + esc(data.settings.signupLink || '') + '" placeholder="https://www.signupgenius.com/go/…"></label>' +
     '<label>Facebook group link<input id="mFb" type="url" value="' + esc(data.settings.facebook || '') + '" placeholder="https://www.facebook.com/groups/…"></label>' +
     '<label>Welcome note<textarea id="mIntro" rows="2" placeholder="Thank you for supporting the band!">' + esc(data.settings.intro || '') + '</textarea></label>' +
     '<div class="row-actions"><a class="button ghost" href="#share">📣 Share link and QR code</a><a class="button ghost" href="' + esc(signupUrl()) + '" target="_blank" rel="noopener">See the page</a></div></div>' +
@@ -956,6 +1087,12 @@ function viewMore() {
   $('mFrom').onchange = e => { data.settings.from = e.target.value.trim(); window.save(); };
   $('mTitle').onchange = e => { data.settings.title = e.target.value.trim(); window.save(); };
   $('mFb').onchange = e => { data.settings.facebook = e.target.value.trim(); window.save(); };
+  $('mWhere').onchange = e => { $('mSugWrap').hidden = !e.target.value; if (!e.target.value) { data.settings.signupLink = ''; $('mSug').value = ''; window.save(); } };
+  $('mSug').onchange = e => {
+    const v = e.target.value.trim();
+    if (v && !/^https?:\/\//.test(v)) { toast('Paste the whole link, starting with https://'); return; }
+    data.settings.signupLink = v; window.save(); toast(v ? 'Your Share screen and QR code now point to SignUpGenius.' : 'Using your own sign-up page.');
+  };
   $('mIntro').onchange = e => { data.settings.intro = e.target.value.trim(); window.save(); };
   $('mBackup').onclick = () => download('band-volunteers-backup-' + today() + '.json', JSON.stringify(data, null, 1), 'application/json');
   $('mRestore').onchange = async e => {
