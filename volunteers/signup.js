@@ -28,6 +28,13 @@
   function closeModal() { $('modal').hidden = true; $('modalBody').innerHTML = ''; }
   $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 
+  // The welcome note keeps its paragraphs, and its email address and phone number can be tapped.
+  function linkify(text) {
+    return text.split(/\n\s*\n/).map(par => '<p>' + esc(par.trim()).replace(/\n/g, '<br>')
+      .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, m => '<a href="mailto:' + m + '">' + m + '</a>')
+      .replace(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, m => '<a href="tel:+1' + m.replace(/\D/g, '') + '">' + m + '</a>') + '</p>').join('');
+  }
+
   let board = null;
 
   async function load() {
@@ -55,7 +62,7 @@
     };
     $('view').innerHTML =
       '<h1>' + esc(st.title || 'Volunteer Sign-Up') + '</h1>' +
-      (st.intro ? '<p>' + esc(st.intro) + '</p>' : '') +
+      (st.intro ? '<div class="intro">' + linkify(st.intro) + '</div>' : '') +
       '<div id="mine"></div>' +
       (only && !one ? '<p class="chip warn">That event is full, past, or no longer listed. Here is everything that\'s open.</p>' : '') +
       (events.length ? events.map(ev => '<section class="card pad pub-event"><div class="pub-when">' + esc(fmtDate(ev.date)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + '</div>' +

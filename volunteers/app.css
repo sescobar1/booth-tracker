@@ -110,8 +110,9 @@ table.signin { width: 100%; border-collapse: collapse; font-size: .92rem; min-wi
 table.signin th, table.signin td { border: 1px solid #888; padding: 7px 6px; text-align: left; vertical-align: middle; height: 34px; }
 table.signin th { background: #eef1f7; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
 table.signin td:first-child { width: 28px; text-align: center; color: var(--muted); }
-table.signin td:nth-last-child(-n+3) { width: 13%; }
-table.signin td:last-child { width: 22%; }
+table.signin td:nth-last-child(-n+4) { width: 11%; }
+table.signin td.credit { width: 14%; font-size: .78rem; line-height: 1.5; white-space: nowrap; }
+table.signin td:last-child { width: 20%; }
 table.signin small { color: var(--muted); }
 .sheetfoot { font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
 
@@ -173,3 +174,5 @@ body.public { padding-bottom: 32px; }
 .bar span { display: block; height: 100%; background: var(--gold); }
 .card.mine { border-color: var(--ok); background: #f4fbf6; }
 .sugrow { padding: 4px 0; border-bottom: 1px dotted var(--line); }
+.intro { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; padding: 4px 14px; margin: 8px 0 14px; }
+.intro a { font-weight: 600; word-break: break-word; }
