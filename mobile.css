@@ -165,6 +165,41 @@ td.rcpt{white-space:nowrap}
 .owner-name input{max-width:240px;margin-left:6px;padding:7px}
 .sheet-body .bx-row label{margin-bottom:0}
 
+/* This week, recap, baking plan, thrift list, pricing helper */
+.wk-list{display:grid;gap:0;padding-top:4px}
+.wk-day{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #edf1f2}
+.wk-day:last-child{border-bottom:0}
+.wk-day.today .wk-date b{color:var(--green)}
+.wk-date small{display:block;color:#64747d;font-size:.78rem}
+.wk-ev{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ev{background:var(--soft);border-radius:8px;padding:4px 9px;font-size:.86rem}
+.ev.cookie{background:#fbe7ee}.ev.tax{background:#fff1d6}.ev.backup,.ev.relic{background:#eef3f5}.ev.none{background:none;color:#8a979e;padding-left:0}
+.recap-head select{border:1px solid #cbd9df;border-radius:7px;padding:6px;font:inherit}
+.cards.recap-cards{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
+.recap-cards .card{min-width:0}.recap-cards .value{font-size:1.3rem}.recap-cards .helper{margin:4px 0 0;font-size:.78rem}
+.recap-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.recap-grid h4{margin:0 0 6px}
+.recap-list{margin:0;padding-left:20px;font-size:.9rem}.recap-list.plain{list-style:none;padding:0}
+.recap-list li{padding:4px 0;display:flex;justify-content:space-between;gap:10px}.recap-list li span:last-child{color:#4e5f69;white-space:nowrap}.rl-name{min-width:0}
+.panel .recap-head h3{padding:0;border:0;font-size:1.05rem}
+.bake-plan{margin-bottom:16px}
+.plan-weeks{font-size:.88rem;color:#31576b;display:block;margin-bottom:8px}
+.plan-weeks select{border:1px solid #cbd9df;border-radius:7px;padding:5px;font:inherit}
+.plan-n{width:64px}
+.shop-title{margin:14px 0 6px}
+.check-list{list-style:none;padding:0;margin:0 0 10px}
+.check-list li{display:flex;align-items:center;gap:8px;border-bottom:1px solid #edf1f2;padding:8px 0}
+.check-list label{display:flex;gap:10px;align-items:flex-start;flex:1;cursor:pointer}
+.check-list input{width:20px;height:20px;margin-top:2px;flex:none}
+.check-list small{display:block;color:#64747d}
+.check-list li.done span{text-decoration:line-through;color:#8a979e}
+.thrift-add{display:flex;gap:8px;margin:6px 0 4px}
+.thrift-add input{flex:1;border:1px solid #cbd9df;border-radius:7px;padding:9px;font:inherit;font-size:16px}
+.price-insight{grid-column:1/-1;font-size:.86rem;color:#31576b;margin:-6px 0 10px}
+.price-insight:empty{display:none}
+.pi{display:block;background:#fff8e9;border:1px solid #ead4aa;border-radius:8px;padding:8px 10px;line-height:1.4}
+.pi.none{background:none;border:0;padding:0;color:#8a979e}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -210,6 +245,8 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
+  .cards.recap-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .recap-grid{grid-template-columns:1fr}
   .bx-row{grid-template-columns:1fr 1fr auto}
   .bx-row label:nth-child(2){grid-column:1/-1;grid-row:1}
   .cards.tax-cards{grid-template-columns:1fr}

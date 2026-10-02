@@ -88,7 +88,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['week', 'This week', 'Calendar, Sunday recap'], ['taxes', 'Taxes', 'Profit for taxes, set-aside, due dates'], ['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -409,6 +409,7 @@
     if (typeof boothReport === 'function') boothReport().filter(r => r.status[0] === 'Losing money').forEach(r => items.push([r.c + ' booth is losing money', r.status[2], 'reports', 'Review']));
     const due = typeof nextTaxDue === 'function' ? nextTaxDue() : null;
     if (due && due.est > 0 && !due.paid && due.days <= 21) items.push(['Estimated tax ' + money(due.est) + ' due ' + nice(due.due), due.q + ' ' + due.yr + ' · in ' + due.days + ' days', 'taxes', 'View']);
+    if ([0, 1].includes(new Date().getDay()) && data.recapSeen !== weekStart()) items.push(['Your weekly recap is ready', 'Sales, top sellers, miles, and what sold out', 'recap', 'See it']);
     if (need.length) items.push([need.length + ' item' + (need.length === 1 ? '' : 's') + ' to restock', need.filter(x => x.status === 'out').length + ' out of stock', 'restock', 'View']);
     $('todo').innerHTML = '<section class="todo" aria-labelledby="todoTitle"><h3 id="todoTitle">To do</h3>' + (items.length ?
       items.map(([t, s, task, btn]) => '<div class="todo-item"><div><b>' + esc(t) + '</b><small>' + esc(s) + '</small></div><button type="button" class="button" data-task="' + task + '">' + btn + '</button></div>').join('') :
@@ -421,6 +422,7 @@
     if (t === 'mileage') go('mileage');
     if (t === 'reports') go('reports');
     if (t === 'taxes') go('taxes');
+    if (t === 'recap') { data.recapSeen = weekStart(); save(); go('week'); }
     if (t === 'cookies') document.getElementById('dashCookies').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   $('relicEvery').value = data.settings.relicEvery;
@@ -1000,6 +1002,164 @@
     }
   });
 
+  // ---------- shared helpers for the week page, baking plan, thrift list, and pricing ----------
+  let flatSales = null, flatVer = -1;
+  function salesFlat() {
+    if (flatSales && flatVer === dataVer) return flatSales;
+    flatSales = []; for (const m of months) for (const x of allRows('sales', m)) if (x.booth !== 'Work income') flatSales.push({ ...x, k: groupKey(x.item) });
+    flatVer = dataVer; return flatSales;
+  }
+  const salesBetween = (a, b) => salesFlat().filter(x => x.date && x.date >= a && x.date <= b);
+  const shareText = async (title, text) => {
+    try { if (navigator.share) { await navigator.share({ title, text }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into Notes or a text.'); } catch (e) { toast('Could not copy the list.'); }
+  };
+  const pct = (a, b) => b ? Math.round((a - b) / b * 100) : null;
+
+  // ---------- 1 + 4. This week: week at a glance and the Sunday recap ----------
+  function weekEvents(day) {
+    const ev = [], d = dow(day);
+    data.routes.filter(r => (r.days || []).includes(d)).forEach(r => ev.push(['trip', '🚗 ' + r.name + (r.detail ? ' · ' + r.detail : '')]));
+    (data.batches || []).filter(b => !b.done && b.expires === day).forEach(b => ev.push(['cookie', '🍪 Pull ' + b.name.toLowerCase() + ' (made ' + nice(b.made) + ')']));
+    const yr = day.slice(0, 4);
+    [yr, String(Number(yr) - 1)].forEach(y => QUARTERS(y).filter(q => q.due === day).forEach(q => { const tq = taxYear(y).quarters.find(x => x.q === q.q); if (tq && tq.est > 0 && !tq.paid) ev.push(['tax', '🧾 Estimated tax ' + money(tq.est) + ' due (' + q.q + ')']); }));
+    if (data.lastRelicImport && addDays(data.lastRelicImport, Number(data.settings.relicEvery) || 7) === day) ev.push(['relic', '⬇️ Import Relic sales']);
+    if (day === todayIso() && daysSince(data.lastBackup) >= 1) ev.push(['backup', '☁️ Back up to OneDrive']);
+    return ev;
+  }
+  function renderWeek() {
+    if (!$('week').classList.contains('active')) return;
+    const today = todayIso();
+    $('weekGlance').innerHTML = Array.from({ length: 7 }, (_, i) => addDays(today, i)).map(day => {
+      const ev = weekEvents(day);
+      return '<div class="wk-day' + (day === today ? ' today' : '') + '"><div class="wk-date"><b>' + (day === today ? 'Today' : DAYS[dow(day)]) + '</b><small>' + nice(day).replace(/^\w+, /, '') + '</small></div><div class="wk-ev">' +
+        (ev.length ? ev.map(([k, t]) => '<span class="ev ' + k + '">' + esc(t) + '</span>').join('') : '<span class="ev none">Nothing planned</span>') + '</div></div>';
+    }).join('');
+    // recap
+    const which = $('recapWeek').value, ws = weekStart(), start = which === 'this' ? ws : addDays(ws, -7), end = addDays(start, 6);
+    const sales = salesBetween(start, end), prev = salesBetween(addDays(start, -7), addDays(start, -1));
+    const tot = sales.reduce((t, x) => t + x.amount, 0), ptot = prev.reduce((t, x) => t + x.amount, 0), ch = pct(tot, ptot);
+    const trips = data.mileage.filter(t => t.date >= start && t.date <= end), miles = trips.reduce((t, x) => t + x.miles, 0), gas = trips.reduce((t, x) => t + gasOf(x), 0);
+    const made = (data.batches || []).filter(b => b.made >= start && b.made <= end);
+    const best = {}; sales.forEach(x => { const g = best[x.k] = best[x.k] || { name: x.item, n: 0, amt: 0 }; g.n++; g.amt += x.amount; });
+    const top = Object.values(best).sort((a, b) => b.amt - a.amt).slice(0, 5);
+    const byBooth = BOOTH_CODES.map(c => [c, sales.filter(x => code(x.booth) === c).reduce((t, x) => t + x.amount, 0)]);
+    const days = [0, 0, 0, 0, 0, 0, 0]; sales.forEach(x => days[dow(x.date)] += x.amount); const bestDay = days.indexOf(Math.max(...days));
+    const { need } = restockData(), out = need.filter(x => x.status === 'out');
+    const card = (l, v, sub) => '<div class="card"><div class="label">' + l + '</div><div class="value">' + v + '</div>' + (sub ? '<div class="helper">' + sub + '</div>' : '') + '</div>';
+    $('recapBody').innerHTML = '<p class="helper">' + nice(start) + ' – ' + nice(end) + (sales.length ? '' : ' · No dated sales yet for this week. Import your Relic sales to fill it in.') + '</p>' +
+      '<div class="cards recap-cards">' + card('Sales', money(tot), ch == null ? '' : (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs the week before') + card('Items sold', sales.length, tot ? 'Best day: ' + DAYS[bestDay] : '') + card('Miles', Math.round(miles), 'About ' + money(gas) + ' gas') + card('Batches baked', made.length, made.reduce((t, b) => t + b.qty, 0) + ' cookies') + '</div>' +
+      '<div class="recap-grid"><div><h4>Top sellers</h4>' + (top.length ? '<ul class="recap-list plain">' + top.map((g, i) => '<li><span class="rl-name">' + (i + 1) + '. ' + esc(g.name) + '</span><span>' + g.n + ' · ' + money(g.amt) + '</span></li>').join('') + '</ul>' : '<p class="helper">No sales this week.</p>') + '</div>' +
+      '<div><h4>By booth</h4><ul class="recap-list plain">' + byBooth.map(([c, v]) => '<li><span class="rl-name">' + esc(c) + '</span><span>' + money(v) + '</span></li>').join('') + '</ul></div>' +
+      '<div><h4>Sold out at the store</h4>' + (out.length ? '<ul class="recap-list plain">' + out.slice(0, 6).map(x => '<li>' + esc(x.item) + '</li>').join('') + '</ul><button type="button" class="link" data-go="restock">Thrift run list</button>' : '<p class="helper">Nothing sold out.</p>') + '</div></div>';
+  }
+  $('recapWeek').addEventListener('change', renderWeek);
+  $('weekIcs').addEventListener('click', () => {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z', ymd = s => s.replace(/-/g, ''), L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Booth Tracker//EN'];
+    const ev = (uid, date, title, extra) => L.push('BEGIN:VEVENT', 'UID:' + uid + '@booth-tracker', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + ymd(date), 'DTEND;VALUE=DATE:' + ymd(addDays(date, 1)), 'SUMMARY:' + title.replace(/[,;]/g, ' '), ...(extra || []), 'END:VEVENT');
+    const ws = weekStart(), codes = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+    data.routes.filter(r => (r.days || []).length).forEach(r => { const first = Array.from({ length: 7 }, (_, i) => addDays(ws, i)).find(d => r.days.includes(dow(d))); ev('trip-' + r.id, first, r.name + ' trip', ['RRULE:FREQ=WEEKLY;BYDAY=' + r.days.map(d => codes[d]).join(',')]); });
+    (data.batches || []).filter(b => !b.done && b.expires >= todayIso()).forEach(b => ev('batch-' + b.id, b.expires, 'Pull ' + b.name.toLowerCase(), ['BEGIN:VALARM', 'TRIGGER:-PT12H', 'ACTION:DISPLAY', 'DESCRIPTION:Cookies expire', 'END:VALARM']));
+    const y = todayIso().slice(0, 4);
+    QUARTERS(y).filter(q => q.due >= todayIso()).forEach(q => ev('tax-' + y + q.q, q.due, 'Estimated tax ' + q.q + ' due (check Booth Tracker)', ['BEGIN:VALARM', 'TRIGGER:-P7D', 'ACTION:DISPLAY', 'DESCRIPTION:Estimated tax due in a week', 'END:VALARM']));
+    L.push('END:VCALENDAR');
+    shareOrDownload(new File([L.join('\r\n')], 'booth-week.ics', { type: 'text/calendar' }), false);
+  });
+
+  // ---------- 2. Baking plan and shopping list ----------
+  data.bakePlan = data.bakePlan || {};
+  data.settings.planWeeks = data.settings.planWeeks || 1;
+  function recipeDemand(r) {
+    const kw = r.name.toLowerCase().replace(/\bcookies?\b/g, '').trim(), words = kw.split(/[\s-]+/).filter(Boolean);
+    if (!words.length) return { perWeek: 0, sold28: 0 };
+    const re = new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s-]?'), 'i'), each = recipeMath(r).payout || 1;
+    const sold = salesBetween(addDays(todayIso(), -27), todayIso()).filter(x => re.test(x.item)).reduce((t, x) => t + Math.max(1, Math.round(x.amount / each)), 0);
+    return { perWeek: sold / 4, sold28: sold };
+  }
+  function bakePlan() {
+    const weeks = Number(data.settings.planWeeks) || 1, today = todayIso();
+    return data.recipes.map((r, i) => {
+      const d = recipeDemand(r), onHand = (data.batches || []).filter(b => !b.done && b.recipe === r.id && b.expires >= today).reduce((t, b) => t + b.qty, 0);
+      const need = Math.max(0, Math.ceil(d.perWeek * weeks - onHand)), suggested = need ? Math.ceil(need / (r.perBatch || 16)) : 0;
+      const batches = data.bakePlan[r.id] != null ? data.bakePlan[r.id] : suggested;
+      return { r, i, ...d, onHand, suggested, batches };
+    });
+  }
+  function shoppingList(plan) {
+    const items = {};
+    plan.forEach(p => p.batches > 0 && p.r.ingredients.forEach(g => {
+      const it = items[g.name] = items[g.name] || { name: g.name, unit: g.unit, use: 0, packAmt: Number(g.packAmt) || 1, pack: Number(g.pack) || 0 };
+      it.use += (Number(g.use) || 0) * p.batches;
+    }));
+    return Object.values(items).map(it => ({ ...it, buy: Math.ceil(it.use / it.packAmt - 1e-9), cost: Math.ceil(it.use / it.packAmt - 1e-9) * it.pack }));
+  }
+  function renderBakePlan() {
+    if (!$('cookies').classList.contains('active')) return;
+    if (!data.recipes.length) { $('bakePlan').innerHTML = ''; return; }
+    const plan = bakePlan(), list = shoppingList(plan), total = list.reduce((t, x) => t + x.cost, 0), fmt = n => Math.round(n * 100) / 100;
+    $('bakePlan').innerHTML = '<section class="panel summary bake-plan"><h3>Baking plan</h3><div class="panel-body"><label class="plan-weeks">Plan for <select id="planWeeks">' + [1, 2].map(w => '<option value="' + w + '"' + (w === Number(data.settings.planWeeks) ? ' selected' : '') + '>' + w + ' week' + (w > 1 ? 's' : '') + '</option>').join('') + '</select></label>' +
+      '<div class="scroll"><table><thead><tr><th>Recipe</th><th class="num">Sold / week</th><th class="num">On hand</th><th class="num">Batches to bake</th></tr></thead><tbody>' +
+      plan.map(p => '<tr><td>' + esc(p.r.name) + '</td><td class="num">' + (Math.round(p.perWeek * 10) / 10) + '</td><td class="num">' + p.onHand + '</td><td class="num"><input class="cell-input plan-n" type="number" min="0" step="1" inputmode="numeric" data-id="' + esc(p.r.id) + '" value="' + p.batches + '" aria-label="Batches of ' + esc(p.r.name) + '">' + (data.bakePlan[p.r.id] != null && data.bakePlan[p.r.id] !== p.suggested ? '<small class="sug">suggested ' + p.suggested + '</small>' : '') + '</td></tr>').join('') +
+      '</tbody></table></div><p class="helper">Based on cookies sold in the last 4 weeks and fresh cookies still out. Change the batches if you know better.</p>' +
+      (list.length ? '<h4 class="shop-title">Walmart list · about ' + money(total) + '</h4><ul class="check-list">' + list.map(x => '<li><label><input type="checkbox"> <span><b>' + esc(x.name) + '</b> · uses ' + fmt(x.use) + ' ' + esc(x.unit) + ' · buy ' + x.buy + ' (' + money(x.cost) + ')</span></label></li>').join('') + '</ul><p class="helper">Skip anything you already have at home.</p><button type="button" class="button" id="shareBake">Share shopping list</button>' : '<p class="helper">Nothing to bake right now.</p>') +
+      '</div></section>';
+  }
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t.id === 'planWeeks') { data.settings.planWeeks = Number(t.value) || 1; data.bakePlan = {}; save(); renderBakePlan(); }
+    if (t.matches('.plan-n')) { data.bakePlan[t.dataset.id] = Math.max(0, Math.round(Number(t.value) || 0)); save(); renderBakePlan(); }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#shareBake')) return;
+    const plan = bakePlan(), list = shoppingList(plan), fmt = n => Math.round(n * 100) / 100;
+    shareText('Baking shopping list', 'Baking: ' + plan.filter(p => p.batches).map(p => p.batches + '× ' + p.r.name).join(', ') + '\n\nWalmart list:\n' + list.map(x => '☐ ' + x.name + ' — buy ' + x.buy + ' (uses ' + fmt(x.use) + ' ' + x.unit + ')').join('\n'));
+  });
+
+  // ---------- 3. Thrift run list ----------
+  data.shopList = data.shopList || { custom: [], checked: {} };
+  function thriftItems() {
+    const { need } = restockData(), cb = cookieBooth(), seen = new Set(), items = [];
+    need.filter(x => boothFor(x.item) !== cb).forEach(x => { const k = groupKey(x.item); if (!seen.has(k)) { seen.add(k); items.push({ k, name: x.item, why: x.status === 'out' ? 'Sold out · ' + x.lifetimeSales + ' sold' : 'Running low · ' + x.qty + ' left', booth: code(boothFor(x.item)) }); } });
+    const hot = {}; salesBetween(addDays(todayIso(), -29), todayIso()).forEach(x => { if (x.booth === cb) return; const h = hot[x.k] = hot[x.k] || { name: x.item, n: 0, amt: 0, booth: code(x.booth) }; h.n++; h.amt += x.amount; });
+    Object.entries(hot).filter(([, h]) => h.n >= 3).sort((a, b) => b[1].n - a[1].n).slice(0, 10).forEach(([k, h]) => { if (!seen.has(k)) { seen.add(k); items.push({ k, name: h.name, why: 'Hot seller · ' + h.n + ' sold in 30 days', booth: h.booth }); } });
+    data.shopList.custom.forEach((c, i) => items.push({ k: 'custom:' + i, name: c, why: 'Added by you', booth: '', custom: i }));
+    return items;
+  }
+  function renderThrift() {
+    if (!$('restock').classList.contains('active')) return;
+    const items = thriftItems(), ch = data.shopList.checked;
+    $('thriftList').innerHTML = '<section class="panel summary"><h3>Thrift run list</h3><div class="panel-body"><p class="helper">What is selling out and what sells fast, for Price Break, Goodwill, and the rest. Tick things off as you find them.</p>' +
+      (items.length ? '<ul class="check-list">' + items.map(x => '<li class="' + (ch[x.k] ? 'done' : '') + '"><label><input type="checkbox" class="thrift-check" data-k="' + esc(x.k) + '"' + (ch[x.k] ? ' checked' : '') + '> <span><b>' + esc(x.name) + '</b>' + (x.booth ? ' · ' + esc(x.booth) : '') + '<small>' + esc(x.why) + '</small></span></label>' + (x.custom != null ? '<button type="button" class="del thrift-del" data-i="' + x.custom + '" aria-label="Remove">×</button>' : '') + '</li>').join('') + '</ul>' : '<p class="helper">Nothing on the list yet. Import Relic sales and inventory to fill it in.</p>') +
+      '<form class="thrift-add" id="thriftAdd"><input name="item" placeholder="Add something to look for…" aria-label="Add item"><button class="button">Add</button></form>' +
+      '<div class="export-row"><button type="button" class="button" id="shareThrift">Share list</button><button type="button" class="button ghost" id="clearThrift">Clear ticked</button></div></div></section>';
+  }
+  document.addEventListener('change', e => { const t = e.target; if (t.matches('.thrift-check')) { if (t.checked) data.shopList.checked[t.dataset.k] = true; else delete data.shopList.checked[t.dataset.k]; save(); renderThrift(); } });
+  document.addEventListener('submit', e => { if (e.target.id !== 'thriftAdd') return; e.preventDefault(); const v = e.target.item.value.trim(); if (v) { data.shopList.custom.push(v); save(); renderThrift(); } });
+  document.addEventListener('click', e => {
+    const d = e.target.closest('.thrift-del'); if (d) { data.shopList.custom.splice(Number(d.dataset.i), 1); data.shopList.checked = {}; save(); renderThrift(); }
+    if (e.target.closest('#clearThrift')) { const keep = []; data.shopList.custom.forEach((c, i) => { if (!data.shopList.checked['custom:' + i]) keep.push(c); }); data.shopList.custom = keep; data.shopList.checked = {}; save(); renderThrift(); }
+    if (e.target.closest('#shareThrift')) shareText('Thrift run list', 'Thrift run list:\n' + thriftItems().filter(x => !data.shopList.checked[x.k]).map(x => '☐ ' + x.name + (x.booth ? ' (' + x.booth + ')' : '')).join('\n'));
+  });
+
+  // ---------- 5. Pricing helper ----------
+  function priceInsight(name) {
+    const q = groupKey(name); if (q.length < 3) return '';
+    const hits = salesFlat().filter(x => x.k && (x.k.includes(q) || (x.k.length >= 4 && q.includes(x.k))));
+    if (!hits.length) return '<span class="pi none">No sales of “' + esc(name) + '” yet.</span>';
+    // Typical price = middle sale; the range skips the lowest and highest tenth so lump sums don't skew it.
+    const amts = hits.map(x => x.amount).sort((a, b) => a - b), at = f => amts[Math.min(amts.length - 1, Math.floor(f * amts.length))], avg = at(0.5), fee = (Number(data.settings.relicFee) || 0) / 100;
+    const tag = avg / (1 - fee || 1), dates = hits.map(x => x.date).filter(Boolean).sort(), last = dates[dates.length - 1];
+    const span = dates.length > 1 ? Math.max(1, Math.round((new Date(last + 'T00:00:00') - new Date(dates[0] + 'T00:00:00')) / DAY / (dates.length - 1))) : null;
+    return '<span class="pi">💡 Sold <b>' + hits.length + '×</b> · usually you get <b>' + money(avg) + '</b>' + (amts.length >= 3 && at(0.1) !== at(0.9) ? ' (' + money(at(0.1)) + '–' + money(at(0.9)) + ')' : '') + ' (≈' + money(tag) + ' price tag)' + (last ? ' · last ' + nice(last) : '') + (span ? ' · sells about every ' + span + ' day' + (span === 1 ? '' : 's') : '') + '. Pay up to <b>' + money(tag / 2) + '</b> each to double your money.</span>';
+  }
+  [['quickForm', 'qInsight'], ['purchaseForm', 'pInsight'], ['amzForm', 'aInsight']].forEach(([f, id]) => {
+    const form = $(f), box = document.createElement('div');
+    box.id = id; box.className = 'price-insight'; box.setAttribute('aria-live', 'polite');
+    const label = form.item.closest('label'); label.insertAdjacentElement('afterend', box);
+    let tm; form.item.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { box.innerHTML = priceInsight(form.item.value); }, 200); });
+    form.addEventListener('reset', () => { box.innerHTML = ''; });
+  });
+
   // ---------- recipes: add and remove ----------
   if (!CFG.recipeCards) { const a = document.querySelector('a[href="recipe-cards.html"]'); if (a) a.remove(); }
   document.addEventListener('click', e => {
@@ -1054,6 +1214,9 @@
     renderDashInsights();
     if ($('reports').classList.contains('active')) { renderReportCard(); renderWeekdays(); }
     renderTaxes();
+    renderWeek();
+    renderBakePlan();
+    renderThrift();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };

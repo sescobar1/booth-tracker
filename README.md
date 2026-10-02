@@ -17,6 +17,10 @@ Open the site in Safari (iPhone) or Chrome (Android), then choose **Share → Ad
 - **Purchases** show unit cost and a sell price (2× unit cost by default). Type over any sell price to set your own; it carries into overall and store inventory, where prices are editable too.
 - **Amazon** (More → Amazon orders) logs things you order for the booth with order number and invoice; they count as purchases.
 - **Cookie costs** (More) figures cost per batch and per cookie for no-bake and chocolate chip cookies (16 per batch), profit after Relic's fee, and how many cover the FC rent. Edit ingredient prices to match your receipts; **I baked a batch** adds the batch cost to this month's purchases.
+- **This week** (More → This week): the next 7 days at a glance (trips, cookie pull dates, tax due dates) with **Add to my calendar**, and a weekly recap of sales, top sellers, booths, miles, and what sold out. The recap shows on To do each Sunday.
+- **Baking plan** (Cookie costs): how many batches to bake from the last 4 weeks of cookie sales and fresh cookies still out, plus a shareable Walmart shopping list.
+- **Thrift run list** (Restock): sold-out and hot-selling items to look for, with your own additions and a share button.
+- **Pricing helper**: typing an item in any purchase or sale form shows what it usually sells for, how fast, and what to pay to double your money.
 - **Taxes** shows business profit for taxes (sales, purchases, rent, IRS mileage deduction), what to set aside, quarterly estimated payment dates with a Paid column, and a CSV for your tax preparer.
 - **Receipts**: tap **📷 Snap a receipt** on Purchases, or the 📷 on any purchase line (even past months), to save a receipt photo with it.
 - **Price tags**: Inventory → **Print price tags** prints Avery 5160 labels (30 per sheet) with item, price, booth, and SKU.
