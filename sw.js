@@ -1,5 +1,5 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'booth-tracker-v35';
+const CACHE = 'booth-tracker-v36';
 const ASSETS = ['./', 'index.html', 'mobile.js', 'sync.js', 'vendor/supabase.js', 'mobile.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'profit-worksheet-data.json', 'relic-inventory-2026-10-02.csv', 'recipe-cards.html', 'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2'];
 
 self.addEventListener('install', e => {
@@ -14,7 +14,7 @@ self.addEventListener('fetch', e => {
   // Only this site's files; cloud sync requests always go straight to the network.
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(res => {
         if (res.ok && (res.type === 'basic' || res.type === 'cors')) {
           const copy = res.clone();
