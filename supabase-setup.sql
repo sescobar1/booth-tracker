@@ -18,3 +18,14 @@ create policy "Own booth data" on public.booth_data
 
 -- Send live updates to your other signed-in devices.
 alter publication supabase_realtime add table public.booth_data;
+
+-- Photo lookup: photos are kept for a day so Google Lens can open them by web address.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('lens', 'lens', true, 5242880, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
+create policy "Lens photos: add own" on storage.objects for insert to authenticated
+  with check (bucket_id = 'lens' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "Lens photos: see own" on storage.objects for select to authenticated
+  using (bucket_id = 'lens' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "Lens photos: delete own" on storage.objects for delete to authenticated
+  using (bucket_id = 'lens' and (storage.foldername(name))[1] = (select auth.uid())::text);

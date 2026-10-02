@@ -1342,6 +1342,41 @@
     if (age) { data.ageMin = Number(age.dataset.age); renderAging(); }
   });
 
+  // Photo lookup: the photo is saved for a day in Supabase so Google Lens can open it by its web address.
+  function shrink(file, max) {
+    return new Promise((ok, no) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(b => b ? ok(b) : no(new Error('photo')), 'image/jpeg', 0.82);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); no(new Error('photo')); };
+      img.src = url;
+    });
+  }
+  $('buyPhoto').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const box = $('buyLens'), sync = window.boothSync, sb = sync && sync.client(), u = sync && sync.user();
+    const local = URL.createObjectURL(f);
+    box.innerHTML = '<img class="lens-thumb" alt="Your photo" src="' + local + '"><span class="helper">Getting your photo ready…</span>';
+    if (!sb || !u) { box.innerHTML = '<p class="helper">Sign in under <b>Import &amp; backup → Sync between devices</b> to use photo lookup.</p>'; return; }
+    try {
+      const blob = await shrink(f, 1280), dir = u.id, path = dir + '/' + Date.now() + '.jpg';
+      const up = await sb.storage.from('lens').upload(path, blob, { contentType: 'image/jpeg' });
+      if (up.error) throw up.error;
+      const pub = sb.storage.from('lens').getPublicUrl(path).data.publicUrl;
+      box.innerHTML = '<img class="lens-thumb" alt="Your photo" src="' + local + '"><div><a class="button lens-go" href="https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(pub) + '" target="_blank" rel="noopener">🔎 See what it is in Google Lens</a>' +
+        '<span class="helper">Lens shows what it is and prices online. Type the name above to see your own sales.</span></div>';
+      // Clear out photos older than a day.
+      sb.storage.from('lens').list(dir, { limit: 100 }).then(r => {
+        const old = (r.data || []).filter(o => Number(o.name.split('.')[0]) < Date.now() - DAY).map(o => dir + '/' + o.name);
+        if (old.length) sb.storage.from('lens').remove(old);
+      }).catch(() => {});
+    } catch (err) { box.innerHTML = '<p class="helper">The photo could not be uploaded. Check your signal and try again.</p>'; }
+  });
+
   // Log a price drop so the Markdowns tab can show whether it worked.
   function logMarkdown(x, from, to) {
     if (!(to < from)) return;

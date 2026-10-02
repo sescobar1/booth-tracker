@@ -158,5 +158,8 @@
     }
   });
 
+  // Other features (photo lookup) use the same signed-in connection.
+  window.boothSync = { client: () => sb, user: () => user };
+
   start();
 })();
