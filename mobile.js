@@ -1338,7 +1338,7 @@
     if (total) why.unshift('Purchase price <b>' + money(total) + '</b>' + (qty > 1 ? ' for ' + qty + ' = <b>' + money(cost) + ' each</b>' : '') + '.');
     box.innerHTML = '<div class="verdict ' + verdict[0] + '">' + verdict[1] + '</div><ul class="why">' + why.filter(Boolean).map(w => '<li>' + w + '</li>').join('') + '</ul>' +
       (hits.length ? '<details class="buy-hits"><summary>See the ' + Math.min(hits.length, 15) + ' most recent sales</summary><ul>' + hits.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15).map(x => '<li>' + esc(x.item) + ' · ' + money(x.amount) + (x.date ? ' · ' + nice(x.date) : '') + '</li>').join('') + '</ul></details>' : '') +
-      links + '<div class="buy-actions"><button type="button" class="button ghost" id="buyBest">💲 Find the best price</button>' + (cost ? '<button type="button" class="button" id="buyBought">I bought it: add to purchases</button>' : '') + '</div>';
+      links + '<details class="buy-cheaper"><summary class="button ghost">💲 Find it cheaper</summary><div class="cheaper-body">' + bestPriceHtml(q, cost, true) + '</div></details><div class="buy-actions">' + (cost ? '<button type="button" class="button" id="buyBought">I bought it: add to purchases</button>' : '') + '</div>';
   }
   let buyTm;
   var buyChecked = false;
@@ -1409,9 +1409,12 @@
   }
   const when = w => /^\d{4}-\d\d-\d\d$/.test(w || '') ? nice(w) : esc(w || '');
   function renderBestPrice() {
-    const box = $('bestResult'); if (!box) return;
-    const q = $('bestItem').value.trim(), price = Number($('bestCost').value) || 0, enc = encodeURIComponent(q), m = matcher(q);
-    if (!m) { box.innerHTML = '<p class="helper">Type what you want to buy. You\'ll see what you\'ve paid before, prices you\'ve noted at other stores, and the cheapest listings online.</p>'; return; }
+    const box = $('bestResult'); if (box) box.innerHTML = bestPriceHtml($('bestItem').value.trim(), Number($('bestCost').value) || 0, false);
+  }
+  // Shared by the Best price tab and the Find it cheaper section of Should I buy.
+  function bestPriceHtml(q, price, inline) {
+    const enc = encodeURIComponent(q), m = matcher(q);
+    if (!m) { return '<p class="helper">Type what you want to buy. You\'ll see what you\'ve paid before, prices you\'ve noted at other stores, and the cheapest listings online.</p>'; }
     const paid = [];
     for (const mo of months) for (const x of allRows('purchases', mo)) {
       if (!x.amount || /rent|balance from|carry ?over/i.test(x.item) || !m(x.item)) continue;
@@ -1441,7 +1444,7 @@
       ['Dollar Tree', 'https://www.dollartree.com/searchresults?Ntt=' + enc],
       ['FB Marketplace', 'https://www.facebook.com/marketplace/search/?sortBy=price_ascend&query=' + enc]
     ];
-    box.innerHTML = verdict +
+    return verdict +
       '<ul class="why">' +
       (low ? '<li>Lowest you\'ve found: <b>' + money(low.unit) + '</b> each' + where(low.where) + ' (' + when(low.when) + ').</li>' : '<li>No past purchases or saved prices for this yet.</li>') +
       (usual ? '<li>You usually pay <b>' + money(usual) + '</b> each (' + each.length + ' purchase' + (each.length === 1 ? '' : 's') + ').</li>' : '') +
@@ -1451,9 +1454,9 @@
       '</ul>' +
       (all.length ? '<details class="buy-hits"' + (all.length <= 6 ? ' open' : '') + '><summary>Prices you\'ve paid and seen (' + all.length + ')</summary><ul class="age-list">' + all.slice().sort((a, b) => a.unit - b.unit).slice(0, 25).map(p =>
         '<li><div><b>' + money(p.unit) + '</b> · ' + esc(p.item) + '<small>' + p.kind + where(p.where) + ' · ' + esc(p.when.length > 10 ? p.when : nice(p.when)) + '</small></div>' + (p.id ? '<button type="button" class="del best-del" data-id="' + p.id + '" aria-label="Remove">×</button>' : '') + '</li>').join('') + '</ul></details>' : '') +
-      (price ? '<div class="best-save"><input id="bestWhere" placeholder="Where? (Walmart, Goodwill…)" autocomplete="off"><button type="button" class="button ghost" id="bestSave">Save this price</button></div>' : '') +
+      (price && !inline ? '<div class="best-save"><input id="bestWhere" placeholder="Where? (Walmart, Goodwill…)" autocomplete="off"><button type="button" class="button ghost" id="bestSave">Save this price</button></div>' : '') +
       '<div class="comp-links"><span>Cheapest first at:</span>' + shops.map(([t, u]) => '<a class="button ghost" href="' + u + '" target="_blank" rel="noopener">' + t + '</a>').join('') + '</div>' +
-      '<p class="helper">Save prices as you shop around and this keeps a list, so you know which store had it cheapest.</p>';
+      (inline ? '<p class="helper">To save prices as you shop around, use <button type="button" class="linkish" id="buyBest">the Best price tab</button>.</p>' : '<p class="helper">Save prices as you shop around and this keeps a list, so you know which store had it cheapest.</p>');
   }
   let bestTm;
   ['bestItem', 'bestCost'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(bestTm); bestTm = setTimeout(renderBestPrice, 200); }));

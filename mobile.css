@@ -383,3 +383,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .refresh-btn{padding:7px 11px;font-size:.85rem}
 }
 .buy-submit{grid-column:1/-1;font-size:1.05rem;padding:12px}
+.buy-cheaper{margin:8px 0}
+.buy-cheaper>summary{display:inline-block;list-style:none;cursor:pointer}
+.buy-cheaper>summary::-webkit-details-marker{display:none}
+.buy-cheaper[open]>summary{margin-bottom:8px}
+.cheaper-body{border:1px solid #e3e9ec;border-radius:12px;padding:10px 12px;background:#fbfcfd}
