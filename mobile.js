@@ -8,6 +8,13 @@
   const DAY = 864e5;
 
   data.settings = Object.assign({ relicEvery: 7, mileRate: 0.7, mpg: 25, gasPrice: 2.75 }, data.settings || {});
+  // Use the car's real MPG from the settings file once (replacing the 25 MPG placeholder) and
+  // recompute gas on trips already logged, since they used the placeholder.
+  if (CFG.car && CFG.car.mpg && data.carMpgSet !== CFG.car.mpg) {
+    data.settings.mpg = CFG.car.mpg;
+    (data.mileage || []).forEach(t => { t.gas = Math.round(t.miles / CFG.car.mpg * (Number(data.settings.gasPrice) || 0) * 100) / 100; });
+    data.carMpgSet = CFG.car.mpg; save();
+  }
   data.shifts = data.shifts || [];
   data.mileage = data.mileage || [];
   // Regular trips and places from the settings file; miles are one way from home.

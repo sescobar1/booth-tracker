@@ -4,6 +4,7 @@ window.BOOTH_CONFIG = {
   owner: 'Shaana',
   storeName: "Y'allternative Market",       // the store your booths are in
   storeShort: "Y'allternative",            // shorter name for tight spots
+  car: { name: '2025 Ford Explorer', mpg: 27 }, // used for gas cost estimates
   storageKey: 'boothMonthlyTracker',      // where this copy saves on the device
   docsDb: 'boothDocuments',               // where receipt photos are saved on the device
   startMonth: '2025-09',                  // first month in the month lists
