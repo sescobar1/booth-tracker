@@ -92,7 +92,7 @@
 
   document.body.insertAdjacentHTML('beforeend',
     '<dialog class="sheet" id="moreSheet" aria-labelledby="moreTitle"><div class="sheet-head"><h2 id="moreTitle">More</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body"><div class="more-list">' +
-    [['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
+    [['inventory', 'Inventory', 'Overall and store stock'], ['amazon', 'Amazon orders', 'Things you order for the booth'], ['restock', 'Restock', 'What to restock and slow movers'], ['cookies', 'Cookie costs', 'Cost and profit per batch and cookie'], ['reports', 'Reports', 'Year totals and best sellers'], ['booths', 'Booth editor', 'Move items between booths in bulk'], ['documents', 'Documents', 'Receipts and photos'], ['settings', 'Import & backup', 'Relic import, backup, reminders']]
       .map(([p, t, d]) => '<button type="button" data-go="' + p + '"><span>' + t + '<small>' + d + '</small></span><span aria-hidden="true">›</span></button>').join('') +
     '</div></div></dialog>' +
     '<dialog class="sheet" id="quickSheet" aria-labelledby="quickTitle"><form id="quickForm" method="dialog"><div class="sheet-head"><h2 id="quickTitle">Quick add</h2><button type="button" class="sheet-close" data-close aria-label="Close">×</button></div><div class="sheet-body">' +
@@ -664,6 +664,77 @@
     if (x && confirm('Delete the Amazon order “' + x.item + '” (' + money(x.amount) + ')? It will also come off your purchases.')) { data.amazon = data.amazon.filter(t => t !== x); save(); render(); }
   });
 
+  // ---------- cookie cost calculator ----------
+  // Each ingredient: package price for a package amount, and how much one batch uses (same unit).
+  // Prices are typical store prices; edit them to match your receipts.
+  const DEFAULT_RECIPES = [
+    { id: 'nobake', name: 'No-bake cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
+      { name: 'Sugar', pack: 3.50, packAmt: 9, unit: 'cups', use: 2 },
+      { name: 'Butter', pack: 4.50, packAmt: 4, unit: 'sticks', use: 1 },
+      { name: 'Milk', pack: 3.50, packAmt: 16, unit: 'cups', use: 0.5 },
+      { name: 'Cocoa powder', pack: 4.00, packAmt: 2.67, unit: 'cups', use: 0.25 },
+      { name: 'Peanut butter', pack: 5.50, packAmt: 4.5, unit: 'cups', use: 0.5 },
+      { name: 'Quick oats', pack: 5.00, packAmt: 14, unit: 'cups', use: 3 },
+      { name: 'Vanilla', pack: 4.00, packAmt: 12, unit: 'tsp', use: 1 }
+    ] },
+    { id: 'chocchip', name: 'Chocolate chip cookies', perBatch: 16, packaging: 0.10, price: 2.00, ingredients: [
+      { name: 'Flour', pack: 3.50, packAmt: 18, unit: 'cups', use: 2.25 },
+      { name: 'Butter', pack: 4.50, packAmt: 4, unit: 'sticks', use: 2 },
+      { name: 'Sugar', pack: 3.50, packAmt: 9, unit: 'cups', use: 0.75 },
+      { name: 'Brown sugar', pack: 3.00, packAmt: 4.5, unit: 'cups', use: 0.75 },
+      { name: 'Eggs', pack: 3.50, packAmt: 12, unit: 'eggs', use: 2 },
+      { name: 'Chocolate chips', pack: 3.50, packAmt: 2, unit: 'cups', use: 2 },
+      { name: 'Vanilla', pack: 4.00, packAmt: 12, unit: 'tsp', use: 1 },
+      { name: 'Baking soda', pack: 1.00, packAmt: 48, unit: 'tsp', use: 1 },
+      { name: 'Salt', pack: 1.00, packAmt: 156, unit: 'tsp', use: 1 }
+    ] }
+  ];
+  data.recipes = data.recipes || JSON.parse(JSON.stringify(DEFAULT_RECIPES));
+  data.settings.relicFee = data.settings.relicFee ?? 10;
+  const ingCost = g => (Number(g.packAmt) > 0 ? (Number(g.pack) || 0) / Number(g.packAmt) * (Number(g.use) || 0) : 0);
+  function recipeMath(r) {
+    const batch = r.ingredients.reduce((t, g) => t + ingCost(g), 0), n = Math.max(1, Number(r.perBatch) || 1);
+    const each = batch / n + (Number(r.packaging) || 0), payout = (Number(r.price) || 0) * (1 - (Number(data.settings.relicFee) || 0) / 100);
+    return { batch, n, each, payout, profit: payout - each, batchTotal: each * n };
+  }
+  function renderCookies() {
+    if (!$('cookies').classList.contains('active')) return;
+    const fc = RENT.FC;
+    $('cookieCards').innerHTML = data.recipes.map((r, ri) => {
+      const m = recipeMath(r), rentCookies = m.profit > 0 ? Math.ceil(fc / m.profit) : '—';
+      const num = (f, v, step, extra) => '<input class="cell-input ck" type="number" min="0" step="' + step + '" inputmode="decimal" data-r="' + ri + '" data-f="' + f + '"' + (extra || '') + ' value="' + v + '">';
+      return '<article class="panel cookie-card"><h3><input class="cell-input ck ck-name" data-r="' + ri + '" data-f="name" value="' + esc(r.name) + '" aria-label="Recipe name"></h3><div class="panel-body">' +
+        '<div class="ck-summary"><div><span>Cost per cookie</span><b>' + money(m.each) + '</b></div><div><span>Profit per cookie</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit) + '</b></div><div><span>Batch costs you</span><b>' + money(m.batchTotal) + '</b></div><div><span>Batch profit</span><b class="' + (m.profit < 0 ? 'inventory-low' : 'green') + '">' + money(m.profit * m.n) + '</b></div></div>' +
+        '<p class="helper">Ingredients ' + money(m.batch) + ' ÷ ' + m.n + ' cookies = ' + money(m.batch / m.n) + ' each, plus ' + money(Number(r.packaging) || 0) + ' bag/label. You get ' + money(m.payout) + ' per cookie after Relic\'s ' + (data.settings.relicFee || 0) + '%. Sell about <b>' + rentCookies + '</b> a month to cover the $' + fc + ' FC rent.</p>' +
+        '<div class="ck-settings"><label>Cookies per batch' + num('perBatch', r.perBatch, '1') + '</label><label>Bag/label per cookie' + num('packaging', r.packaging, '.01') + '</label><label>Sell price' + num('price', r.price, '.05') + '</label></div>' +
+        '<div class="scroll"><table class="ck-table"><thead><tr><th>Ingredient</th><th class="num">Package price</th><th class="num">Package has</th><th>Unit</th><th class="num">Batch uses</th><th class="num">Cost</th><th></th></tr></thead><tbody>' +
+        r.ingredients.map((g, gi) => { const a = ' data-g="' + gi + '"';
+          return '<tr><td><input class="cell-input ck wide" data-r="' + ri + '"' + a + ' data-f="name" value="' + esc(g.name) + '" aria-label="Ingredient"></td><td class="num">' + num('pack', g.pack, '.01', a) + '</td><td class="num">' + num('packAmt', g.packAmt, '.01', a) + '</td><td><input class="cell-input ck unit" data-r="' + ri + '"' + a + ' data-f="unit" value="' + esc(g.unit) + '" aria-label="Unit"></td><td class="num">' + num('use', g.use, '.01', a) + '</td><td class="num">' + money(ingCost(g)) + '</td><td><button type="button" class="del ck-del" data-r="' + ri + '"' + a + ' aria-label="Remove ' + esc(g.name) + '">×</button></td></tr>'; }).join('') +
+        '</tbody></table></div><div class="ck-actions"><button type="button" class="button ghost ck-add" data-r="' + ri + '">+ Ingredient</button><button type="button" class="button ck-log" data-r="' + ri + '">I baked a batch</button></div></div></article>';
+    }).join('');
+    $('relicFee').value = data.settings.relicFee;
+  }
+  document.addEventListener('change', e => {
+    const t = e.target; if (!t.matches('.ck')) return;
+    const r = data.recipes[Number(t.dataset.r)]; if (!r) return;
+    const target = t.dataset.g != null ? r.ingredients[Number(t.dataset.g)] : r, f = t.dataset.f;
+    target[f] = ['name', 'unit'].includes(f) ? t.value.trim() : Math.max(0, Number(t.value) || 0);
+    save(); renderCookies();
+  });
+  document.addEventListener('click', e => {
+    const add = e.target.closest('.ck-add'), del = e.target.closest('.ck-del'), log = e.target.closest('.ck-log');
+    if (add) { data.recipes[Number(add.dataset.r)].ingredients.push({ name: 'New ingredient', pack: 0, packAmt: 1, unit: 'cups', use: 0 }); save(); renderCookies(); }
+    if (del) { const r = data.recipes[Number(del.dataset.r)]; r.ingredients.splice(Number(del.dataset.g), 1); save(); renderCookies(); }
+    if (log) {
+      const r = data.recipes[Number(log.dataset.r)], m = recipeMath(r);
+      if (!confirm('Add a purchase of ' + money(m.batchTotal) + ' for ' + m.n + ' ' + r.name.toLowerCase() + ' to ' + currentMonth + ' (FC booth)?')) return;
+      (data.purchases[currentMonth] = data.purchases[currentMonth] || []).push({ item: r.name + ' (baked batch)', booth: BOOTHS[2], qty: m.n, amount: r2(m.batchTotal), sell: Number(r.price) || undefined, date: todayIso() });
+      save(); render(); toast('Batch cost ' + money(m.batchTotal) + ' added to ' + currentMonth + ' purchases.');
+    }
+  });
+  $('relicFee').addEventListener('change', e => { data.settings.relicFee = Math.min(100, Math.max(0, Number(e.target.value) || 0)); save(); renderCookies(); });
+  $('ckReset').addEventListener('click', () => { if (confirm('Put both recipes back to the starting ingredients and prices?')) { data.recipes = JSON.parse(JSON.stringify(DEFAULT_RECIPES)); save(); renderCookies(); } });
+
   // ---------- render hook ----------
   function renderExtras() {
     const need = renderRestock();
@@ -673,6 +744,7 @@
     renderMileage();
     renderWork();
     renderAmazon();
+    renderCookies();
   }
   const baseRender = window.render;
   window.render = function () { baseRender(); renderExtras(); };

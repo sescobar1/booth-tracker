@@ -13,8 +13,10 @@ Open the site in Safari (iPhone) or Chrome (Android), then choose **Share → Ad
 - **Import & backup → Import from Relic**: upload the Relic sales export (CSV or Excel). Sales go into the right month and booth, and sales already in the tracker are skipped. Upload the Relic inventory export to refresh your store inventory.
 - **Restock** lists repeat sellers that are out or running low, and slow movers sitting 60+ days without a sale.
 - **Work** logs your shifts (date, hours, pay) and shows work income by month and year, including the shifts from your worksheet.
-- **Mileage** has your regular trips (Relic store in Sherwood 3×/week, Price Break 2×/week, Conway 1×/week). Tap **Log trip** to log the round trip; each trip shows estimated gas cost (set your MPG and gas price under **Your car**) and the tax deduction; edit miles or add trips under **Edit my regular trips**.
+- **Miles** logs scheduled trips automatically (Relic store Sun/Wed/Fri, Price Break Tue/Sat, St. Joe's in Conway Fri). Tap **Didn't go** to remove a day. **My places** (Goodwill, Marva's, Dardanelle, Atkins, or your own) log with one tap; each trip shows estimated gas cost (set your MPG and gas price under **Your car**) and the tax deduction; edit miles or add trips under **Edit my regular trips**.
 - **Purchases** show unit cost and a sell price (2× unit cost by default). Type over any sell price to set your own; it carries into overall and store inventory, where prices are editable too.
+- **Amazon** (More → Amazon orders) logs things you order for the booth with order number and invoice; they count as purchases.
+- **Cookie costs** (More) figures cost per batch and per cookie for no-bake and chocolate chip cookies (16 per batch), profit after Relic's fee, and how many cover the FC rent. Edit ingredient prices to match your receipts; **I baked a batch** adds the batch cost to this month's purchases.
 - **Reports** has year totals by booth and month (including the mileage deduction), best sellers per booth, and a CSV download or printable summary for taxes.
 - **Booth editor** moves every line with the same item name to a booth in one step. On **Purchases** and **Sold items**, tick rows and use **Assign selected** for one month.
 

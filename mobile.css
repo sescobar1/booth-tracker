@@ -86,6 +86,22 @@
 .amz-form{grid-template-columns:repeat(4,minmax(0,1fr))}
 .amz-form .button{grid-column:1/-1}
 
+/* Cookie costs */
+.cookie-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.cookie-card h3{padding:10px 12px}
+.cookie-card .ck-name{width:100%;font-weight:800;font-size:1.05rem;border-color:transparent}
+.ck-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.ck-summary div{background:var(--soft);border-radius:9px;padding:9px}
+.ck-summary span{display:block;font-size:.68rem;font-weight:700;text-transform:uppercase;color:#64747d}
+.ck-summary b{font-size:1.15rem}
+.ck-settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;align-items:end}
+.ck-settings label{font-size:.75rem;font-weight:700;color:#5c6b74}
+.ck-settings input{display:block;width:100%;margin-top:4px}
+.ck-table .cell-input{width:68px;text-align:right}
+.ck-table .cell-input.wide{width:100%;min-width:120px;text-align:left}
+.ck-table .unit{width:62px;text-align:left}
+.ck-actions{display:flex;justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap}
+
 /* Bottom tab bar, floating add button, sheets */
 .bottom-nav{display:none}
 .fab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:0;background:#b67c20;color:#fff;font-size:2rem;line-height:1;box-shadow:0 6px 18px #19324650;z-index:20}
@@ -132,6 +148,8 @@ dialog.sheet::backdrop{background:#17344766}
   .year-cards .value{font-size:1.1rem}
   .best-grid,.reminders{grid-template-columns:1fr}
   .gas-form,.work-form,.amz-form,.place-form{grid-template-columns:1fr 1fr}
+  .cookie-grid{grid-template-columns:1fr}
+  .ck-summary{grid-template-columns:1fr 1fr}
   .place-form [name=name]{min-width:0}
   .cards.amz-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   .amz-cards .card{padding:11px 9px;min-width:0}
