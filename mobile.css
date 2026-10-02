@@ -374,3 +374,11 @@ dialog.sheet::backdrop{background:#17344766}
 .best-save{display:flex;gap:8px;margin:8px 0}
 .best-save input{flex:1;min-width:0;font-size:1rem;padding:9px;border:1px solid #cfd9de;border-radius:10px}
 .best-del{flex-shrink:0}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.refresh-btn{flex-shrink:0;background:#ffffff1f;color:#fff;border:1px solid #ffffff66;border-radius:999px;padding:8px 14px;font-weight:700;font-size:.9rem;cursor:pointer}
+.refresh-btn:active{background:#ffffff40}
+.refresh-btn:disabled{opacity:.8}
+@media (max-width:760px){
+  header{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}
+  .refresh-btn{padding:7px 11px;font-size:.85rem}
+}

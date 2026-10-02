@@ -168,6 +168,16 @@
   });
   document.querySelectorAll('dialog.sheet').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
 
+  // Refresh: sync with the other devices, pick up app updates, and reload.
+  $('refreshBtn').addEventListener('click', async () => {
+    const b = $('refreshBtn'); b.disabled = true; b.classList.add('spin'); b.textContent = '↻ Refreshing…';
+    try {
+      if (window.boothSync && window.boothSync.refresh) await Promise.race([window.boothSync.refresh(), new Promise(r => setTimeout(r, 8000))]);
+      if (navigator.serviceWorker) { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update().catch(() => {}); }
+    } catch (e) {}
+    location.reload();
+  });
+
   // ---------- quick add ----------
   const qf = $('quickForm');
   let qType = 'sales', boothTouched = false;

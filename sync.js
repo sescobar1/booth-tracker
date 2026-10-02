@@ -159,7 +159,11 @@
   });
 
   // Other features (photo lookup) use the same signed-in connection.
-  window.boothSync = { client: () => sb, user: () => user };
+  window.boothSync = {
+    client: () => sb, user: () => user,
+    // Send anything not yet synced, then get the latest from the other devices.
+    refresh: async () => { if (!user || !navigator.onLine) return false; clearTimeout(pushTimer); if (dirty()) await push(); await pull(false); return true; }
+  };
 
   start();
 })();
