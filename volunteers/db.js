@@ -134,7 +134,7 @@
         const remote = JSON.stringify(st.data.data), mine = JSON.stringify(settingsOf(data));
         if (synced.settings === undefined || mine === synced.settings) {
           if (remote !== mine) { data.settings = Object.assign({}, data.settings, st.data.data.settings || {}); if (st.data.data.templates && st.data.data.templates.length) data.templates = st.data.data.templates; changed = true; }
-          synced.settings = JSON.stringify(settingsOf(data));
+          synced.settings = remote; // anything only on this device (like a new message) gets sent next
         }
       }
       saveSynced();

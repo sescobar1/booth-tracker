@@ -7,7 +7,10 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+// Shaana's night-before text for concession stand volunteers.
+const CONCESSION_TEMPLATE = { id: 'conc', name: 'Concession stand – night before', text: 'Thank you so much for signing up to work the Russellville concession stand {when}! We truly appreciate your time and dedication to our band program. 💛\nA few important reminders:\n\n• Please arrive by {arrive}.\n• If someone is working the admission gate, just let them know you are there to work the concession stand.\n• When you arrive, please sign in on the sign-in sheet and indicate whether you would like trip credit or volunteer hours.\n• As a thank-you for volunteering, we will provide you with a free drink and one entrée item for dinner. You also get unlimited volunteer water.\n• If you have long hair, please make sure it is pulled back or pinned up while working.\n• Wear comfortable closed-toe shoes—you will be on your feet!\n• You must remain in your assigned position the entire time. We ask that you do not leave to go watch the band at halftime, or any other time.\n• Please do not bring children unless they have signed up to work through their band director.\n\nIf you have any questions, please let me know. If you are unable to attend, please text me separately, and make sure to tell me your name when you text.\n{stillneed}If you know someone who might be willing to help us {day}, please send them our way!\nAgain, thank you for volunteering and supporting our band program. We truly appreciate your help! 🎶💛\n\nThanks, S.Escobar' };
 const DEFAULT_TEMPLATES = [
+  CONCESSION_TEMPLATE,
   { id: 't1', name: 'Reminder', text: 'Hi {first}! Reminder: you signed up to help{job} at {event} on {date}{time}. Thank you for supporting the band! – {from}' },
   { id: 't2', name: 'Thank you', text: 'Thank you, {first}, for volunteering at {event}! The band couldn\'t do it without you. – {from}' },
   { id: 't3', name: 'Still need help', text: 'Hi {first}! We still need volunteers for {event} on {date}{time}. Can you help? Sign up here: {link} – {from}' },
@@ -23,6 +26,11 @@ var data = (() => {
   try { const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d && d.people) return Object.assign(blank(), d); } catch (e) {}
   return blank();
 })();
+// Devices set up before the concession stand text existed get it once (and keep it deleted if removed).
+if (!data.settings.hasConcession) {
+  if (!data.templates.some(t => t.id === 'conc')) data.templates.unshift(Object.assign({}, CONCESSION_TEMPLATE));
+  data.settings.hasConcession = true;
+}
 
 window.save = function () {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { toast('Could not save on this device: ' + e.message); }
@@ -190,10 +198,27 @@ function smsHref(numbers, body) {
   const sep = /SAMSUNG|SM-/i.test(navigator.userAgent) ? ';' : ',';
   return 'sms:' + nums.join(sep) + '?body=' + b;
 }
+// "tonight", "tomorrow night", or "on Friday night" (morning events drop "night").
+function whenWords(ev, start, short) {
+  if (!ev) return '';
+  const days = Math.round((new Date(ev.date + 'T12:00') - new Date(today() + 'T12:00')) / 864e5);
+  const night = !start || start >= '15:00';
+  if (days === 0) return night ? 'tonight' : 'today';
+  if (days === 1) return 'tomorrow' + (night && !short ? ' night' : '');
+  const wd = new Date(ev.date + 'T12:00').toLocaleDateString([], { weekday: 'long' });
+  if (days > 1 && days < 7) return 'on ' + wd + (night && !short ? ' night' : '');
+  return 'on ' + fmtDate(ev.date, true);
+}
 function fillMessage(text, ev, slot, p) {
   const start = (slot && slot.start) || (ev && ev.start);
   const role = slot && slot.role;
+  const open = ev ? eventCounts(ev).open : 0;
   return String(text || '')
+    .replace(/\{when\}/g, whenWords(ev, start, false))
+    .replace(/\{day\}/g, whenWords(ev, start, true))
+    .replace(/\{arrive\}/g, start ? fmtTime(start) : 'your start time')
+    .replace(/\{open\}/g, String(open))
+    .replace(/\{stillneed\}/g, open ? 'We are also still looking for ' + open + ' more volunteer' + (open === 1 ? '' : 's') + '.\n' : '')
     .replace(/\{first\}/g, p ? (p.first || 'there') : 'everyone')
     .replace(/\{name\}/g, p ? fullName(p) : 'everyone')
     .replace(/\{event\}/g, ev ? ev.name : '')
@@ -326,10 +351,15 @@ function editEvent(id, copyFrom) {
 }
 const JOB_IDEAS = ['Concession Stand', 'Hospitality Room', 'Security', 'Tally Room', 'Chaperone', 'Pit Crew', 'Water / Snacks', 'Uniforms', 'Ticket Table', 'Setup', 'Cleanup'];
 
+// A link to one event can open before the list has loaded from the cloud; wait instead of bouncing away.
+function missingEvent() {
+  $('view').innerHTML = '<a class="back" href="#events">‹ Events</a><p class="helper">' + (signedIn() ? 'This event was deleted or moved.' : 'Loading… If this doesn\'t change, sign in on the Events tab.') + '</p>';
+}
+
 let evFilter = 'all';
 function viewEvent(id) {
   const ev = event(id);
-  if (!ev) { location.hash = 'events'; return; }
+  if (!ev) { missingEvent(); return; }
   const c = eventCounts(ev);
   const ss = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
     .filter(x => evFilter === 'all' || (evFilter === 'student' ? x.p.type === 'student' : evFilter === 'adult' ? x.p.type !== 'student' : !digits(x.p.phone)))
@@ -502,7 +532,7 @@ function textOneByOne(ev, queue, text) {
 let ciSearch = '';
 function viewCheckin(id) {
   const ev = event(id);
-  if (!ev) { location.hash = 'events'; return; }
+  if (!ev) { missingEvent(); return; }
   const all = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p).sort((a, b) => sortName(a.p).localeCompare(sortName(b.p)));
   const inCount = all.filter(x => x.s.inAt).length;
   $('view').innerHTML = '<a class="back" href="#event/' + id + '">‹ ' + esc(ev.name) + '</a>' +
@@ -533,19 +563,20 @@ function viewCheckin(id) {
 }
 
 // ---------- Printable sign-in sheet ----------
+const CREDIT_CELL = '<td class="credit">☐ Trip credit<br>☐ Volunteer hours</td>';
 let sheetOpts = { split: false, blanks: 8, phone: true };
 function viewSheet(id) {
   const ev = event(id);
-  if (!ev) { location.hash = 'events'; return; }
+  if (!ev) { missingEvent(); return; }
   const list = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
     .sort((a, b) => ((a.s.role || '') + sortName(a.p)).localeCompare((b.s.role || '') + sortName(b.p)));
   const table = (title, rows) => {
     let body = rows.map((x, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(fullName(x.p)) + '</b>' + (sheetOpts.split ? '' : ' <small>' + typeLabel(x.p.type) + '</small>') + '</td><td>' + esc([x.s.role, fmtRange(x.s.start, x.s.end)].filter(Boolean).join(', ')) + '</td>' +
-      (sheetOpts.phone ? '<td>' + esc(fmtPhone(x.p.phone)) + '</td>' : '') + '<td></td><td></td><td></td></tr>').join('');
-    for (let i = 0; i < sheetOpts.blanks; i++) body += '<tr class="blankrow"><td>' + (rows.length + i + 1) + '</td><td></td><td></td>' + (sheetOpts.phone ? '<td></td>' : '') + '<td></td><td></td><td></td></tr>';
+      (sheetOpts.phone ? '<td>' + esc(fmtPhone(x.p.phone)) + '</td>' : '') + '<td></td><td></td>' + CREDIT_CELL + '<td></td></tr>').join('');
+    for (let i = 0; i < sheetOpts.blanks; i++) body += '<tr class="blankrow"><td>' + (rows.length + i + 1) + '</td><td></td><td></td>' + (sheetOpts.phone ? '<td></td>' : '') + '<td></td><td></td>' + CREDIT_CELL + '<td></td></tr>';
     return '<section class="sheetpage"><div class="sheethead"><div><h1>' + esc(data.settings.org || 'Band Boosters') + ' Volunteer Sign-In' + (title ? ' – ' + title : '') + '</h1>' +
       '<p><b>' + esc(ev.name) + '</b> · ' + esc(fmtDate(ev.date, true)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + (ev.location ? ' · ' + esc(ev.location) : '') + '</p></div></div>' +
-      '<table class="signin"><thead><tr><th>#</th><th>Name</th><th>Job / time</th>' + (sheetOpts.phone ? '<th>Phone</th>' : '') + '<th>Time in</th><th>Time out</th><th>Signature</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      '<table class="signin"><thead><tr><th>#</th><th>Name</th><th>Job / time</th>' + (sheetOpts.phone ? '<th>Phone</th>' : '') + '<th>Time in</th><th>Time out</th><th>Trip credit or hours?</th><th>Signature</th></tr></thead><tbody>' + body + '</tbody></table>' +
       '<p class="sheetfoot">Thank you for supporting the band! Please sign in when you arrive and sign out when you leave.</p></section>';
   };
   const sheets = sheetOpts.split
@@ -1060,7 +1091,7 @@ function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<div class="card pad"><h2>Your info</h2><div class="grid2"><label>Group name<input id="mOrg" value="' + esc(data.settings.org) + '"></label>' +
     '<label>Sign texts as<input id="mFrom" value="' + esc(data.settings.from) + '" placeholder="Shaana, Volunteer Coordinator"></label></div></div>' +
-    '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {job} {location} {from} {link}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
+    '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {arrive} {when} (tomorrow night) {day} (tomorrow) {stillneed} {open} {job} {location} {from} {link}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
     '<div class="card pad"><h2>Sign-up page</h2><label>Page title<input id="mTitle" value="' + esc(data.settings.title || '') + '" placeholder="Band Booster & Parent Volunteer Opportunities"></label>' +
     '<label>Where volunteers sign up<select id="mWhere"><option value="">My own sign-up page</option><option value="sug"' + (data.settings.signupLink ? ' selected' : '') + '>SignUpGenius</option></select></label>' +
     '<label' + (data.settings.signupLink ? '' : ' hidden') + ' id="mSugWrap">SignUpGenius sign-up link (open your sign-up, tap Share, copy the link)<input id="mSug" type="url" value="' + esc(data.settings.signupLink || '') + '" placeholder="https://www.signupgenius.com/go/…"></label>' +
