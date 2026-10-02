@@ -231,19 +231,33 @@
 
   // ---------- backup & restore ----------
   const blobToDataUrl = b => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); r.readAsDataURL(b); });
+  async function buildBackup() {
+    const all = await docTx('readonly', s => s.getAll()).catch(() => []) || [];
+    const documents = await Promise.all(all.map(async d => { const { blob, ...rest } = d; return { ...rest, dataUrl: await blobToDataUrl(blob) }; }));
+    const payload = { app: 'booth-tracker', version: 1, saved: new Date().toISOString(), data: { ...data, lastBackup: todayIso() }, documents };
+    return { file: new File([JSON.stringify(payload)], 'booth-tracker-backup-' + todayIso() + '.json', { type: 'application/json' }), docs: documents.length };
+  }
+  // Phones only open the share sheet straight from a tap, so the daily backup file is
+  // built ahead of time and handed over the moment Back up is tapped.
+  let prepared = null, preparing = false, dataVer = 0;
+  const baseSave = window.save;
+  window.save = function () { baseSave(); dataVer++; prepared = null; };
+  function prepareBackup() {
+    if (preparing || (prepared && prepared.v === dataVer)) return;
+    const v = dataVer; preparing = true;
+    buildBackup().then(b => { if (v === dataVer) prepared = { v, ...b }; }).catch(() => {}).finally(() => { preparing = false; });
+  }
   async function backupNow() {
     const msg = $('backupMsg');
     msg.textContent = 'Preparing your backup…';
     try {
-      const all = await docTx('readonly', s => s.getAll()).catch(() => []) || [];
-      const documents = await Promise.all(all.map(async d => { const { blob, ...rest } = d; return { ...rest, dataUrl: await blobToDataUrl(blob) }; }));
-      const payload = { app: 'booth-tracker', version: 1, saved: new Date().toISOString(), data: { ...data, lastBackup: todayIso() }, documents };
-      const file = new File([JSON.stringify(payload)], 'booth-tracker-backup-' + todayIso() + '.json', { type: 'application/json' });
-      const done = await shareOrDownload(file, true);
+      const b = prepared && prepared.v === dataVer ? prepared : await buildBackup();
+      const done = await shareOrDownload(b.file, true);
       if (!done) { msg.textContent = 'Backup cancelled.'; return; }
       data.lastBackup = todayIso(); save(); renderExtras();
-      msg.textContent = 'Backup saved (' + fileSize(file.size) + ', ' + documents.length + ' document' + (documents.length === 1 ? '' : 's') + ').';
-    } catch (e) { msg.textContent = 'The backup could not be made. Please try again.'; }
+      msg.textContent = 'Backup saved (' + fileSize(b.file.size) + ', ' + b.docs + ' document' + (b.docs === 1 ? '' : 's') + ').';
+      toast('Backed up. Pick OneDrive in the share menu to keep it there.');
+    } catch (e) { msg.textContent = 'The backup could not be made. Please try again.'; toast('Backup did not finish. Try again.'); }
   }
   async function restoreFrom(file) {
     const msg = $('backupMsg');
@@ -368,7 +382,7 @@
   function renderTodo(need) {
     const items = [], relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
     if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest Relic sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
-    if (backupAge >= 7) items.push(['Back up your data', data.lastBackup ? 'Last backup ' + backupAge + ' days ago' : 'No backup yet — your data lives only on this device', 'backup', 'Back up']);
+    if (backupAge >= 1) { items.push(['Back up to OneDrive', data.lastBackup ? 'Last backup ' + (backupAge === 1 ? 'yesterday' : backupAge + ' days ago') : 'No backup yet. Your data lives only on this phone', 'backup', 'Back up']); prepareBackup(); }
     (data.batches || []).filter(b => !b.done).forEach(b => {
       const left = Math.round((new Date(b.expires + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / DAY);
       if (left <= 1) items.push(['Pull ' + b.name.toLowerCase() + ' made ' + nice(b.made), left < 0 ? 'Expired ' + nice(b.expires) : left === 0 ? 'They expire today' : 'They expire tomorrow', 'cookies', 'View']);
@@ -380,7 +394,7 @@
   }
   function runTask(t) {
     if (t === 'relic') go('settings');
-    if (t === 'backup') { go('settings'); backupNow(); }
+    if (t === 'backup') backupNow();
     if (t === 'restock') go('restock');
     if (t === 'mileage') go('mileage');
     if (t === 'cookies') document.getElementById('dashCookies').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -708,6 +722,18 @@
     const batch = r.ingredients.reduce((t, g) => t + ingCost(g), 0), n = Math.max(1, Number(r.perBatch) || 1);
     const each = batch / n + (Number(r.packaging) || 0), payout = (Number(r.price) || 0) * (1 - (Number(data.settings.relicFee) || 0) / 100);
     return { batch, n, each, payout, profit: payout - each, batchTotal: each * n };
+  }
+  // The no-bake and chocolate chip batches Shaana made on Sept 30, entered for her once.
+  if (!data.seedBatches0930) {
+    const made = '2026-09-30';
+    for (const id of ['nobake', 'chocchip']) {
+      const r = data.recipes.find(x => x.id === id);
+      if (!r || data.batches.some(b => b.recipe === id && b.made === made)) continue;
+      const m = recipeMath(r), qty = r.perBatch || 16;
+      data.batches.push({ id: newId(), recipe: id, name: r.name, qty, made, expires: addDays(made, r.shelf ?? 7), done: false });
+      (data.purchases['September 2026'] = data.purchases['September 2026'] || []).push({ item: r.name + ' (baked batch)', booth: BOOTHS[2], qty, amount: r2(m.each * qty), sell: Number(r.price) || undefined, date: made });
+    }
+    data.seedBatches0930 = true; save();
   }
   function renderCookies() {
     if (!$('cookies').classList.contains('active')) return;
