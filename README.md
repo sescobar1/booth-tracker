@@ -13,6 +13,7 @@ Open the site, add purchases as you buy inventory, and review the restock list b
 
 ## Booths and inventory
 
+- Use the **Booth editor** tab to move every line with the same item name (across all months, sold and purchased) to a booth in one step.
 - On **Purchases** and **Sold items**, filter the list (for example "squish"), tick the rows or use the select-all box, pick a booth, and click **Assign selected**.
 - Purchases are added to **Overall inventory** automatically (uncheck the box for rent, supplies, and fees). **Store inventory** shows what is listed in your Relic store.
 
