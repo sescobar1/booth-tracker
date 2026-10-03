@@ -209,7 +209,7 @@
     if (!item || !(amount >= 0)) return;
     let m = monthOf(date); if (!months.includes(m)) m = currentMonth;
     if (qType === 'sales') {
-      (data.sales[m] = data.sales[m] || []).push({ item, booth, amount, date });
+      (data.sales[m] = data.sales[m] || []).push({ item, booth, amount, date, manual: true });
     } else {
       const qty = Math.max(1, Number(qf.qty.value) || 1);
       const sell = Number(qf.sellPrice.value) || 0, override = qf.sellPrice.dataset.touched === '1', rec = { item, booth, qty, amount, date };
@@ -419,11 +419,43 @@
   const NET_SALE = ['NETSALE', 'NETSALES', 'NETSALEAMOUNT', 'NETSALESAMOUNT', 'NETAMOUNT', 'NETPRICE', 'NETTOTAL'];
   const hkey = v => String(v ?? '').toUpperCase().replace(/[^A-Z]/g, '');
   function textRows(text) {
+    const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim());
+    if (lines.length > 10 && lines.filter(l => /\t|,/.test(l)).length < lines.length / 4) { const v = columnRows(text); if (v) return v; }
     return text.replace(/\r/g, '').split('\n').filter(l => l.trim()).map(l => l.includes('\t') ? l.split('\t') : csvLine(l));
   }
   // PDF sales reports: rebuild the table from where each word sits on the page. Words on the same line form a
   // row; the header row (DETAIL, PAYOUT, DATE SOLD…) gives the column positions, and every word goes to the
   // column it sits under. Item names that wrap onto a second line are joined back to their row.
+  // Store reports can list the same sales again under "Today", "Current Week" and "Current Month". Each section
+  // starts at a title or totals line; a sale counts as many times as it appears in any one section, never more.
+  const SECTION_LINE = /^(today|yesterday|current (day|week|month|year)|this (week|month|year)|total items|gross sales|net sales)\b/i;
+  function onceAcrossSections(entries) {
+    const seen = {}, kept = {}, out = [];
+    for (const e of entries) {
+      const k = e.row.map(v => String(v || '').trim().toUpperCase()).join('|'), sk = e.section + '#' + k;
+      seen[sk] = (seen[sk] || 0) + 1;
+      if (seen[sk] > (kept[k] || 0)) { kept[k] = seen[sk]; out.push(e.row); }
+    }
+    return out;
+  }
+  // Text copied from the store's report web page arrives one cell per line. Rebuild the rows from the header.
+  function columnRows(text) {
+    const L = text.replace(/\r/g, '').split('\n').map(x => x.trim()).filter(Boolean), DATE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+    let head = null, section = 0; const entries = [];
+    for (let i = 0; i < L.length; i++) {
+      if (/^date( sold)?$/i.test(L[i])) {
+        let j = i; while (j < L.length && !DATE.test(L[j]) && j - i < 20) j++;
+        const h = L.slice(i, j), hk = h.map(hkey);
+        if (hk.some(x => ['ITEM', 'DETAIL', 'DESCRIPTION', 'ITEMDESCRIPTION'].includes(x)) && hk.some(x => ['PAYOUT', 'NETPAYOUT', 'NET', ...NET_SALE].includes(x))) { head = h; i = j - 1; continue; }
+      }
+      if (SECTION_LINE.test(L[i])) { section++; continue; }
+      if (head && DATE.test(L[i]) && i + head.length <= L.length) {
+        const row = L.slice(i, i + head.length);
+        if (!row.slice(1).some(v => DATE.test(v))) { entries.push({ section, row }); i += head.length - 1; }
+      }
+    }
+    return head ? [head].concat(onceAcrossSections(entries)) : null;
+  }
   async function pdfRows(f) {
     const pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
     pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
@@ -450,10 +482,11 @@
     const heads = lines.filter(isHead);
     if (!heads.length) return pdfLooseRows(lines);
     const out = [heads[0].cells.map(c => c.str)], data = [], lone = [];
-    let cols = null, itemCol = -1, dateCol = -1, amtCol = -1, moneyAfter = 0;
+    let cols = null, itemCol = -1, dateCol = -1, amtCol = -1, moneyAfter = 0, section = 0;
     const MONEY = /^-?\$?\d{1,5}(,\d{3})*\.\d{2}$/, DATE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$|^\d{4}-\d{2}-\d{2}$/;
     const MONEY_HEADS = ['PRICE', 'DISCOUNT', 'SALE', 'SALES', 'GROSS', 'GROSSSALE', 'PAYOUT', 'NETPAYOUT', 'NET', 'COMMISSION', 'FEE', 'TAX', 'TOTAL', 'AMOUNT', ...NET_SALE];
     for (const l of lines) {
+      if (SECTION_LINE.test(l.cells.map(c => c.str).join(' '))) { section++; continue; }
       if (isHead(l)) {
         cols = l.cells.map(c => ({ x: c.x, end: c.end }));
         const h = l.cells.map(c => hkey(c.str));
@@ -465,7 +498,8 @@
       }
       if (!cols) continue;
       // A wrapped piece of an item name: one line of words with no numbers.
-      if (l.cells.length === 1 && /[a-z]/i.test(l.cells[0].str) && !/\d/.test(l.cells[0].str) && !/^(page|total|printed|report|today|yesterday)\b/i.test(l.cells[0].str)) { lone.push({ l, text: l.cells[0].str }); continue; }
+      const one = l.cells.length === 1 && l.cells[0].str;
+      if (one && /[a-z]/i.test(one) && !/\b(19|20)\d\d\b|\$\d|\d\.\d\d/.test(one) && !/^(page|total|printed|report|today|yesterday|current|average|gross|net|week|month)\b/i.test(one)) { lone.push({ l, text: one }); continue; }
       const row = cols.map(() => '');
       l.cells.forEach(c => {
         // The column whose header overlaps this cell, or the nearest one.
@@ -485,7 +519,7 @@
         if (dateCol >= 0) row[dateCol] = l.cells[di].str;
       }
       const filled = row.filter(Boolean).length;
-      if (filled) { data.push({ l, row, before: [], after: [], sale: di >= 0 || (amtCol >= 0 && !!row[amtCol]) }); out.push(row); }
+      if (filled) data.push({ l, row, section, before: [], after: [], sale: di >= 0 || (amtCol >= 0 && !!row[amtCol]) });
     }
     // A wrapped name can sit above or below its sale line; join each piece to the closest line on that page.
     lone.forEach(({ l, text }) => {
@@ -494,7 +528,7 @@
       if (best && d < l.size * 2.6) (l.y > best.l.y ? best.before : best.after).push(text);
     });
     data.forEach(x => { x.row[itemCol] = [...x.before, x.row[itemCol], ...x.after].filter(Boolean).join(' '); });
-    return out;
+    return out.concat(onceAcrossSections(data));
   }
   // No header row found: take any line with a dollar amount, using its date (if any) and the words as the item.
   function pdfLooseRows(lines) {
@@ -548,7 +582,26 @@
       if (!months.includes(m)) { outside++; continue; }
       (incoming[m] = incoming[m] || []).push(payout != null ? { item, amount, payout, date, booth: 'Unassigned' } : { item, amount, date, booth: 'Unassigned' });
     }
-    let added = 0, dupes = 0, fixed = 0; const perMonth = [];
+    let added = 0, dupes = 0, fixed = 0, replaced = 0; const perMonth = [];
+    // The report is the truth for the days it covers: if the tracker's sales for those days don't match it,
+    // offer to swap them for the report's rows (booth assignments carry over by item name).
+    const days = new Set(Object.values(incoming).flat().map(x => x.date).filter(Boolean));
+    const onDays = m => (data.sales[m] || []).filter(x => x.date && days.has(x.date) && !x.manual);
+    const sum = l => Math.round(l.reduce((t, x) => t + Number(x.amount || 0), 0) * 100) / 100;
+    const oldRows = Object.keys(incoming).flatMap(onDays), newRows = Object.values(incoming).flat().filter(x => x.date);
+    if (oldRows.length && (oldRows.length !== newRows.length || sum(oldRows) !== sum(newRows))) {
+      const ds = [...days].sort(), label = d => new Date(d + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const span = ds.length > 1 ? label(ds[0]) + '–' + label(ds[ds.length - 1]) : label(ds[0]);
+      if (confirm('The tracker has ' + oldRows.length + ' sales ($' + sum(oldRows).toFixed(2) + ') for ' + span + ', but this report has ' + newRows.length + ' ($' + sum(newRows).toFixed(2) + ').\n\nReplace the tracker\'s sales for ' + span + ' with the report?')) {
+        const booths = {};
+        oldRows.forEach(x => { if (x.booth && x.booth !== 'Unassigned') booths[groupKey(x.item)] = x.booth; });
+        for (const m of Object.keys(incoming)) {
+          data.sales[m] = (data.sales[m] || []).filter(x => !(x.date && days.has(x.date) && !x.manual));
+          incoming[m].forEach(x => { if (booths[groupKey(x.item)]) x.booth = booths[groupKey(x.item)]; });
+        }
+        replaced = oldRows.length;
+      }
+    }
     for (const [m, list] of Object.entries(incoming)) {
       const have = {}, mine = {};
       const key = (x, amt) => (x.date || '') + '|' + groupKey(x.item) + '|' + Number(amt).toFixed(2);
@@ -564,7 +617,7 @@
       if (fresh.length) { (data.sales[m] = data.sales[m] || []).push(...fresh); perMonth.push(m + ': ' + fresh.length); added += fresh.length; }
     }
     data.lastRelicImport = todayIso(); save(); render();
-    msg.textContent = (c.net >= 0 ? 'Using net sale amounts. ' : '') + (added ? 'Added ' + added + ' new sale' + (added === 1 ? '' : 's') + ' (' + perMonth.join(', ') + ').' : 'No new sales to add.') + (fixed ? ' Changed ' + fixed + ' earlier sale' + (fixed === 1 ? '' : 's') + ' to the net sale amount.' : '') +
+    msg.textContent = (c.net >= 0 ? 'Using net sale amounts. ' : '') + (replaced ? 'Replaced ' + replaced + ' earlier sales for those days. ' : '') + (added ? 'Added ' + added + ' new sale' + (added === 1 ? '' : 's') + ' (' + perMonth.join(', ') + ').' : 'No new sales to add.') + (fixed ? ' Changed ' + fixed + ' earlier sale' + (fixed === 1 ? '' : 's') + ' to the net sale amount.' : '') +
       (dupes ? ' Skipped ' + dupes + ' already in the tracker.' : '') + (skippedStatus ? ' Skipped ' + skippedStatus + ' refunds.' : '') + (outside ? ' ' + outside + ' rows were outside the tracker\'s months.' : '');
     if (added) toast(added + ' ' + STORE_SHORT + ' sales imported.');
   }
