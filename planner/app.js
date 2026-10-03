@@ -1396,6 +1396,7 @@ function viewFreezer() {
     '<div class="quickbar fzbar"><input id="fzAdd" placeholder="Add: “4 cans corn”, “2 lb ground beef”, “Pizza x2”"><select id="fzWhere" aria-label="Which freezer">' + fz.map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select><button type="button" id="fzGo">Add</button></div>' +
     fzSuggestList(fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) +
     '<div class="row-actions tight fztools"><button type="button" class="ghost small" id="fzUp">📷 Upload a list</button><input id="fzFind" type="search" placeholder="Search food on hand" value="' + esc(fzFind) + '"></div>' +
+    (have.length && !q ? '<a class="card pad tip" href="#meals"><b>🍳 What can I make?</b><span class="sub">' + mealIdeas('Dinner').length + ' meal ideas from what you have →</span></a>' : '') +
     (soon.length && !q ? '<div class="card pad fzsoon"><h2>⏰ Use these soon</h2>' + soon.slice(0, 6).map(row).join('') + '</div>' : '') +
     (shown.length ? Object.keys(groups).sort((a, b) => catOrder(a) - catOrder(b)).map(k => '<div class="card pad"><h3>' + fzCat(k)[1] + ' ' + esc(k) + ' <small>' + groups[k].reduce((n, i) => n + (i.priority || 1), 0) + '</small></h3>' + groups[k].sort((a, b) => a.title.localeCompare(b.title)).map(row).join('') + '</div>').join('')
       : '<div class="card pad"><p class="helper">' + (q ? 'Nothing matches “' + esc(fzFind) + '”.' : 'Nothing here yet. Type something above, or tap 📷 Upload a list.') + '</p></div>') +
@@ -1945,7 +1946,7 @@ function viewMeals(sub) {
   $('view').innerHTML = mealTabs('plan') +
     '<div class="cal-head"><button type="button" class="ghost small" id="mPrev">‹</button><h2>' + esc(weekTitle(mealWeek)) + '</h2><button type="button" class="ghost small" id="mNext">›</button></div>' +
     '<div class="row-actions center"><button type="button" id="mShop">Add ingredients to shopping list</button><button type="button" class="ghost small" id="mCopy">Copy last week</button></div>' +
-    '<p class="helper center">' + planned + ' meals planned · tap any slot to fill it</p>' +
+    '<p class="helper center">' + planned + ' meals planned · tap any slot to fill it</p>' + ideasCard(days) +
     days.map(d => {
       const dt = new Date(d + 'T12:00'), ms = mealsOn(d);
       return '<div class="card pad mealday' + (d === today() ? ' today' : '') + '"><div class="mini-head"><h2>' + dt.toLocaleDateString([], { weekday: 'long' }) + ' <small>' + dt.toLocaleDateString([], { month: 'short', day: 'numeric' }) + '</small></h2></div>' +
@@ -1954,7 +1955,8 @@ function viewMeals(sub) {
   $('mPrev').onclick = () => { mealWeek = addDays(mealWeek, -7); viewMeals(); };
   $('mNext').onclick = () => { mealWeek = addDays(mealWeek, 7); viewMeals(); };
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
-  $('mShop').onclick = () => { const n = addWeekToShopping(days); toast(n ? '✓ Added ' + n + ' items to your shopping list' : 'Those ingredients are already on the list (or the meals have no recipes yet).'); if (n) location.hash = 'meals/shop'; };
+  wireIdeas($('view'), mealIdeas('Dinner').slice(0, 12), days, () => { const y = window.scrollY; viewMeals(); window.scrollTo(0, y); });
+  $('mShop').onclick = () => { const n = addWeekToShopping(days), sk = addWeekToShopping.skipped; toast((n ? '✓ Added ' + n + ' items to your shopping list' : 'Nothing new to add (or the meals have no recipes yet).') + (sk ? ' · skipped ' + sk + ' you already have' : '')); if (n) location.hash = 'meals/shop'; };
   $('mCopy').onclick = () => {
     const prev = data.items.filter(i => i.kind === 'meal' && i.date >= addDays(mealWeek, -7) && i.date < mealWeek);
     if (!prev.length) { toast('Nothing planned last week to copy.'); return; }
@@ -1963,12 +1965,14 @@ function viewMeals(sub) {
     window.save(); toast('✓ Copied ' + n + ' meals'); viewMeals();
   };
 }
-const mealTabs = on => '<h1>Meals</h1><div class="toptabs"><a href="#meals"' + (on === 'plan' ? ' class="on"' : '') + '>Meal plan</a><a href="#meals/shop"' + (on === 'shop' ? ' class="on"' : '') + '>Shopping list' + (shopCount() ? ' <small>' + shopCount() + '</small>' : '') + '</a><a href="#meals/recipes"' + (on === 'recipes' ? ' class="on"' : '') + '>Recipes</a><a href="#meals/freezer"' + (on === 'freezer' ? ' class="on"' : '') + '>🥫 On hand</a></div>';
+const mealTabs = on => '<h1>Meals</h1><div class="toptabs"><a href="#meals"' + (on === 'plan' ? ' class="on"' : '') + '>Meal plan</a><a href="#meals/freezer"' + (on === 'freezer' ? ' class="on"' : '') + '>🥫 On hand</a><a href="#meals/shop"' + (on === 'shop' ? ' class="on"' : '') + '>Shopping list' + (shopCount() ? ' <small>' + shopCount() + '</small>' : '') + '</a><a href="#meals/recipes"' + (on === 'recipes' ? ' class="on"' : '') + '>Recipes</a></div>';
 const shopCount = () => data.items.filter(i => i.kind === 'shop' && !i.done).length;
 function editMeal(date, slot) {
   const cur = data.items.find(i => i.kind === 'meal' && i.date === date && i.list === slot);
   const rs = recipes(), fit = rs.filter(r => !r.list || r.list === slot), other = rs.filter(r => r.list && r.list !== slot);
+  const ideas = mealIdeas(slot).slice(0, 6);
   openModal('<h2>' + esc(slot) + ' · ' + esc(fmtDate(date)) + '</h2>' +
+    (ideas.length ? '<p class="lbl">🍳 From what you have</p><div class="catchips">' + ideas.map((m, n) => '<button type="button" class="chipbtn idea-chip' + (m.soon ? ' soon' : '') + '" data-idea="' + n + '">' + (m.soon ? '⏰ ' : '') + esc(m.title) + '<small>' + (m.need.length ? ' · need ' + m.need.length : ' · have it all') + '</small></button>').join('') + '</div>' : '') +
     (rs.length ? '<p class="lbl">From your recipes</p><div class="catchips">' + fit.concat(other).map(r => '<button type="button" class="chipbtn' + (cur && cur.location === r.id ? ' on' : '') + '" data-rec="' + r.id + '">' + esc(r.title) + '</button>').join('') + '</div>' : '<p class="helper">Tip: add recipes (Meals → Recipes) and their ingredients go on the shopping list for you.</p>') +
     '<p class="lbl">Quick picks</p><div class="catchips">' + ['Leftovers', 'Eat out', 'Takeout', 'Sandwiches', 'Cereal', 'School lunch'].map(x => '<button type="button" class="chipbtn" data-quick="' + x + '">' + x + '</button>').join('') + '</div>' +
     '<label>Or type it<input id="mlTitle" value="' + esc(cur ? cur.title : '') + '" placeholder="Pot roast"></label>' +
@@ -1983,19 +1987,135 @@ function editMeal(date, slot) {
   };
   document.querySelectorAll('[data-rec]').forEach(b => b.onclick = () => { const r = rs.find(x => x.id === b.dataset.rec); put(r.title, r.id); });
   document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => put(b.dataset.quick, ''));
+  document.querySelectorAll('[data-idea]').forEach(b => b.onclick = () => {
+    const m = ideas[+b.dataset.idea], r = ideaRecipe(m), frozen = m.have.filter(h => h.item.list !== 'pantry');
+    if (frozen.length && !$('mlNotes').value.trim()) $('mlNotes').value = 'Thaw ' + frozen.map(h => h.item.title.toLowerCase() + ' (' + fzName(h.item.list).name.toLowerCase() + ')').join(', ') + ' the night before';
+    put(m.title, r.id);
+  });
   $('mlSave').onclick = () => { const t = $('mlTitle').value.trim(), r = rs.find(x => x.title.toLowerCase() === t.toLowerCase()); put(t, r ? r.id : ''); };
   $('mlCancel').onclick = closeModal;
   if (cur) $('mlDel').onclick = () => { data.items = data.items.filter(i => i !== cur); window.save(); closeModal(); route(); };
 }
+// ---------- Meal ideas from what's on hand ----------
+// Your recipes, the starter recipes and these everyday meals are matched against the pantry and freezers.
+const MEAL_IDEAS = [
+  ['Burgers & fries', 'Dinner', '2 lb ground beef\nHamburger buns\nSliced cheese\nLettuce\nTomato\nFrench fries'],
+  ['Sloppy joes', 'Dinner', '1 lb ground beef\n1 can sloppy joe sauce\nHamburger buns\nChips'],
+  ['Hamburger Helper', 'Dinner', '1 lb ground beef\n1 box Hamburger Helper\nMilk'],
+  ['Chicken alfredo', 'Dinner', '2 chicken breasts\n1 lb fettuccine\n1 jar alfredo sauce\n1 bag broccoli'],
+  ['Chicken fajitas', 'Dinner', '2 lb chicken breasts\nTortillas\n2 bell peppers\n1 onion\n1 packet fajita seasoning\nShredded cheese'],
+  ['BBQ chicken, corn & potatoes', 'Dinner', '2 lb chicken thighs\nBBQ sauce\nCorn\nPotatoes'],
+  ['Chicken stir fry', 'Dinner', '2 chicken breasts\n1 bag stir fry vegetables\n2 cups rice\nSoy sauce'],
+  ['Pork chops, potatoes & green beans', 'Dinner', '4 pork chops\nPotatoes\nGreen beans'],
+  ['Crockpot pot roast', 'Dinner', '1 roast\n2 lb potatoes\n1 bag carrots\n1 onion\n1 packet onion soup mix'],
+  ['Sausage, peppers & rice', 'Dinner', '1 pack sausage\n2 bell peppers\n1 onion\n2 cups rice'],
+  ['Breakfast for dinner', 'Dinner', '1 lb bacon\n1 dozen eggs\n1 box pancake mix\nSyrup'],
+  ['Brisket & mac and cheese', 'Dinner', '1 brisket\nBBQ sauce\nMac & cheese\nHamburger buns'],
+  ['Fish tacos', 'Dinner', '1 lb fish\nTortillas\nCabbage slaw\nLimes'],
+  ['Shrimp scampi', 'Dinner', '1 lb shrimp\n1 lb spaghetti\nButter\nGarlic'],
+  ['Pizza night', 'Dinner', 'Frozen pizza\nBagged salad'],
+  ['Nuggets & fries', 'Dinner', 'Chicken nuggets\nFrench fries'],
+  ['Steak night', 'Dinner', '2 steaks\nPotatoes\n1 bag broccoli'],
+  ['Roast turkey dinner', 'Dinner', '1 whole turkey\n1 box stuffing\nPotatoes\nGreen beans'],
+  ['Chili mac', 'Dinner', '1 lb ground beef\n1 lb macaroni\n1 can chili beans\n1 can diced tomatoes\nShredded cheese'],
+  ['Waffles & fruit', 'Breakfast', 'Waffles\nSyrup\nBerries']
+];
+const ALWAYS_HAVE = /^(salt|pepper|salt (&|and) pepper|black pepper|oil|olive oil|vegetable oil|cooking spray|water|ice)$/i;
+const ING_SKIP = /\b(frozen|canned|can|cans|of|fresh|shredded|sliced|diced|chopped|large|small|medium|whole|boneless|skinless|lean|family|size|bag|bags|box|jar|packet|pack|package|bunch|baby|jumbo|regular|lb|lbs|oz)\b/g;
+function ingTokens(s) {
+  return ingredientName(s).toLowerCase().replace(/&/g, ' and ').replace(/\bveggies\b|\bveg\b/g, 'vegetables').replace(/\b(french )?fries\b/g, 'french fries').replace(/[^a-z\s]/g, ' ').replace(ING_SKIP, ' ')
+    .split(/\s+/).filter(w => w.length > 2 && w !== 'and').map(w => w.length > 3 ? w.replace(/ies$/, 'y').replace(/(ch|sh|x|ss)es$/, '$1').replace(/oes$/, 'o').replace(/s$/, '') : w);
+}
+// Does this ingredient match something on hand? All the words of the shorter name have to be in the longer one.
+function onHandFor(line, stock) {
+  const a = ingTokens(line); if (!a.length) return null;
+  return stock.find(i => { const b = ingTokens(i.title); if (!b.length) return false; const [s, l] = a.length <= b.length ? [a, b] : [b, a]; return s.every(w => l.includes(w)); }) || null;
+}
+const onHand = () => fzItems().filter(i => !i.done && (i.priority || 0) > 0);
+const MAIN_KINDS = ['Beef', 'Ground meat', 'Chicken & turkey', 'Pork', 'Fish & seafood', 'Meals & leftovers'];
+// Every meal we know, best first: things that use what you have (especially what needs using soon), then fewest to buy.
+function mealIdeas(slot) {
+  const stock = onHand(); if (!stock.length) return [];
+  const saved = recipes(), seen = new Set(saved.map(r => r.title.toLowerCase()));
+  const pool = saved.map(r => ({ title: r.title, slot: r.list || 'Dinner', notes: r.notes || '', recipe: r }))
+    .concat(STARTER_RECIPES.concat(MEAL_IDEAS).filter(([t]) => { const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).map(([title, sl, notes]) => ({ title, slot: sl, notes })));
+  return pool.filter(m => !slot || m.slot === slot || (slot === 'Dinner' && m.slot === 'Lunch')).map(m => {
+    const lines = m.notes.split('\n').map(x => x.trim()).filter(Boolean).filter(l => !ALWAYS_HAVE.test(ingredientName(l)));
+    const have = [], need = [];
+    lines.forEach(l => { const it = onHandFor(l, stock); if (it) have.push({ line: l, item: it }); else { const n = ingredientName(l).replace(/^(box|bag|jar|can|pack|packet|bottle)\s+(of\s+)?/i, ''); need.push(n.charAt(0).toUpperCase() + n.slice(1)); } });
+    const main = have.some(h => MAIN_KINDS.includes(h.item.location));
+    const soon = have.filter(h => fzOld(h.item)).length;
+    return Object.assign(m, { have, need, soon, score: have.length * 10 + (main ? 15 : 0) + soon * 20 - need.length * 3 + (need.length ? 0 : 15) + (m.recipe ? 3 : 0) });
+  }).filter(m => m.have.length && (m.have.some(h => MAIN_KINDS.includes(h.item.location)) || m.have.length >= 2)).sort((a, b) => b.score - a.score);
+}
+// Make sure an idea is a saved recipe (so its ingredients can go on the shopping list), and return it.
+function ideaRecipe(m) {
+  if (m.recipe) return m.recipe;
+  const have = recipes().find(r => r.title.toLowerCase() === m.title.toLowerCase()); if (have) return have;
+  const r = newItem({ kind: 'recipe', title: m.title, list: m.slot, notes: m.notes }); data.items.push(r); return r;
+}
+const ideaHtml = (m, n) => '<div class="idea' + (m.soon ? ' soon' : '') + '"><div class="ideat"><b>' + (m.recipe ? '⭐ ' : '') + esc(m.title) + '</b>' + (m.soon ? '<span class="chip">⏰ uses ' + esc(m.have.find(h => fzOld(h.item)).item.title.toLowerCase()) + '</span>' : '') + '</div>' +
+  '<p class="ihave">✓ ' + m.have.map(h => esc(h.item.title) + (h.item.list !== 'pantry' ? ' <small>(' + esc(fzName(h.item.list).name.replace(/ freezer$/i, '').toLowerCase()) + ')</small>' : '')).join(', ') + '</p>' +
+  (m.need.length ? '<p class="ineed">Need: ' + m.need.slice(0, 5).map(esc).join(', ') + (m.need.length > 5 ? ' +' + (m.need.length - 5) : '') + '</p>' : '<p class="ineed ok">You have everything!</p>') +
+  '<div class="row-actions tight"><button type="button" class="small" data-iplan="' + n + '">＋ Plan it</button>' + (m.need.length ? '<button type="button" class="ghost small" data-ineed="' + n + '">🛒 Add what I need</button>' : '') + '</div></div>';
+function ideasCard(days) {
+  const all = mealIdeas('Dinner'), more = !!viewMeals.moreIdeas, list = all.slice(0, more ? 12 : 4);
+  if (!onHand().length) return '<a class="card pad tip" href="#meals/freezer"><b>🍳 Meal ideas from what you have</b><span class="sub">Add your pantry and freezers in 🥫 On hand, and ideas show up here →</span></a>';
+  return '<div class="card pad ideas"><div class="mini-head"><h2>🍳 What can I make?</h2><a class="linkish" href="#meals/freezer">On hand</a></div>' +
+    (list.length ? '<p class="helper">From what’s in your pantry and freezers. Things that need using soon come first.</p>' + list.map(ideaHtml).join('') +
+      (all.length > 4 ? '<button type="button" class="linkish" id="ideaMore">' + (more ? 'Show fewer' : 'Show ' + (Math.min(12, all.length) - 4) + ' more ideas') + '</button>' : '')
+      : '<p class="helper">No matches yet. Add a few recipes, or more to 🥫 On hand.</p>') + '</div>';
+}
+function wireIdeas(root, ideas, days, redraw) {
+  root.querySelectorAll('[data-iplan]').forEach(b => b.onclick = () => planIdea(ideas[+b.dataset.iplan], days, redraw));
+  root.querySelectorAll('[data-ineed]').forEach(b => b.onclick = () => {
+    const m = ideas[+b.dataset.ineed]; let n = 0;
+    m.notes.split('\n').map(x => x.trim()).filter(Boolean).forEach(line => {
+      const name = ingredientName(line); if (ALWAYS_HAVE.test(name) || onHandFor(line, onHand())) return;
+      if (data.items.some(i => i.kind === 'shop' && !i.done && i.title.toLowerCase() === name.toLowerCase())) return;
+      data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(line), notes: (amountOf(line) ? amountOf(line) + ' · ' : '') + m.title, location: (S().walmart || {})[name.toLowerCase()] || '' })); n++;
+    });
+    window.save(); toast(n ? '🛒 Added ' + n + ' things for ' + m.title : 'Those are already on your shopping list');
+  });
+  if ($('ideaMore')) $('ideaMore').onclick = () => { viewMeals.moreIdeas = !viewMeals.moreIdeas; redraw(); };
+}
+// Pick the day for an idea; it's planned with a thaw reminder if something comes out of a freezer.
+function planIdea(m, days, redraw) {
+  const t = today(), slot = m.slot === 'Lunch' || m.slot === 'Breakfast' || m.slot === 'Snack' ? m.slot : 'Dinner';
+  const choices = (days || []).concat([0, 1, 2, 3, 4, 5, 6].map(k => addDays(t, k))).filter((d, k, a) => d >= t && a.indexOf(d) === k).sort().slice(0, 10);
+  const frozen = m.have.filter(h => h.item.list !== 'pantry');
+  // Something frozen needs a night to thaw, so start looking tomorrow.
+  const firstFree = choices.find(d => (!frozen.length || d > t) && !mealsOn(d).some(x => x.list === slot)) || choices[0];
+  openModal('<h2>Plan ' + esc(m.title) + '</h2>' +
+    '<div class="daypick">' + choices.map(d => { const taken = mealsOn(d).find(x => x.list === slot); return '<button type="button" class="chipbtn' + (d === firstFree ? ' on' : '') + '" data-pday="' + d + '">' + esc(fmtDate(d, 'rel')) + (taken ? '<small> · ' + esc(taken.title) + '</small>' : '') + '</button>'; }).join('') + '</div>' +
+    '<label>Meal<select id="piSlot">' + SLOTS.map(s => '<option' + (s === slot ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
+    (frozen.length ? '<label class="check"><input type="checkbox" id="piThaw" checked> Remind me to take out ' + esc(frozen.map(h => h.item.title.toLowerCase()).join(' and ')) + ' the night before</label>' : '') +
+    '<div class="row-actions"><button type="button" id="piGo">Plan it</button><button type="button" class="ghost" id="piX">Cancel</button></div>');
+  let day = firstFree;
+  $('modalBody').querySelectorAll('[data-pday]').forEach(b => b.onclick = () => { day = b.dataset.pday; $('modalBody').querySelectorAll('[data-pday]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('piX').onclick = closeModal;
+  $('piGo').onclick = () => {
+    const sl = $('piSlot').value, r = ideaRecipe(m), cur = data.items.find(i => i.kind === 'meal' && i.date === day && i.list === sl);
+    if (cur && !confirm('Replace ' + cur.title + ' on ' + fmtDate(day, 'rel') + '?')) return;
+    const thaw = frozen.length && $('piThaw') && $('piThaw').checked;
+    const note = frozen.length ? 'Thaw ' + frozen.map(h => h.item.title.toLowerCase() + ' (' + fzName(h.item.list).name.toLowerCase() + ')').join(', ') + ' the night before' : '';
+    if (cur) Object.assign(cur, { title: m.title, location: r.id, notes: note }); else data.items.push(newItem({ kind: 'meal', date: day, list: sl, title: m.title, location: r.id, notes: note }));
+    if (thaw) data.items.push(newItem({ kind: 'task', title: '🧊 Take out ' + frozen.map(h => h.item.title.toLowerCase()).join(' & ') + ' for ' + m.title, date: addDays(day, -1) < t ? t : addDays(day, -1), list: 'Home', remind: -1080, notes: note }));
+    window.save(); closeModal(); (redraw || route)();
+    toast('✓ ' + m.title + ' planned for ' + fmtDate(day, 'rel') + (thaw ? ' · thaw reminder set' : ''));
+  };
+}
 // Every ingredient from the week's recipes goes on the list once; amounts and meal names are noted.
 function addWeekToShopping(days) {
-  let added = 0;
+  let added = 0; addWeekToShopping.skipped = 0;
+  const stock = onHand();
   const open = () => data.items.filter(i => i.kind === 'shop' && !i.done);
   data.items.filter(i => i.kind === 'meal' && days.includes(i.date) && i.location).sort((a, b) => a.date.localeCompare(b.date)).forEach(m => {
     const r = data.items.find(i => i.id === m.location && i.kind === 'recipe'); if (!r) return;
     const tag = m.title + ' (' + new Date(m.date + 'T12:00').toLocaleDateString([], { weekday: 'short' }) + ')';
     r.notes.split('\n').map(x => x.trim()).filter(Boolean).forEach(line => {
       const name = ingredientName(line), amt = amountOf(line);
+      if (ALWAYS_HAVE.test(name) || onHandFor(line, stock)) { addWeekToShopping.skipped++; return; }
       const have = open().find(i => i.title.toLowerCase() === name.toLowerCase());
       if (have) { if (!have.notes.includes(tag)) have.notes = [have.notes, (amt ? amt + ' · ' : '') + tag].filter(Boolean).join('; '); return; }
       data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(line), notes: (amt ? amt + ' · ' : '') + tag, location: (S().walmart || {})[name.toLowerCase()] || '' }));
