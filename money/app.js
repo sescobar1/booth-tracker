@@ -11,7 +11,28 @@ const isoDay = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.
 const today = () => isoDay(new Date());
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-const DEFAULT_CATEGORIES = ['House Bill', 'Groceries', 'Gas', 'Eating out', 'Car', 'Insurance', 'Utilities', 'Phone & internet', 'Subscriptions', 'Medical', 'Kids & school', 'Band', 'Booth business', 'Personal care', 'Shopping', 'Gifts & donations', 'Savings', 'Paycheck', 'Transfer', 'Other'];
+const DEFAULT_CATEGORIES = ['House Bill', 'Groceries', 'Eating out', 'Gas', 'Car', 'Shopping', 'Personal care', 'Medical', 'Kids & school', 'Band', 'Booth business', 'Credit card payment', 'Cash', 'Gifts & donations', 'Taxes', 'Fees', 'Paycheck', 'Side income', 'Transfer', 'Other'];
+// Name rules for sorting entries into categories automatically (her own choices and past entries come first).
+const CATEGORY_RULES = [
+  [/payroll|direct dep|salary/i, 'Paycheck'],
+  [/shellpoin|newrez|mortgage|\batt\b|at&t|brightspeed|bright speed|farm bureau|netflix|spotify|youtube|prime|hulu|disney|apple (storage|com)|apple\.com|^apple$|openai|chatgpt|claude|terminix|terminex|entergy|swepco|ozarks electric|water|cox|internet|insurance/i, 'House Bill'],
+  [/car payment|auto loan|autozone|o'?reilly|oil change|tire|car wash|jiffy|dmv|revenue office/i, 'Car'],
+  [/phillips 66|casey'?s|maverik|exxon|shell oil|valero|murphy|kum ?& ?go|love'?s|conoco|chevron|gas station|^gas$|fuel/i, 'Gas'],
+  [/kroger|aldi|harps|food lion|grocery|sam'?s club(?! mastercard)|walmart|wm supercenter|neighborhood market|edwards food/i, 'Groceries'],
+  [/sonic|mcdonald|domino|chick-?fil|zaxby|taco bell|wendy|burger|pizza|grill|cafe|caf\u00e9|coffee|starbucks|subway|chili'?s|restaurant|bbq|bar-?b|hog|hangout|el charro|red lobster|bundt|gadwall|whataburger|arby|kfc|popeye|dairy queen|braum|waffle|ihop|cracker barrel|panda|sushi|mexican|diner|donut|doughnut|bakery|tropical smoothie|smoothie|dutch bros/i, 'Eating out'],
+  [/walgreens|cvs|caremark|pharmacy|clinic|hospital|medical|dental|dentist|doctor|urgent care|optical|vision|health/i, 'Medical'],
+  [/nails?\b|salon|hair|barber|spa\b|sally beauty|ulta|beauty|lash|brow/i, 'Personal care'],
+  [/amazon|amzn|tj ?maxx|target|ebay|dollar general|dollar tree|lowe'?s|home depot|hobby lobby|bargain|boutique|thrift|marshalls|ross|old navy|kohl|best buy|tiktok|tik tok|shein|etsy|michaels|bath ?& ?body/i, 'Shopping'],
+  [/y'?\s?all?ternative|booth|price break|marva/i, 'Booth business'],
+  [/band boosters|rsd ?band|band fee/i, 'Band'],
+  [/school|rsdk12|tuition|arkansas tech|ar tech|atu\b|lunch money|my ?school ?bucks/i, 'Kids & school'],
+  [/church|donation|tithe|charity|united way/i, 'Gifts & donations'],
+  [/mastercard|visa payment|credit card|card payment|crd pymt|capital one|discover|chase credit|syf|synchrony|amex/i, 'Credit card payment'],
+  [/ar\.gov|irs|tax payment|stpayment|dfa/i, 'Taxes'],
+  [/\bfees?\b|overdraft|service charge|\bnsf\b/i, 'Fees'],
+  [/cash withdrawal|\batm\b|wthdrl/i, 'Cash'],
+  [/transfer|xfer/i, 'Transfer']
+];
 // Tax categories an expense (or receipt) can count toward.
 const DEFAULT_TAX_CATS = ['Charitable donations', 'Medical & dental', 'Mortgage interest', 'Property & personal property tax', 'Booth business – supplies & inventory', 'Booth business – booth rent & fees', 'Booth business – mileage', 'Education', 'Childcare', 'Other deductible'];
 // The yearly tax checklist: papers to gather. Each one checks itself off when a file is uploaded to it.
@@ -101,30 +122,59 @@ function activeAccount() {
   return account(currentAccount);
 }
 const signed = t => t.type === 'income' ? Number(t.amount) : -Number(t.amount);
+// What the bank actually took or paid (her register amounts are rounded).
+const bankAmt = t => t.bankAmount != null && t.bankAmount !== '' ? Number(t.bankAmount) : Number(t.amount);
+const bankSigned = t => t.type === 'income' ? bankAmt(t) : -bankAmt(t);
+// Her rounding: a bill over 5¢ past the dollar rounds up to the next dollar (5¢ or less rounds down); deposits round down.
+function myRound(amt, type) {
+  const a = Math.round(Number(amt) * 100) / 100;
+  if ((data.settings.rounding || 'up5') === 'none') return a;
+  const whole = Math.floor(a + 1e-9), cents = Math.round((a - whole) * 100);
+  if (type === 'income') return whole;
+  return cents > 5 ? whole + 1 : whole;
+}
 // Oldest first, so a running balance can be added up.
 const byTime = (a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')) || String(a.id).localeCompare(String(b.id));
 function balances(acc) {
   const list = data.tx.filter(t => t.accountId === acc.id).sort(byTime);
   let bal = Number(acc.openingBalance) || 0, cleared = bal;
   const running = {};
-  list.forEach(t => { bal += signed(t); if (t.cleared) cleared += signed(t); running[t.id] = bal; });
-  return { balance: Math.round(bal * 100) / 100, cleared: Math.round(cleared * 100) / 100, running, list };
+  let pending = 0;
+  list.forEach(t => { bal += signed(t); if (t.cleared) cleared += bankSigned(t); else pending += signed(t); running[t.id] = bal; });
+  const r2 = n => Math.round(n * 100) / 100;
+  // What's left after pending entries is the cushion from rounding.
+  return { balance: r2(bal), cleared: r2(cleared), pending: r2(pending), cushion: r2(bal - cleared - pending), running, list };
 }
 
 // ---------- routing ----------
 function route() {
+  if (location.hash.startsWith('#add')) { quickAdd(); return; }
   const [tab, arg] = (location.hash.slice(1) || 'register').split('/');
-  const tabOf = { reports: 'register', import: 'more', accounts: 'more' };
+  const tabOf = { reports: 'register', import: 'more', accounts: 'more', recurring: 'more', siri: 'more' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport };
+  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri };
   (views[tab] || viewRegister)(arg);
 }
-window.render = () => { const y = window.scrollY; if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
+window.render = () => { const y = window.scrollY; firstSort(); runRecurring(); if (pendingAdd) { finishQuickAdd(); return; } if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
-$('topAdd').onclick = () => editTx(null, 'expense');
+$('fab').onclick = () => $('topAdd').click();
+$('topAdd').onclick = () => {
+  openModal('<h2>Add</h2><div class="addgrid">' +
+    '<button type="button" data-addk="expense">− Expense<span>money out</span></button>' +
+    '<button type="button" class="income-btn" data-addk="income">+ Income<span>money in</span></button>' +
+    '<button type="button" class="ghost" data-addk="rexpense">🔁 Recurring bill<span>every month</span></button>' +
+    '<button type="button" class="ghost" data-addk="rincome">🔁 Recurring deposit<span>paycheck, etc.</span></button></div>' +
+    '<div class="row-actions"><button type="button" class="ghost" id="addX">Cancel</button></div>');
+  $('addX').onclick = closeModal;
+  document.querySelectorAll('[data-addk]').forEach(b => b.onclick = () => {
+    const k = b.dataset.addk; closeModal();
+    if (k[0] === 'r') editRecurring(null, k.slice(1)); else editTx(null, k);
+  });
+};
 
 // ---------- Register ----------
 let regMonth = '', regSearch = '', regCat = '';
+let balView = (() => { try { return localStorage.getItem(KEY + 'BalView') || 'bank'; } catch (e) { return 'bank'; } })();
 function viewRegister() {
   const acc = activeAccount();
   if (!acc) {
@@ -145,25 +195,33 @@ function viewRegister() {
     if (t.date !== lastDate) { rows += '<div class="day">' + esc(fmtDate(t.date, true)) + '</div>'; lastDate = t.date; }
     rows += '<div class="tx' + (t.cleared ? ' cleared' : '') + '" data-tx="' + t.id + '">' +
       '<button type="button" class="clr" data-clear="' + t.id + '" title="' + (t.cleared ? 'Cleared – tap to unclear' : 'Not cleared – tap to clear') + '">' + (t.cleared ? '✓' : '') + '</button>' +
-      '<div class="who"><b>' + esc(t.payee || '(no payee)') + '</b>' +
+      '<div class="who"><b>' + (String(t.id).startsWith('rec_') ? '🔁 ' : '') + esc(t.payee || '(no payee)') + '</b>' +
       '<span class="sub">' + esc([t.category, t.checkNum ? '#' + t.checkNum : '', t.note].filter(Boolean).join(' · ')) + '</span>' +
       (t.taxCat || t.receipt ? '<span class="sub">' + (t.taxCat ? '<span class="chip tax">🧾 ' + esc(t.taxCat) + '</span> ' : '') + (t.receipt ? '<span class="chip">📎 receipt</span>' : '') + '</span>' : '') + '</div>' +
-      '<div class="amt"><b class="' + t.type + '">' + (t.type === 'income' ? '+' : '−') + money(t.amount).replace('−', '') + '</b><span class="sub">' + money(b.running[t.id]) + '</span></div></div>';
+      '<div class="amt"><b class="' + t.type + '">' + (t.type === 'income' ? '+' : '−') + money(t.amount).replace('−', '') + '</b>' + (t.bankAmount != null && Math.abs(bankAmt(t) - t.amount) >= 0.005 ? '<span class="sub bankamt">bank ' + money(bankAmt(t)) + '</span>' : '') + '<span class="sub">' + money(b.running[t.id]) + '</span></div></div>';
   });
   const accOpts = data.accounts.length > 1 ? '<select id="accPick">' + data.accounts.slice().sort((a, c) => a.sort - c.sort).map(a => '<option value="' + a.id + '"' + (a.id === acc.id ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select>' : '<b>' + esc(acc.name) + '</b>';
   const monthIn = regMonth ? b.list.filter(t => t.date.startsWith(regMonth)) : [];
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Spending</a></div>' +
+    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Spending &amp; reports</a></div>' +
     '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
-    '<div class="bal"><span>Balance</span><b class="' + (b.balance < 0 ? 'neg' : '') + '">' + money(b.balance) + '</b></div>' +
-    '<div class="bal-row"><span>Cleared: <b>' + money(b.cleared) + '</b></span><span>Not cleared: <b>' + money(b.balance - b.cleared) + '</b></span></div></div>' +
+    '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
+    (balView === 'bank'
+      ? '<div class="bal"><span>Bank balance (what\'s cleared)</span><b class="' + (b.cleared < 0 ? 'neg' : '') + '">' + money(b.cleared) + '</b></div>' +
+        '<div class="bal-row"><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '<span>Register: <b>' + money(b.balance) + '</b></span></div></div>'
+      : '<div class="bal"><span>Register balance (after pending)</span><b class="' + (b.balance < 0 ? 'neg' : '') + '">' + money(b.balance) + '</b></div>' +
+        '<div class="bal-row"><span>Bank: <b>' + money(b.cleared) + '</b></span><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '</div></div>') +
+    comingUp(acc, b.balance) +
     '<div class="row-actions quick"><button type="button" id="addExp">− Expense</button><button type="button" class="income-btn" id="addInc">+ Income</button></div>' +
     '<div class="filters"><input id="regFind" type="search" placeholder="Search payee, note, amount" value="' + esc(regSearch) + '">' +
     '<select id="regMonth"><option value="">All months</option>' + months.map(m => '<option value="' + m + '"' + (m === regMonth ? ' selected' : '') + '>' + esc(monthName(m)) + '</option>').join('') + '</select>' +
     '<select id="regCat"><option value="">All categories</option>' + data.settings.categories.map(c => '<option' + (c === regCat ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></div>' +
     (regMonth ? '<p class="helper">' + esc(monthName(regMonth)) + ': in ' + money(monthIn.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)) + ' · out ' + money(monthIn.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)) + '</p>' : '') +
     (rows || '<p class="helper">No entries' + (q || regMonth || regCat ? ' match' : ' yet') + '.</p>');
+  $('view').querySelectorAll('[data-bv]').forEach(x => x.onclick = () => { balView = x.dataset.bv; try { localStorage.setItem(KEY + 'BalView', balView); } catch (e) {} viewRegister(); });
   if ($('accPick')) $('accPick').onchange = e => { currentAccount = e.target.value; viewRegister(); };
+  $('view').querySelectorAll('[data-uprec]').forEach(x => x.onclick = () => editRecurring(x.dataset.uprec));
+  $('view').querySelectorAll('[data-newrec]').forEach(x => x.onclick = () => editRecurring(null, x.dataset.newrec));
   $('addExp').onclick = () => editTx(null, 'expense');
   $('addInc').onclick = () => editTx(null, 'income');
   $('regFind').oninput = e => { regSearch = e.target.value; clearTimeout(viewRegister.t); viewRegister.t = setTimeout(() => { viewRegister(); const f = $('regFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
@@ -180,7 +238,7 @@ function viewRegister() {
 // Last category used for a payee, so typing "Shellpoint" fills in "House Bill".
 function payeeMemory() {
   const m = {};
-  data.tx.slice().sort(byTime).forEach(t => { if (t.payee) m[t.payee.trim().toLowerCase()] = { category: t.category, type: t.type, taxCat: t.taxCat, amount: t.amount }; });
+  data.tx.slice().sort(byTime).forEach(t => { if (t.payee && (t.category || !m[t.payee.trim().toLowerCase()])) m[t.payee.trim().toLowerCase()] = { category: t.category || (m[t.payee.trim().toLowerCase()] || {}).category || '', type: t.type, taxCat: t.taxCat, amount: t.amount }; });
   return m;
 }
 function editTx(id, type) {
@@ -196,21 +254,31 @@ function editTx(id, type) {
     '<label>Payee<input id="tPayee" list="payees" value="' + esc(t.payee) + '" placeholder="Walmart" autocapitalize="words"></label><datalist id="payees">' + payees.map(p => '<option value="' + esc(p) + '">').join('') + '</datalist>' +
     '<div class="grid2"><label>Category<input id="tCat" list="cats" value="' + esc(t.category) + '" placeholder="Groceries"></label><label>Date<input id="tDate" type="date" value="' + esc(t.date) + '"></label></div>' +
     '<datalist id="cats">' + data.settings.categories.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
+    '<div class="catchips" id="tChips">' + topCategories(10).map(c => '<button type="button" class="chipbtn" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>' +
     '<div class="grid2"><label>Check #<input id="tCheck" inputmode="numeric" value="' + esc(t.checkNum) + '"></label>' +
     (data.accounts.length > 1 ? '<label>Account<select id="tAcc">' + data.accounts.map(a => '<option value="' + a.id + '"' + (a.id === t.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select></label>' : '<span></span>') + '</div>' +
+    (t.bankAmount != null && t.bankAmount !== '' ? '<p class="helper">🏦 The bank shows ' + money(t.bankAmount) + '.' + (Math.abs(bankAmt(t) - Number(t.amount)) >= 0.005 ? ' Your register has it rounded.' : '') + '</p>' : '') +
     '<label>Note<input id="tNote" value="' + esc(t.note) + '"></label>' +
     '<label class="check"><input type="checkbox" id="tClr"' + (t.cleared ? ' checked' : '') + '> Cleared the bank</label>' +
+    (id && String(id).startsWith('rec_') ? '<p class="helper">🔁 This came from a recurring ' + (t.type === 'income' ? 'deposit' : 'bill') + '. <button type="button" class="linkish" id="tRec">Edit the recurring ' + (t.type === 'income' ? 'deposit' : 'bill') + '</button></p>' : '<label class="check"><input type="checkbox" id="tRepeat"> 🔁 Repeats every month (adds it on the ' + ordinal(Number(t.date.slice(8, 10)) || 1) + ')</label>') +
     '<details class="taxbox"' + (t.taxCat || t.receipt ? ' open' : '') + '><summary>🧾 Taxes &amp; receipt</summary>' +
     '<label>Counts for taxes as<select id="tTax"><option value="">— not for taxes —</option>' + data.settings.taxCats.map(c => '<option' + (c === t.taxCat ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></label>' +
     '<div class="row-actions">' + (t.receipt ? '<button type="button" class="ghost small" id="tView">📎 View receipt</button>' : '') +
     '<label class="button ghost small file">📷 ' + (t.receipt ? 'Replace' : 'Add') + ' receipt<input type="file" id="tFile" accept="image/*,application/pdf" hidden></label></div>' +
     '<p class="helper" id="tFileNote">' + (signedIn() ? 'Receipts are stored privately in your account.' : 'Sign in to save receipt photos.') + '</p></details>' +
-    '<div class="row-actions"><button type="button" id="tSave">Save</button><button type="button" class="ghost" id="tCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="tDel">Delete</button>' : '') + '</div>');
+    '<div class="row-actions"><button type="button" id="tSave">Save</button><button type="button" class="ghost" id="tCancel">Cancel</button>' + (id ? '<button type="button" class="ghost" id="tCopy">Copy as new</button><button type="button" class="danger" id="tDel">Delete</button>' : '') + '</div>');
+  if ($('tRec')) $('tRec').onclick = () => { const r = recList().find(x => String(id).startsWith('rec_' + x.id + '_')); closeModal(); if (r) editRecurring(r.id); else toast('That recurring bill was removed.'); };
+  if ($('tCopy')) $('tCopy').onclick = () => { closeModal(); editTx(null, t.type); ['tAmt', 'tPayee', 'tCat', 'tNote'].forEach((f, i) => { $(f).value = [Number(t.amount).toFixed(2), t.payee, t.category, t.note][i]; }); $('tTax').value = t.taxCat || ''; };
   let pendingFile = null;
+  const oldCat = t.category || '';
+  const markChip = () => $('tChips').querySelectorAll('[data-cat]').forEach(b => b.classList.toggle('on', b.dataset.cat === $('tCat').value));
+  $('tChips').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { $('tCat').value = b.dataset.cat; markChip(); });
+  $('tCat').oninput = markChip; markChip();
   $('tKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('tKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); });
   $('tPayee').onchange = () => {
     const m = mem[$('tPayee').value.trim().toLowerCase()];
-    if (m && !$('tCat').value) $('tCat').value = m.category || '';
+    if (!$('tCat').value) $('tCat').value = autoCategory($('tPayee').value, '', kind) || '';
+    markChip();
     if (m && !id && !$('tAmt').value && m.category === 'House Bill') $('tAmt').value = Number(m.amount).toFixed(2);
     if (m && m.taxCat && !$('tTax').value) $('tTax').value = m.taxCat;
   };
@@ -224,7 +292,19 @@ function editTx(id, type) {
     if (pendingFile && !signedIn()) { toast('Sign in (More → Account) to save receipt photos.'); return; }
     Object.assign(t, { amount: Math.abs(amount), type: kind, payee: $('tPayee').value.trim(), category: $('tCat').value.trim(), date: $('tDate').value, checkNum: $('tCheck').value.trim(), note: $('tNote').value.trim(), cleared: $('tClr').checked, taxCat: $('tTax').value, accountId: $('tAcc') ? $('tAcc').value : t.accountId });
     if (!id) { t.id = uid(); t.time = new Date().toTimeString().slice(0, 5); data.tx.push(t); }
+    if ($('tRepeat') && $('tRepeat').checked) {
+      const r = { id: uid(), accountId: t.accountId, payee: t.payee || t.category || 'Bill', amount: t.amount, type: t.type, category: t.category, taxCat: t.taxCat, every: 'month', day: Number(t.date.slice(8, 10)), start: t.date, through: t.date, paused: false };
+      data.settings.recurring = recList().concat([r]);
+    }
     if (t.category && !data.settings.categories.includes(t.category)) data.settings.categories.push(t.category);
+    if (t.payee && t.category && t.category !== oldCat) {
+      // Remember it for this name, and offer to fix the others.
+      const k = looseName(t.payee), rules = data.settings.catRules = Object.assign({}, data.settings.catRules);
+      const others = data.tx.filter(x => x !== t && x.payee && looseName(x.payee) === k && x.category !== t.category);
+      if (!others.length || confirm('Also put your other ' + others.length + ' “' + t.payee + '” entries in ' + t.category + '?')) {
+        rules[k] = t.category; others.forEach(x => { x.category = t.category; });
+      }
+    }
     if (pendingFile) {
       $('tSave').disabled = true; $('tSave').textContent = 'Saving receipt…';
       try { t.receipt = await uploadFile(pendingFile, t.date.slice(0, 4) + '/receipts'); }
@@ -270,6 +350,224 @@ async function openFile(path) {
   if (w) w.location = d.signedUrl; else location.href = d.signedUrl;
 }
 
+// The next 30 days of recurring bills and income, and what the balance will be after them.
+function comingUp(acc, balance) {
+  const list = upcoming(acc, 31);
+  if (!list.length) return recList().length ? '' : '<p class="helper"><a href="#recurring">🔁 Set up your monthly bills</a> to see what\'s coming up.</p>';
+  const net = list.reduce((s, x) => s + (x.r.type === 'income' ? 1 : -1) * Number(x.r.amount), 0);
+  const days = {};
+  list.forEach(x => { (days[x.date] = days[x.date] || []).push(x); });
+  return '<details class="card pad coming"><summary>📅 Coming up: ' + list.length + ' in the next month · after them <b class="' + (balance + net < 0 ? 'expense' : '') + '">' + money(balance + net) + '</b></summary>' +
+    Object.entries(days).map(([d, xs]) => '<div class="day">' + esc(fmtDate(d, true)) + '</div>' + xs.map(x => '<div class="mini-row" data-uprec="' + x.r.id + '" style="cursor:pointer"><span>🔁 ' + esc(x.r.payee) + '</span><b class="' + x.r.type + '">' + signedAmt(x.r.type, x.r.amount) + '</b></div>').join('')).join('') +
+    '<div class="row-actions"><button type="button" class="ghost small" data-newrec="expense">+ Recurring bill</button><button type="button" class="ghost small" data-newrec="income">+ Recurring deposit</button><a class="button ghost small" href="#recurring">See all</a></div>' +
+    '<p class="helper">These go into the register on their day. Tap one to change it.</p></details>';
+}
+
+// ---------- Recurring bills & income ----------
+// Each one is added to the register on its day (the 1st unless changed), not cleared, until the bank shows it.
+// Ids are built from the bill and the date, so two devices adding the same month's bill end up with one entry.
+const recList = () => data.settings.recurring || [];
+const lastDay = (y, m) => new Date(y, m, 0).getDate();
+const recId = (r, date) => 'rec_' + r.id + '_' + date.replace(/-/g, '');
+const EVERY = { month: 'Every month', '2weeks': 'Every 2 weeks', week: 'Every week', year: 'Every year' };
+function ordinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+function recWhen(r) {
+  if (r.every === 'month') return 'Monthly on the ' + (r.day >= 31 ? 'last day' : ordinal(r.day || 1));
+  if (r.every === 'year') return 'Yearly on ' + fmtDate(r.start);
+  return EVERY[r.every] + ' from ' + fmtDate(r.start);
+}
+// Due dates after `from` up to and including `to` (ISO days).
+function recDates(r, from, to) {
+  const out = [];
+  if (r.every === 'month' || r.every === 'year') {
+    let [y, m] = from.split('-').map(Number);
+    for (let k = 0; k < 400; k++) {
+      const mm = ((m - 1 + k) % 12) + 1, yy = y + Math.floor((m - 1 + k) / 12);
+      if (r.every === 'year' && mm !== Number(r.start.slice(5, 7))) continue;
+      const dd = Math.min(r.every === 'year' ? Number(r.start.slice(8, 10)) : (r.day || 1), lastDay(yy, mm));
+      const d = yy + '-' + pad(mm) + '-' + pad(dd);
+      if (d > to) break;
+      if (d > from && d >= r.start) out.push(d);
+    }
+  } else {
+    const step = r.every === 'week' ? 7 : 14;
+    const d = new Date(r.start + 'T12:00');
+    for (let k = 0; k < 2000; k++) {
+      const s = isoDay(d);
+      if (s > to) break;
+      if (s > from) out.push(s);
+      d.setDate(d.getDate() + step);
+    }
+  }
+  return out;
+}
+const recTx = (r, date) => ({ id: recId(r, date), accountId: r.accountId, date, time: '', payee: r.payee, amount: Number(r.amount), type: r.type, category: r.category || '', note: '', checkNum: '', cleared: false, taxCat: r.taxCat || '', receipt: '', source: 'Recurring' });
+// Add every bill that has come due since it was last added.
+function runRecurring() {
+  const now = today(), have = new Set(data.tx.map(t => t.id));
+  let added = 0, changed = false;
+  recList().forEach(r => {
+    if (r.paused || !account(r.accountId)) return;
+    const from = r.through || isoDay(new Date(new Date(r.start + 'T12:00').getTime() - 864e5));
+    recDates(r, from, now).forEach(d => { const t = recTx(r, d); if (!have.has(t.id)) { data.tx.push(t); have.add(t.id); added++; } });
+    if (r.through !== now) { r.through = now; changed = true; }
+  });
+  if (changed || added) window.save();
+  if (added) toast('Added ' + added + ' recurring ' + (added === 1 ? 'entry' : 'entries') + ' to your register.');
+  return added;
+}
+// What's due in the next `days` days that isn't in the register yet.
+function upcoming(acc, days) {
+  const now = today(), end = isoDay(new Date(Date.now() + days * 864e5)), have = new Set(data.tx.map(t => t.id));
+  const out = [];
+  recList().forEach(r => { if (!r.paused && r.accountId === acc.id) recDates(r, r.through && r.through > now ? r.through : now, end).forEach(d => { if (!have.has(recId(r, d))) out.push({ r, date: d }); }); });
+  return out.sort((a, b) => a.date.localeCompare(b.date) || b.r.amount - a.r.amount);
+}
+function firstOfNextMonth(iso) { const [y, m] = iso.split('-').map(Number); return (m === 12 ? y + 1 : y) + '-' + pad(m === 12 ? 1 : m + 1) + '-01'; }
+
+function viewRecurring() {
+  const acc = activeAccount();
+  const list = recList().slice().sort((a, b) => (a.type === b.type ? 0 : a.type === 'income' ? -1 : 1) || b.amount - a.amount);
+  const total = t => list.filter(r => !r.paused && r.type === t && r.every === 'month').reduce((s, r) => s + Number(r.amount), 0);
+  const sugg = acc ? suggestRecurring(acc) : [];
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🔁 Recurring</h1>' +
+    '<p class="helper">Bills and income that repeat. Each one is added to your register on its day (not cleared yet), and the 🏦 Bank tab clears it when it shows up at the bank.</p>' +
+    (list.length ? '<div class="stat-row"><div class="stat"><span>Monthly bills</span><b class="expense">' + money(total('expense')) + '</b></div><div class="stat"><span>Monthly income</span><b class="income">' + money(total('income')) + '</b></div><div class="stat"><span>Bills</span><b>' + list.filter(r => r.type === 'expense').length + '</b></div></div>' +
+      '<div class="card pad">' + list.map(r => '<div class="mini-row" data-rec="' + r.id + '" style="cursor:pointer"><span><b>' + esc(r.payee) + '</b>' + (r.paused ? ' <span class="chip warn">paused</span>' : '') + '<span class="sub">' + esc(recWhen(r)) + (r.category ? ' · ' + esc(r.category) : '') + '</span></span><b class="' + r.type + '">' + signedAmt(r.type, r.amount) + '</b></div>').join('') + '</div>' : '') +
+    '<div class="row-actions"><button type="button" id="recNew">+ Add a recurring bill</button><button type="button" class="ghost" id="recInc">+ Recurring deposit</button></div>' +
+    (sugg.length ? '<div class="card pad"><h2>Suggested from your register</h2><p class="helper">Tick the ones that repeat every month. They\'ll be added on the 1st starting ' + esc(fmtDate(sugg[sugg.length - 1].start, true)) + ' (you can change any one\'s day after).</p>' +
+      sugg.map((s, k) => '<label class="check bline"><input type="checkbox" data-sug="' + k + '"' + (s.likely ? ' checked' : '') + '> <span><b>' + esc(s.payee) + '</b><span class="sub">' + esc(s.why) + '</span></span> <b class="' + s.type + '">' + signedAmt(s.type, s.amount) + '</b></label>').join('') +
+      '<div class="row-actions"><button type="button" id="sugAdd">Add ticked bills</button></div></div>' : '');
+  $('view').querySelectorAll('[data-rec]').forEach(el => el.onclick = () => editRecurring(el.dataset.rec));
+  $('recNew').onclick = () => editRecurring(null, 'expense');
+  $('recInc').onclick = () => editRecurring(null, 'income');
+  if ($('sugAdd')) $('sugAdd').onclick = () => {
+    const picked = [...document.querySelectorAll('[data-sug]:checked')].map(c => sugg[Number(c.dataset.sug)]);
+    if (!picked.length) { toast('Tick at least one.'); return; }
+    data.settings.recurring = recList().concat(picked.map(s => ({ id: uid(), accountId: acc.id, payee: s.payee, amount: s.amount, type: s.type, category: s.category, taxCat: s.taxCat || '', every: 'month', day: 1, start: s.start, through: s.through, paused: false })));
+    window.save(); toast('Added ' + picked.length + ' recurring bills.'); viewRecurring();
+  };
+}
+// Bills she already enters on the 1st (the CheckBook way), plus anything the bank shows every month.
+function suggestRecurring(acc) {
+  const have = recList().map(r => looseName(r.payee));
+  const known = p => have.some(h => h && (h === looseName(p) || sameName({ payee: p }, { payee: h, desc: '' })));
+  const tx = data.tx.filter(t => t.accountId === acc.id && t.type === 'expense');
+  const firsts = [...new Set(tx.filter(t => t.date.endsWith('-01') && t.source !== 'Bank').map(t => t.date))].sort();
+  const out = [], seen = new Set();
+  if (firsts.length) {
+    const d = firsts[firsts.length - 1];
+    tx.filter(t => t.date === d && t.source !== 'Bank').forEach(t => {
+      const k = looseName(t.payee); if (seen.has(k) || known(t.payee)) return; seen.add(k);
+      const likely = t.category === 'House Bill' || /payment|insurance|bill|rent|loan|mortgage/i.test(t.payee + ' ' + t.category);
+      out.push({ payee: t.payee, amount: Number(t.amount), type: 'expense', category: t.category, taxCat: t.taxCat, likely, why: 'On your ' + fmtDate(d) + ' bills', start: firstOfNextMonth(d), through: d });
+    });
+  }
+  // Bank payees charged in at least 3 of the last 4 months at about the same amount.
+  const now = today(), months = [0, 1, 2, 3].map(k => { const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - k); return isoDay(x).slice(0, 7); });
+  const groups = {};
+  tx.filter(t => t.source === 'Bank' && months.includes(t.date.slice(0, 7))).forEach(t => { const k = looseName(t.payee); (groups[k] = groups[k] || []).push(t); });
+  Object.values(groups).forEach(g => {
+    const p = g[g.length - 1].payee, k = looseName(p);
+    if (seen.has(k) || known(p) || out.some(o => sameName({ payee: o.payee }, { payee: p, desc: '' }))) return;
+    const ms = new Set(g.map(t => t.date.slice(0, 7)));
+    const amts = g.map(t => Number(t.amount)).sort((a, b) => a - b), mid = amts[Math.floor(amts.length / 2)];
+    if (ms.size < 3 || g.length > ms.size + 1 || amts.some(a => Math.abs(a - mid) > Math.max(3, mid * 0.15)) || /transfer|walmart|cash app|venmo|zelle/i.test(p)) return;
+    seen.add(k);
+    const last = g.map(t => t.date).sort().pop();
+    out.push({ payee: p, amount: Math.ceil(mid), type: 'expense', category: g[g.length - 1].category, likely: false, why: 'Your bank shows it ' + ms.size + ' of the last 4 months (about ' + money(mid) + ')', start: firstOfNextMonth(now), through: now });
+  });
+  // Paychecks: the same payer in at least 3 of the last 4 months. Amounts can vary some, so the latest is used (rounded down).
+  const inc = data.tx.filter(t => t.accountId === acc.id && t.type === 'income' && months.includes(t.date.slice(0, 7)) && t.category !== 'Transfer' && !/transfer|cash app|venmo|zelle/i.test(t.payee));
+  const ig = [];
+  const samePayer = (a, b) => looseName(a) === looseName(b) || words(a).some(w => words(b).includes(w));
+  inc.sort(byTime).forEach(t => { const g = ig.find(x => samePayer(x[0].payee, t.payee)); if (g) g.push(t); else ig.push([t]); });
+  ig.forEach(g => {
+    const ms = new Set(g.map(t => t.date.slice(0, 7)));
+    const amts = g.map(t => Number(t.amount)).sort((a, b) => a - b), mid = amts[Math.floor(amts.length / 2)];
+    if (ms.size < 3 || g.length > ms.size + 1 || amts.some(a => Math.abs(a - mid) > mid * 0.25) || known(g[0].payee)) return;
+    const latest = g[g.length - 1], named = g.slice().reverse().find(t => t.source !== 'Bank') || latest;
+    out.unshift({ payee: named.payee, amount: Math.floor(Number(latest.amount)), type: 'income', category: 'Paycheck', likely: true, why: 'Deposited ' + ms.size + ' of the last 4 months, usually around the ' + ordinal(Math.round(g.reduce((s, t) => s + Number(t.date.slice(8, 10)), 0) / g.length)) + ' (last one ' + money(latest.amount) + ')', start: firstOfNextMonth(now), through: now });
+  });
+  return out;
+}
+function editRecurring(id, type) {
+  const acc = activeAccount();
+  if (!acc) { toast('Add an account first.'); return; }
+  const r = id ? recList().find(x => x.id === id) : { payee: '', amount: '', type: type || 'expense', category: '', taxCat: '', every: 'month', day: 1, start: firstOfNextMonth(today()), accountId: acc.id, paused: false };
+  let kind = r.type;
+  const next = id ? (recDates(r, r.through || today(), '2100-01-01')[0] || r.start) : r.start;
+  openModal('<h2>' + (id ? 'Edit recurring' : kind === 'income' ? 'Recurring deposit' : 'Recurring bill') + '</h2>' + (id ? '<p class="helper">Changes also apply to its entries in the register that haven\'t cleared yet.</p>' : '') +
+    '<div class="segs" id="rKind"><button type="button" class="seg' + (kind === 'expense' ? ' on' : '') + '" data-k="expense">− Bill</button><button type="button" class="seg' + (kind === 'income' ? ' on' : '') + '" data-k="income">+ Deposit</button></div>' +
+    '<label>Payee<input id="rPayee" value="' + esc(r.payee) + '" placeholder="Shellpoint" autocapitalize="words"></label>' +
+    '<div class="grid2"><label>Amount<input id="rAmt" inputmode="decimal" value="' + (r.amount === '' ? '' : Number(r.amount).toFixed(2)) + '"></label>' +
+    '<label>Category<input id="rCat" list="rcats" value="' + esc(r.category) + '"></label></div><datalist id="rcats">' + data.settings.categories.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
+    '<div class="grid2"><label>How often<select id="rEvery">' + Object.entries(EVERY).map(([k, l]) => '<option value="' + k + '"' + (r.every === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+    '<label>Next one<input id="rNext" type="date" value="' + esc(next) + '"></label></div>' +
+    '<p class="helper" id="rHint"></p>' +
+    (id ? '<label class="check"><input type="checkbox" id="rPause"' + (r.paused ? ' checked' : '') + '> Paused (stop adding it for now)</label>' : '') +
+    '<div class="row-actions"><button type="button" id="rSave">Save</button><button type="button" class="ghost" id="rCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="rDel">Delete</button>' : '') + '</div>');
+  const hint = () => { const d = $('rNext').value; $('rHint').textContent = d ? ($('rEvery').value === 'month' ? 'Monthly on the ' + ordinal(Number(d.slice(8, 10))) + '.' : '') + ' Added to your register on ' + fmtDate(d, true) + '.' : ''; };
+  $('rNext').oninput = hint; $('rEvery').onchange = hint; hint();
+  $('rKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('rKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); });
+  $('rCancel').onclick = closeModal;
+  $('rSave').onclick = () => {
+    const amount = Math.abs(toNum($('rAmt').value)), payee = $('rPayee').value.trim(), d = $('rNext').value;
+    if (!payee || !amount || !d) { toast('Fill in the payee, amount and next date.'); return; }
+    Object.assign(r, { payee, amount, type: kind, category: $('rCat').value.trim(), every: $('rEvery').value, day: Number(d.slice(8, 10)), start: d, through: isoDay(new Date(new Date(d + 'T12:00').getTime() - 864e5)), paused: $('rPause') ? $('rPause').checked : false });
+    if (!id) { r.id = uid(); data.settings.recurring = recList().concat([r]); }
+    else {
+      data.settings.recurring = recList().slice();
+      // Entries this bill already added that haven't cleared get the new amount and name too.
+      data.tx.forEach(t => { if (String(t.id).startsWith('rec_' + r.id + '_') && !t.cleared) Object.assign(t, { payee: r.payee, amount: r.amount, type: r.type, category: r.category }); });
+    }
+    window.save(); closeModal(); runRecurring(); route();
+  };
+  if (id) $('rDel').onclick = () => {
+    if (!confirm('Stop ' + r.payee + ' from repeating? Entries already in your register stay.')) return;
+    data.settings.recurring = recList().filter(x => x.id !== id); window.save(); closeModal(); route();
+  };
+}
+
+// ---------- Siri (iPhone Shortcuts) ----------
+// A Shortcut opens …/money/#add?type=expense&amt=12.50&payee=Sonic and the entry is saved right away.
+let pendingAdd = null;
+function quickAdd() {
+  const q = new URLSearchParams(location.hash.replace(/^#add\??/, ''));
+  pendingAdd = { type: /^(in|dep|pay)/i.test(q.get('type') || '') ? 'income' : 'expense', amt: toNum(q.get('amt') || q.get('amount')), payee: (q.get('payee') || q.get('where') || '').trim(), category: (q.get('cat') || q.get('category') || '').trim(), note: (q.get('note') || '').trim() };
+  history.replaceState(null, '', location.pathname + '#register');
+  finishQuickAdd();
+}
+// Runs once the account has loaded (a phone that just opened the app may still be syncing).
+function finishQuickAdd() {
+  if (!pendingAdd) return;
+  const acc = activeAccount();
+  if (!acc) { $('view').innerHTML = '<p class="helper">Loading your register…</p>'; if (!signedIn()) setTimeout(() => { if (pendingAdd && !activeAccount()) { $('view').innerHTML = '<div class="card pad"><h2>Sign in first</h2><p class="helper">Siri opened the app in Safari. Sign in here once, then try again.</p><div data-syncbox></div></div>'; window.moneySync && window.moneySync.renderBox(); } }, 2500); return; }
+  const p = pendingAdd; pendingAdd = null;
+  if (!p.amt) { route(); editTx(null, p.type); $('tPayee').value = p.payee; return; }
+  const mem = payeeMemory()[p.payee.toLowerCase()] || {};
+  const t = { id: uid(), accountId: acc.id, date: today(), time: new Date().toTimeString().slice(0, 5), payee: p.payee.replace(/\b[a-z]/g, c => c.toUpperCase()), amount: Math.abs(p.amt), type: p.type, category: p.category || autoCategory(p.payee, '', p.type) || '', note: p.note || 'Added by Siri', checkNum: '', cleared: false, taxCat: mem.taxCat || '', receipt: '', source: 'Siri' };
+  data.tx.push(t); window.save(); route();
+  toast('✓ Added ' + (t.payee || 'entry') + ' ' + money(t.amount) + '. Tap it to change anything.');
+}
+function viewSiri() {
+  const base = location.origin + location.pathname;
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🎙 Add with Siri</h1>' +
+    '<p class="helper">Make this Shortcut once on your iPhone. Then say <b>“Hey Siri, add expense”</b>. Siri asks how much and where, and it goes into your register.</p>' +
+    '<div class="card pad"><ol class="steps">' +
+    '<li>Open the <b>Shortcuts</b> app → tap <b>+</b>.</li>' +
+    '<li>Add action <b>Ask for Input</b>. Set Input Type to <b>Number</b>, Prompt: <i>How much?</i></li>' +
+    '<li>Add another <b>Ask for Input</b>. Type <b>Text</b>, Prompt: <i>Where?</i></li>' +
+    '<li>Add action <b>Text</b> and paste this line:<div class="linkbox"><code id="siriUrl">' + esc(base) + '#add?type=expense&amp;amt=</code></div>Right after <i>amt=</i>, tap <b>Provided Input</b> (the number). Then type <code>&amp;payee=</code> and pick the second <b>Provided Input</b> (the place).</li>' +
+    '<li>Add action <b>Open URLs</b> (it uses the Text from step 4).</li>' +
+    '<li>Tap the name at the top and call it <b>Add expense</b>. Done!</li></ol>' +
+    '<div class="row-actions"><button type="button" class="ghost small" id="siriCopy">Copy the line</button></div>' +
+    '<p class="helper">For money in, make a second one called <b>Add deposit</b> with <code>type=income</code>.</p>' +
+    '<p class="helper">Siri opens Safari, so <b>sign in once in Safari</b> too (same email and password). The entry syncs to the app.</p></div>' +
+    '<div class="card pad"><h2>Try it</h2><p class="helper">This link adds a $1.00 test you can delete after:</p><a class="button ghost" href="#add?type=expense&amt=1&payee=Siri%20test">Add a $1 test</a></div>';
+  $('siriCopy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(base + '#add?type=expense&amt=').then(() => toast('Copied.'), () => toast('Press and hold the line to copy it.')); };
+}
+
 // ---------- Accounts ----------
 function editAccount(id) {
   const a = id ? account(id) : { name: 'Checking', kind: 'checking', openingBalance: 0, openingDate: null, sort: data.accounts.length };
@@ -277,8 +575,8 @@ function editAccount(id) {
   openModal('<h2>' + (id ? 'Edit account' : 'New account') + '</h2>' +
     '<label>Name<input id="aName" value="' + esc(a.name) + '" placeholder="Checking"></label>' +
     '<label>Type<select id="aKind">' + [['checking', 'Checking'], ['savings', 'Savings'], ['credit', 'Credit card'], ['cash', 'Cash']].map(([v, l]) => '<option value="' + v + '"' + (a.kind === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
-    '<h3>Starting balance</h3><p class="helper">Easiest: type what the bank says your balance is <b>right now</b>, and the app works out the rest. Or set the balance from before your first entry.</p>' +
-    '<div class="grid2"><label>Balance right now (from the bank)<input id="aNow" inputmode="decimal" placeholder="' + (b ? money(b.balance) : '0.00') + '"></label>' +
+    '<h3>Starting balance</h3><p class="helper">Easiest: type the <b>available balance</b> your bank shows right now, and the app works out the rest. Or set the balance from before your first entry.</p>' +
+    '<div class="grid2"><label>Available balance at the bank right now<input id="aNow" inputmode="decimal" placeholder="' + (b ? money(b.cleared) : '0.00') + '"></label>' +
     '<label>Or: balance before first entry<input id="aOpen" inputmode="decimal" value="' + Number(a.openingBalance || 0).toFixed(2) + '"></label></div>' +
     '<div class="row-actions"><button type="button" id="aSave">Save</button><button type="button" class="ghost" id="aCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="aDel">Delete account</button>' : '') + '</div>');
   $('aCancel').onclick = closeModal;
@@ -288,7 +586,8 @@ function editAccount(id) {
     if (!id) { a.id = uid(); data.accounts.push(a); currentAccount = a.id; }
     if ($('aNow').value.trim()) {
       // Opening = today's bank balance minus everything entered so far.
-      const net = data.tx.filter(t => t.accountId === a.id).reduce((s, t) => s + signed(t), 0);
+      // The bank's balance only includes what has cleared.
+      const net = data.tx.filter(t => t.accountId === a.id && t.cleared).reduce((s, t) => s + bankSigned(t), 0);
       a.openingBalance = Math.round((toNum($('aNow').value) - net) * 100) / 100;
     }
     window.save(); closeModal(); route();
@@ -300,34 +599,112 @@ function editAccount(id) {
   };
 }
 
-// ---------- Spending report ----------
-let repMonth = '';
-function viewReports() {
-  const acc = activeAccount();
-  // Moving money between her own accounts isn't spending or income.
-  const list = data.tx.filter(t => (!acc || t.accountId === acc.id) && t.category !== 'Transfer');
-  const months = [...new Set(list.map(t => t.date.slice(0, 7)))].sort().reverse();
-  if (!repMonth || !months.includes(repMonth)) repMonth = months[0] || today().slice(0, 7);
-  const inMonth = list.filter(t => t.date.startsWith(repMonth));
-  const out = inMonth.filter(t => t.type === 'expense'), inc = inMonth.filter(t => t.type === 'income');
-  const totOut = out.reduce((s, t) => s + Number(t.amount), 0), totIn = inc.reduce((s, t) => s + Number(t.amount), 0);
-  const byCat = {};
-  out.forEach(t => { const c = t.category || 'Uncategorized'; byCat[c] = (byCat[c] || 0) + Number(t.amount); });
-  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-  const max = cats.length ? cats[0][1] : 1;
-  const last6 = months.slice(0, 6).reverse().map(m => {
-    const l = list.filter(t => t.date.startsWith(m));
-    return { m, inc: l.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0), out: l.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0) };
+// ---------- Spending charts & reports ----------
+const PALETTE = ['#1d5c46', '#e0a526', '#3b82c4', '#c4513b', '#7b5ea7', '#2a9d8f', '#d17a22', '#8a9a5b', '#c2577f', '#5c6f82', '#9c6b3e', '#4f9d4f'];
+let rep = { period: 'month', from: '', to: '', group: 'category', kind: 'expense' };
+function periodRange(p) {
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth();
+  const first = (yy, mm) => isoDay(new Date(yy, mm, 1)), last = (yy, mm) => isoDay(new Date(yy, mm + 1, 0));
+  switch (p) {
+    case 'month': return [first(y, m), last(y, m), 'This month'];
+    case 'last': return [first(y, m - 1), last(y, m - 1), new Date(y, m - 1, 1).toLocaleDateString([], { month: 'long', year: 'numeric' })];
+    case '3m': return [first(y, m - 2), last(y, m), 'Last 3 months'];
+    case 'ytd': return [y + '-01-01', today(), 'This year'];
+    case 'lastyear': return [(y - 1) + '-01-01', (y - 1) + '-12-31', String(y - 1)];
+    default: return [rep.from || first(y, m), rep.to || today(), 'Custom'];
+  }
+}
+// Pie-style ring chart drawn as SVG, biggest slice first.
+function donut(items, total) {
+  if (!total) return '';
+  let a = -Math.PI / 2, paths = '';
+  items.forEach(([, v], i) => {
+    const frac = v / total; if (frac <= 0) return;
+    const a2 = a + frac * Math.PI * 2, big = frac > 0.5 ? 1 : 0, R = 90, r = 56;
+    const p = (ang, rad) => (100 + rad * Math.cos(ang)).toFixed(2) + ' ' + (100 + rad * Math.sin(ang)).toFixed(2);
+    paths += frac >= 0.9999 ? '<circle cx="100" cy="100" r="73" fill="none" stroke="' + PALETTE[i % PALETTE.length] + '" stroke-width="34"/>'
+      : '<path d="M' + p(a, R) + ' A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + p(a2, R) + ' L' + p(a2, r) + ' A' + r + ' ' + r + ' 0 ' + big + ' 0 ' + p(a, r) + 'Z" fill="' + PALETTE[i % PALETTE.length] + '"/>';
+    a = a2;
   });
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Spending</a></div>' +
-    '<label>Month<select id="repMonth">' + (months.length ? months : [repMonth]).map(m => '<option value="' + m + '"' + (m === repMonth ? ' selected' : '') + '>' + esc(monthName(m)) + '</option>').join('') + '</select></label>' +
-    '<div class="stat-row"><div class="stat"><span>Money in</span><b class="income">' + money(totIn) + '</b></div><div class="stat"><span>Money out</span><b class="expense">' + money(totOut) + '</b></div><div class="stat"><span>Left over</span><b class="' + (totIn - totOut < 0 ? 'expense' : 'income') + '">' + money(totIn - totOut) + '</b></div></div>' +
-    '<div class="card pad"><h2>Where it went</h2>' + (cats.map(([c, v]) => '<div class="barrow" data-cat="' + esc(c) + '"><span class="lbl">' + esc(c) + '</span><span class="track"><span style="width:' + Math.max(2, Math.round(v / max * 100)) + '%"></span></span><b>' + money(v) + '</b></div>').join('') || '<p class="helper">No expenses this month.</p>') +
-    (byCat.Uncategorized ? '<p class="helper">Tip: tap an entry in the Register to give it a category, and this gets more useful.</p>' : '') + '</div>' +
-    (last6.length > 1 ? '<div class="card pad"><h2>Month by month</h2><table class="mini"><thead><tr><th>Month</th><th>In</th><th>Out</th><th>Left</th></tr></thead><tbody>' +
-      last6.map(r => '<tr><td>' + esc(new Date(r.m + '-02').toLocaleDateString([], { month: 'short', year: '2-digit' })) + '</td><td>' + money(r.inc) + '</td><td>' + money(r.out) + '</td><td class="' + (r.inc - r.out < 0 ? 'expense' : 'income') + '">' + money(r.inc - r.out) + '</td></tr>').join('') + '</tbody></table></div>' : '');
-  $('repMonth').onchange = e => { repMonth = e.target.value; viewReports(); };
-  $('view').querySelectorAll('[data-cat]').forEach(r => r.onclick = () => { regMonth = repMonth; regCat = r.dataset.cat === 'Uncategorized' ? '' : r.dataset.cat; location.hash = 'register'; });
+  return '<svg viewBox="0 0 200 200" class="donut" role="img" aria-label="Spending by category">' + paths +
+    '<text x="100" y="96" text-anchor="middle" class="d-l">Total</text><text x="100" y="118" text-anchor="middle" class="d-v">' + esc(money(total).replace('.00', '')) + '</text></svg>';
+}
+// Money in vs out, month by month, as side-by-side bars.
+function monthBars(rows) {
+  if (rows.length < 2) return '';
+  const max = Math.max(1, ...rows.map(r => Math.max(r.inc, r.out))), W = 320, H = 150, bw = Math.min(18, (W - 20) / rows.length / 2 - 3);
+  let g = '';
+  rows.forEach((r, i) => {
+    const x = 10 + i * (W - 20) / rows.length + ((W - 20) / rows.length - bw * 2 - 2) / 2;
+    const hi = r.inc / max * (H - 30), ho = r.out / max * (H - 30);
+    g += '<rect x="' + x.toFixed(1) + '" y="' + (H - 18 - hi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hi.toFixed(1) + '" fill="#2a9d5c" rx="2"><title>In ' + money(r.inc) + '</title></rect>' +
+      '<rect x="' + (x + bw + 2).toFixed(1) + '" y="' + (H - 18 - ho).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + ho.toFixed(1) + '" fill="#c4513b" rx="2"><title>Out ' + money(r.out) + '</title></rect>' +
+      '<text x="' + (x + bw + 1).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle" class="b-l">' + esc(new Date(r.m + '-02').toLocaleDateString([], { month: 'short' })) + '</text>';
+  });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bars" role="img" aria-label="Money in and out by month">' + g + '</svg><p class="helper legend"><span class="sw" style="background:#2a9d5c"></span>In <span class="sw" style="background:#c4513b"></span>Out</p>';
+}
+function reportData() {
+  const acc = activeAccount();
+  const [from, to, label] = periodRange(rep.period);
+  // Moving money between her own accounts isn't spending or income.
+  const all = data.tx.filter(t => (!acc || t.accountId === acc.id) && t.category !== 'Transfer');
+  const list = all.filter(t => t.date >= from && t.date <= to);
+  const of = k => list.filter(t => t.type === k);
+  const sum = l => l.reduce((s, t) => s + Number(t.amount), 0);
+  const groups = {};
+  of(rep.kind).forEach(t => {
+    const k = rep.group === 'payee' ? (t.payee || '(no payee)') : rep.group === 'month' ? t.date.slice(0, 7) : (t.category || 'Uncategorized');
+    (groups[k] = groups[k] || { v: 0, n: 0 }); groups[k].v += Number(t.amount); groups[k].n++;
+  });
+  const items = Object.entries(groups).map(([k, x]) => [k, Math.round(x.v * 100) / 100, x.n]).sort((a, b) => rep.group === 'month' ? a[0].localeCompare(b[0]) : b[1] - a[1]);
+  const months = [...new Set(list.map(t => t.date.slice(0, 7)))].sort();
+  const byMonth = (months.length > 1 ? months : [...new Set(all.map(t => t.date.slice(0, 7)))].sort().slice(-6)).map(m => {
+    const l = all.filter(t => t.date.startsWith(m));
+    return { m, inc: sum(l.filter(t => t.type === 'income')), out: sum(l.filter(t => t.type === 'expense')) };
+  });
+  return { from, to, label, list, totIn: sum(of('income')), totOut: sum(of('expense')), items, byMonth };
+}
+function viewReports() {
+  const r = reportData();
+  const total = r.items.reduce((s, x) => s + x[1], 0);
+  const top = r.items.slice(0, 11), rest = r.items.slice(11).reduce((s, x) => s + x[1], 0);
+  const chartItems = rep.group === 'month' ? [] : top.concat(rest ? [['Everything else', rest, 0]] : []);
+  const glabel = rep.group === 'payee' ? 'payee' : rep.group === 'month' ? 'month' : 'category';
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Spending &amp; reports</a></div>' +
+    '<div class="rep-opts"><label>Time<select id="rpPeriod">' + [['month', 'This month'], ['last', 'Last month'], ['3m', 'Last 3 months'], ['ytd', 'This year'], ['lastyear', 'Last year'], ['custom', 'Pick dates…']].map(([k, l]) => '<option value="' + k + '"' + (rep.period === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+    '<label>Show<select id="rpKind"><option value="expense"' + (rep.kind === 'expense' ? ' selected' : '') + '>Spending</option><option value="income"' + (rep.kind === 'income' ? ' selected' : '') + '>Income</option></select></label>' +
+    '<label>Group by<select id="rpGroup">' + [['category', 'Category'], ['payee', 'Payee'], ['month', 'Month']].map(([k, l]) => '<option value="' + k + '"' + (rep.group === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label></div>' +
+    (rep.period === 'custom' ? '<div class="grid2"><label>From<input type="date" id="rpFrom" value="' + esc(r.from) + '"></label><label>To<input type="date" id="rpTo" value="' + esc(r.to) + '"></label></div>' : '') +
+    '<p class="helper">' + esc(fmtDate(r.from)) + ' – ' + esc(fmtDate(r.to)) + ' · transfers between your accounts are left out</p>' +
+    '<div class="stat-row"><div class="stat"><span>Money in</span><b class="income">' + money(r.totIn) + '</b></div><div class="stat"><span>Money out</span><b class="expense">' + money(r.totOut) + '</b></div><div class="stat"><span>Left over</span><b class="' + (r.totIn - r.totOut < 0 ? 'expense' : 'income') + '">' + money(r.totIn - r.totOut) + '</b></div></div>' +
+    '<div class="card pad"><h2>' + (rep.kind === 'expense' ? 'Where it went' : 'Where it came from') + '</h2>' +
+    (r.items.length ? (chartItems.length ? '<div class="chartwrap">' + donut(chartItems, total) + '<div class="legend-list">' + chartItems.map(([k, v], i) => '<div><span class="sw" style="background:' + PALETTE[i % PALETTE.length] + '"></span>' + esc(k) + ' <b>' + Math.round(v / total * 100) + '%</b></div>').join('') + '</div></div>' : '') +
+      r.items.map(([k, v, n]) => '<div class="barrow" data-rk="' + esc(k) + '"><span class="lbl">' + esc(rep.group === 'month' ? monthName(k) : k) + ' <span class="sub">' + n + '</span></span><span class="track"><span style="width:' + Math.max(2, Math.round(v / r.items.reduce((m, x) => Math.max(m, x[1]), 1) * 100)) + '%"></span></span><b>' + money(v) + '</b></div>').join('')
+      : '<p class="helper">Nothing for this time.</p>') +
+    (r.items.some(x => x[0] === 'Uncategorized') ? '<p class="helper">Tip: give entries a category (tap one in the Register) and this gets more useful. Tap a row to see its entries.</p>' : '<p class="helper">Tap a row to see its entries.</p>') + '</div>' +
+    (r.byMonth.length > 1 ? '<div class="card pad"><h2>Month by month</h2>' + monthBars(r.byMonth) + '<table class="mini"><thead><tr><th>Month</th><th>In</th><th>Out</th><th>Left</th></tr></thead><tbody>' +
+      r.byMonth.map(x => '<tr><td>' + esc(new Date(x.m + '-02').toLocaleDateString([], { month: 'short', year: '2-digit' })) + '</td><td>' + money(x.inc) + '</td><td>' + money(x.out) + '</td><td class="' + (x.inc - x.out < 0 ? 'expense' : 'income') + '">' + money(x.inc - x.out) + '</td></tr>').join('') + '</tbody></table></div>' : '') +
+    '<div class="row-actions"><button type="button" class="ghost" id="rpCsv">⬇ Download report (CSV)</button><button type="button" class="ghost" id="rpList">⬇ Every entry (CSV)</button><button type="button" class="ghost" id="rpPrint">🖨 Print report</button></div>' +
+    '<div id="printArea" class="print-only"></div>';
+  $('rpPeriod').onchange = e => { rep.period = e.target.value; viewReports(); };
+  $('rpKind').onchange = e => { rep.kind = e.target.value; viewReports(); };
+  $('rpGroup').onchange = e => { rep.group = e.target.value; viewReports(); };
+  if ($('rpFrom')) { $('rpFrom').onchange = e => { rep.from = e.target.value; viewReports(); }; $('rpTo').onchange = e => { rep.to = e.target.value; viewReports(); }; }
+  $('view').querySelectorAll('[data-rk]').forEach(x => x.onclick = () => {
+    const k = x.dataset.rk;
+    regCat = ''; regSearch = ''; regMonth = '';
+    if (rep.group === 'month') regMonth = k; else if (rep.group === 'payee') regSearch = k; else regCat = k === 'Uncategorized' ? '' : k;
+    if (rep.group !== 'month' && /^\d{4}-\d{2}-01$/.test(r.from) && r.to.slice(0, 7) === r.from.slice(0, 7)) regMonth = r.from.slice(0, 7);
+    location.hash = 'register';
+  });
+  const title = (rep.kind === 'expense' ? 'Spending' : 'Income') + ' by ' + glabel + ', ' + fmtDate(r.from) + ' – ' + fmtDate(r.to);
+  $('rpCsv').onclick = () => download('report-' + r.from + '-to-' + r.to + '.csv', [[title], [], [glabel[0].toUpperCase() + glabel.slice(1), 'Total', 'Entries', 'Share']].concat(r.items.map(([k, v, n]) => [k, v.toFixed(2), n, Math.round(v / (total || 1) * 100) + '%']), [[], ['Total', total.toFixed(2)], ['Money in', r.totIn.toFixed(2)], ['Money out', r.totOut.toFixed(2)]]).map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv');
+  $('rpList').onclick = () => download('entries-' + r.from + '-to-' + r.to + '.csv', [['Date', 'Payee', 'Category', 'Type', 'Amount', 'Cleared', 'Note']].concat(r.list.slice().sort(byTime).map(t => [t.date, t.payee, t.category, t.type, Number(t.amount).toFixed(2), t.cleared ? 'yes' : '', t.note])).map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv');
+  $('rpPrint').onclick = () => {
+    $('printArea').innerHTML = '<h1>' + esc(title) + '</h1><p>Money in ' + money(r.totIn) + ' · Money out ' + money(r.totOut) + ' · Left over ' + money(r.totIn - r.totOut) + '</p>' + (chartItems.length ? donut(chartItems, total) : '') +
+      '<table class="mini"><thead><tr><th>' + glabel + '</th><th>Total</th><th>Entries</th><th>Share</th></tr></thead><tbody>' + r.items.map(([k, v, n]) => '<tr><td>' + esc(rep.group === 'month' ? monthName(k) : k) + '</td><td>' + money(v) + '</td><td>' + n + '</td><td>' + Math.round(v / (total || 1) * 100) + '%</td></tr>').join('') + '</tbody></table>';
+    window.print();
+  };
 }
 
 // ---------- Import (CheckBook app and other registers) ----------
@@ -378,7 +755,7 @@ function importCheckbook(rows) {
     const cat = c.cat >= 0 ? String(r[c.cat]).trim() : '';
     const dup = data.tx.find(t => t.accountId === acc.id && t.date === date && Number(t.amount) === amount && t.type === type && (t.payee || '').toLowerCase() === payee.toLowerCase());
     if (dup) { skipped++; return; }
-    data.tx.push({ id: uid(), accountId: acc.id, date, time: parseTime(r[c.date]), payee, amount, type, category: cat === 'None' ? '' : cat, note: c.note >= 0 ? String(r[c.note]).trim() : '', checkNum: c.check >= 0 ? String(r[c.check]).trim() : '', cleared: c.clear >= 0 ? /^y/i.test(String(r[c.clear])) : false, taxCat: '', receipt: '', source: 'CheckBook' });
+    data.tx.push({ id: uid(), accountId: acc.id, date, time: parseTime(r[c.date]), payee, amount, type, category: cat && cat !== 'None' ? cat : autoCategory(payee, '', type), note: c.note >= 0 ? String(r[c.note]).trim() : '', checkNum: c.check >= 0 ? String(r[c.check]).trim() : '', cleared: c.clear >= 0 ? /^y/i.test(String(r[c.clear])) : false, taxCat: '', receipt: '', source: 'CheckBook' });
     if (cat && cat !== 'None' && !data.settings.categories.includes(cat)) data.settings.categories.push(cat);
     added++;
   });
@@ -389,7 +766,7 @@ function importCheckbook(rows) {
   if (added) setTimeout(() => {
     const acc = activeAccount();
     if (acc && !acc.openingBalance) editAccount(acc.id);
-    toast('Now type your bank balance right now, so the running balance is right.');
+    toast('Now type the available balance your bank shows, so the balances are right.');
   }, 400);
 }
 
@@ -440,7 +817,9 @@ function cleanPayee(raw) {
   return { payee: d.split(' ').slice(0, 4).join(' ') || s.slice(0, 40), category: '' };
 }
 const looseName = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
-const words = s => String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 3);
+// Generic bank words don't make two names the same ("Atu Deposit" isn't "Mobile Deposit").
+const STOP = new Set(['deposit', 'payment', 'pmt', 'purchase', 'transfer', 'debit', 'credit', 'mobile', 'online', 'the', 'and', 'inc', 'com', 'bill', 'pos', 'ach', 'card', 'check', 'from', 'payroll', 'payrollt']);
+const words = s => String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w));
 // Register entry vs bank line: same name, a shared word ("Atu Deposit" / "ATU Payroll"), or her payee is the bank line's category ("Gas").
 function sameName(t, l) {
   const x = looseName(t.payee), y = looseName(l.payee);
@@ -458,7 +837,7 @@ function viewBank() {
     $('view').innerHTML = '<h1>🏦 Match a bank statement</h1>' +
       '<div class="card pad"><ol class="steps"><li>On your bank\'s website, download your transactions as <b>CSV</b> or <b>Excel</b> (look for "Export" or "Download").</li>' +
       '<li>Upload the file here. Each bank line is matched to your register by amount and date.</li>' +
-      '<li>Matches get marked ✓ cleared. Your rounded-up amounts still match (and stay rounded unless you choose otherwise). Anything the bank has that your register doesn\'t is listed so you can add it.</li></ol>' +
+      '<li>Matches get marked ✓ cleared, and your register amount is set from the bank\'s with your rounding (the exact amount is kept for the 🏦 Bank balance). Anything the bank has that your register doesn\'t is listed so you can add it.</li></ol>' +
       '<label class="button file">Choose bank file<input type="file" id="bankFile" accept=".csv,.xlsx,.xls,.ofx,.qfx,text/csv" hidden></label>' +
       '<p class="helper">Uploading the same months again is fine: lines already in your register are recognized.</p></div>' +
       '<div class="card pad"><h2>Not cleared yet (' + unclr.length + ')</h2>' + (unclr.sort(byTime).reverse().map(t => '<div class="mini-row"><span>' + esc(fmtDate(t.date)) + ' · ' + esc(t.payee) + '</span><b class="' + t.type + '">' + (t.type === 'income' ? '+' : '−') + money(t.amount).replace('−', '') + '</b></div>').join('') || '<p class="helper">Everything is cleared. 🎉</p>') + '</div>';
@@ -496,7 +875,7 @@ function startBank(rows, file) {
     const d = map.desc;
     return r.slice(0, d).concat([r.slice(d, d + extra + 1).join(',')], r.slice(d + extra + 1));
   });
-  bankState = { headers, rows: body, map, file, flip: false, fixCents: false, addEarly: true, skip: {}, add: {} };
+  bankState = { headers, rows: body, map, file, flip: false, fixCents: true, addEarly: true, skip: {}, add: {} };
   drawBank();
 }
 function bankLines() {
@@ -523,9 +902,11 @@ function matchBank(acc) {
   const start = pool.length ? pool.reduce((m, t) => t.date < m ? t.date : m, pool[0].date) : '9999';
   const taken = new Set(), res = [], early = [];
   const days = (a, b) => Math.abs((new Date(a) - new Date(b)) / 864e5);
-  const pass = (l, ok) => pool.filter(t => !taken.has(t.id) && t.type === l.type && days(t.date, l.date) <= 7 && ok(t))
+  // Recurring entries sit on their due date (usually the 1st); the bank can post them a week early or later that month.
+  const near7 = (t, l) => String(t.id).startsWith('rec_') ? (l.date >= isoDay(new Date(new Date(t.date + 'T12:00').getTime() - 7 * 864e5)) && days(t.date, l.date) <= 31) : days(t.date, l.date) <= 7;
+  const pass = (l, ok) => pool.filter(t => !taken.has(t.id) && t.type === l.type && near7(t, l) && ok(t))
     .sort((a, b) => Number(a.cleared) - Number(b.cleared) || days(a.date, l.date) - days(b.date, l.date))[0];
-  const near = (t, l) => Math.abs(Number(t.amount) - l.amount);
+  const near = (t, l) => Math.min(Math.abs(bankAmt(t) - l.amount), Math.abs(Number(t.amount) - l.amount));
   const inRange = lines.filter(l => { if (l.date < start) { early.push(l); return false; } return true; });
   // Exact amounts first across all lines, so a rounded entry can't steal another line's exact match.
   const hits = new Map();
@@ -552,15 +933,41 @@ function matchBank(acc) {
 }
 // A guess at the category: what she used last time for this payee, else the merchant's usual one.
 function guessCategory(l, mem) {
-  const k = looseName(l.payee);
-  const hit = Object.keys(mem).find(p => looseName(p) === k) || Object.keys(mem).find(p => looseName(p).length > 3 && (k.includes(looseName(p)) || looseName(p).includes(k)));
-  return (hit && mem[hit].category) || l.category || '';
+  return autoCategory(l.payee, l.desc, l.type) || l.category || '';
+}
+// Category for a name: a choice she made for that name, else what she used last time, else the name rules.
+function autoCategory(payee, desc, type) {
+  const k = looseName(payee);
+  if (!k && !desc) return '';
+  const rules = data.settings.catRules || {};
+  if (rules[k]) return rules[k];
+  const mem = autoCategory.mem || payeeMemory();
+  const hit = mem[String(payee || '').trim().toLowerCase()];
+  if (hit && hit.category) return hit.category;
+  const text = (payee || '') + ' ' + (desc || '');
+  if (type === 'income') return /payroll|direct dep|salary/i.test(text) ? 'Paycheck' : /transfer|xfer/i.test(text) ? 'Transfer' : /ebay|etsy|mercari|poshmark|booth|y'?\s?all?ternative/i.test(text) ? 'Side income' : '';
+  const r = CATEGORY_RULES.find(([re]) => re.test(text));
+  return r ? r[1] : '';
+}
+// Fill in categories on entries that don't have one yet. Returns how many were sorted.
+function autoSortAll() {
+  autoCategory.mem = payeeMemory();
+  let n = 0;
+  data.tx.forEach(t => { if (!t.category) { const c = autoCategory(t.payee, t.note, t.type); if (c) { t.category = c; n++; } } });
+  autoCategory.mem = null;
+  return n;
+}
+// Most-used categories first, for the one-tap chips.
+function topCategories(n) {
+  const count = {};
+  data.tx.forEach(t => { if (t.category) count[t.category] = (count[t.category] || 0) + 1; });
+  return data.settings.categories.slice().sort((a, b) => (count[b] || 0) - (count[a] || 0)).slice(0, n);
 }
 const signedAmt = (type, amt) => (type === 'income' ? '+' : '−') + money(amt).replace('−', '');
 function drawBank() {
   const acc = activeAccount(), m = matchBank(acc), { headers, map } = bankState;
   const matched = m.res.filter(x => x.t), extra = m.res.filter(x => !x.t);
-  const fixes = matched.filter(x => Math.abs(Number(x.t.amount) - x.l.amount) >= 0.005);
+  const fixes = matched.filter(x => Math.abs(Number(x.t.amount) - myRound(x.l.amount, x.l.type)) >= 0.005);
   const earlyNet = m.early.reduce((s, l) => s + (l.type === 'income' ? l.amount : -l.amount), 0);
   bankState.result = m;
   $('view').innerHTML = '<h1>🏦 Statement results</h1><p class="helper">' + esc(bankState.file.name) + (m.span ? ' · ' + esc(fmtDate(m.span[0])) + ' – ' + esc(fmtDate(m.span[1])) : '') + ' · ' + (m.res.length + m.early.length) + ' bank lines</p>' +
@@ -578,8 +985,8 @@ function drawBank() {
     (matched.length ? '<details class="card pad"' + (matched.some(x => !sameName(x.t, x.l)) ? ' open' : '') + '><summary>Matched (' + matched.length + ') – will be marked ✓ cleared</summary><p class="helper">Untick a pair if it isn\'t really the same thing (⚠ = names look different). An unticked bank line is added as its own entry.</p>' +
       matched.map(x => { const diff = Math.abs(Number(x.t.amount) - x.l.amount) >= 0.005, odd = !sameName(x.t, x.l);
         return '<label class="check bline"><input type="checkbox" data-pair="' + x.l.i + '"' + (bankState.skip[x.l.i] ? '' : ' checked') + '> <span>' + (odd ? '⚠ ' : '') + esc(fmtDate(x.l.date)) + ' · bank: <b>' + esc(x.l.payee) + '</b> ↔ yours: <b>' + esc(x.t.payee) + '</b>' +
-          (diff ? '<span class="sub">You wrote ' + money(x.t.amount) + ', bank says ' + money(x.l.amount) + '</span>' : '') + '</span> <b class="' + x.l.type + '">' + signedAmt(x.l.type, x.l.amount) + '</b></label>'; }).join('') + '</details>' : '') +
-    (fixes.length ? '<label class="check"><input type="checkbox" id="bFix"' + (bankState.fixCents ? ' checked' : '') + '> Change my ' + fixes.length + ' rounded amounts to the exact bank amount <span class="sub">(leave unticked to keep your rounding cushion)</span></label>' : '') +
+          (Math.abs(Number(x.t.amount) - myRound(x.l.amount, x.l.type)) >= 0.005 ? '<span class="sub">You wrote ' + money(x.t.amount) + ', bank says ' + money(x.l.amount) + ' → ' + money(myRound(x.l.amount, x.l.type)) + '</span>' : '') + '</span> <b class="' + x.l.type + '">' + signedAmt(x.l.type, x.l.amount) + '</b></label>'; }).join('') + '</details>' : '') +
+    (fixes.length ? '<label class="check"><input type="checkbox" id="bFix"' + (bankState.fixCents ? ' checked' : '') + '> Fix ' + fixes.length + ' register amounts to match the bank, with my rounding <span class="sub">(e.g. ' + esc(money(fixes[0].l.amount)) + ' → ' + esc(money(myRound(fixes[0].l.amount, fixes[0].l.type))) + ')</span></label>' : '') +
     '<label class="check"><input type="checkbox" id="bKeep"' + (signedIn() ? ' checked' : ' disabled') + '> Save a copy of this statement in my Taxes files</label>' +
     '<div class="row-actions"><button type="button" id="bApply">Update my register</button><button type="button" class="ghost" id="bCancel">Cancel</button></div>';
   document.querySelectorAll('[data-bmap]').forEach(s => s.onchange = () => { if (s.value === '') delete bankState.map[s.dataset.bmap]; else bankState.map[s.dataset.bmap] = Number(s.value); drawBank(); });
@@ -593,11 +1000,12 @@ function drawBank() {
     $('bApply').disabled = true;
     let cleared = 0, added = 0, fixed = 0;
     const mem = payeeMemory();
-    const addLine = l => data.tx.push({ id: uid(), accountId: acc.id, date: l.date, time: '', payee: l.payee, amount: l.amount, type: l.type, category: guessCategory(l, mem), note: l.desc.slice(0, 120), checkNum: l.check, cleared: true, taxCat: '', receipt: '', source: 'Bank' });
+    const addLine = l => data.tx.push({ id: uid(), accountId: acc.id, date: l.date, time: '', payee: l.payee, amount: myRound(l.amount, l.type), bankAmount: l.amount, type: l.type, category: guessCategory(l, mem), note: l.desc.slice(0, 120), checkNum: l.check, cleared: true, taxCat: '', receipt: '', source: 'Bank' });
     matched.forEach(x => {
       if (bankState.skip[x.l.i]) { addLine(x.l); added++; return; }
       if (!x.t.cleared) { x.t.cleared = true; cleared++; }
-      if (bankState.fixCents && Math.abs(Number(x.t.amount) - x.l.amount) >= 0.005) { x.t.amount = x.l.amount; fixed++; }
+      x.t.bankAmount = x.l.amount;
+      if (bankState.fixCents && Math.abs(Number(x.t.amount) - myRound(x.l.amount, x.l.type)) >= 0.005) { x.t.amount = myRound(x.l.amount, x.l.type); fixed++; }
     });
     extra.forEach(x => { if (bankState.add[x.l.i] !== false) { addLine(x.l); added++; } });
     if ($('bUnclear') && $('bUnclear').checked) m.missingFromBank.forEach(t => { t.cleared = false; });
@@ -614,7 +1022,7 @@ function drawBank() {
       } catch (e) { toast('Register updated, but the statement copy didn\'t save: ' + e.message); }
     }
     window.save(); bankState = null;
-    toast('Done: ' + cleared + ' marked cleared, ' + added + ' added' + (fixed ? ', ' + fixed + ' amounts fixed to the penny' : '') + '.');
+    toast('Done: ' + cleared + ' marked cleared, ' + added + ' added' + (fixed ? ', ' + fixed + ' amounts fixed' : '') + '.');
     location.hash = 'register';
   };
 }
@@ -728,13 +1136,18 @@ function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<div class="card pad"><h2>🏦 Accounts</h2>' + (data.accounts.slice().sort((a, b) => a.sort - b.sort).map(a => { const b = balances(a); return '<div class="mini-row"><a href="#" data-acc="' + a.id + '">' + esc(a.name) + ' <span class="sub">(' + esc(a.kind) + ')</span></a><b>' + money(b.balance) + '</b></div>'; }).join('') || '<p class="helper">No accounts yet.</p>') +
     '<div class="row-actions"><button type="button" class="ghost small" id="accNew">+ New account</button></div></div>' +
+    '<div class="card pad"><h2>🔁 Recurring bills &amp; income</h2><p class="helper">' + (recList().length ? recList().length + ' set up, added on their day each month.' : 'Set up bills that repeat (added on the 1st).') + '</p><a class="button ghost" href="#recurring">Recurring</a></div>' +
+    '<div class="card pad"><h2>🎙 Siri</h2><p class="helper">Say “Hey Siri, add expense” and tell it the amount and where.</p><a class="button ghost" href="#siri">Set up Siri</a></div>' +
+    '<div class="card pad"><h2>🪙 Rounding</h2><label>When the bank fills in an amount<select id="mRound"><option value="up5"' + ((data.settings.rounding || 'up5') === 'up5' ? ' selected' : '') + '>Round bills up to the dollar if over 5¢; deposits down</option><option value="none"' + (data.settings.rounding === 'none' ? ' selected' : '') + '>Use the exact amount</option></select></label></div>' +
     '<div class="card pad"><h2>⬆ Import</h2><p class="helper">Bring in your CheckBook app export.</p><a class="button ghost" href="#import">Import CheckBook file</a></div>' +
-    '<div class="card pad"><h2>🏷 Categories</h2><p class="helper">One per line. Used in the Register and Spending.</p><textarea id="mCats" rows="6">' + esc(data.settings.categories.join('\n')) + '</textarea>' +
+    '<div class="card pad"><h2>🏷 Categories</h2><p class="helper">New entries are sorted by name automatically. Change one entry\'s category and the app offers to change the rest with that name, and remembers it.</p><div class="row-actions"><button type="button" class="ghost small" id="mSort">✨ Sort entries without a category (' + data.tx.filter(t => !t.category).length + ')</button></div><p class="helper">One per line:</p><textarea id="mCats" rows="6">' + esc(data.settings.categories.join('\n')) + '</textarea>' +
     '<h3>Tax categories</h3><textarea id="mTax" rows="5">' + esc(data.settings.taxCats.join('\n')) + '</textarea></div>' +
     '<div class="card pad"><h2>Account and sync</h2><div data-syncbox></div></div>' +
     '<div class="card pad"><h2>Back up</h2><div class="row-actions"><button type="button" class="ghost" id="mBackup">Download backup</button><button type="button" class="ghost" id="mCsv">Register as CSV</button></div></div>';
   $('view').querySelectorAll('[data-acc]').forEach(a => a.onclick = e => { e.preventDefault(); editAccount(a.dataset.acc); });
   $('accNew').onclick = () => editAccount();
+  $('mSort').onclick = () => { const n = autoSortAll(); window.save(); toast(n ? 'Sorted ' + n + ' entries into categories.' : 'Nothing new to sort.'); viewMore(); };
+  $('mRound').onchange = e => { data.settings.rounding = e.target.value; window.save(); toast('Saved.'); };
   const lines = v => v.split('\n').map(x => x.trim()).filter(Boolean);
   $('mCats').onchange = e => { data.settings.categories = lines(e.target.value); window.save(); };
   $('mTax').onchange = e => { data.settings.taxCats = lines(e.target.value); window.save(); };
@@ -747,4 +1160,14 @@ function viewMore() {
   if (window.moneySync) window.moneySync.renderBox();
 }
 
+// Newer default categories show up for people who started with the older list.
+DEFAULT_CATEGORIES.forEach(c => { if (!data.settings.categories.includes(c)) data.settings.categories.push(c); });
+// The first time, sort the entries already here (only ones without a category are touched).
+function firstSort() {
+  if (data.settings.autoSorted || !data.tx.length) return;
+  const n = autoSortAll(); data.settings.autoSorted = true; window.save();
+  if (n) toast('✨ Sorted ' + n + ' entries into categories by name.');
+}
+firstSort();
+runRecurring();
 route();

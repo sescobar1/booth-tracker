@@ -71,3 +71,30 @@ ol.steps li { margin: 4px 0; }
 }
 table.mini td { white-space: nowrap; }
 label.bline .sub { display: block; overflow-wrap: anywhere; }
+.coming summary { font-weight: 600; color: var(--ink); } .coming .day { margin-top: 8px; }
+.baltog { display: inline-flex; background: rgba(255,255,255,.15); border-radius: 99px; padding: 3px; margin-top: 8px; }
+.baltog button { min-height: 0; padding: 5px 12px; border-radius: 99px; background: none; border: 0; color: #fff; font-size: .85rem; opacity: .85; }
+.baltog button.on { background: #fff; color: var(--navy); opacity: 1; }
+.addgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.addgrid button { flex-direction: column; min-height: 76px; font-size: 1.05rem; }
+.addgrid button span { font-size: .78rem; font-weight: 400; opacity: .8; }
+.rep-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 8px; }
+.chartwrap { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+.donut { width: 170px; height: 170px; flex: 0 0 auto; }
+.donut .d-l { font-size: 12px; fill: var(--muted); }
+.donut .d-v { font-size: 19px; font-weight: 700; fill: var(--ink); }
+.legend-list { flex: 1; min-width: 150px; font-size: .88rem; }
+.legend-list div { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.legend-list b { margin-left: auto; }
+.sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+.bars { width: 100%; height: auto; }
+.bars .b-l { font-size: 10px; fill: var(--muted); }
+.legend { display: flex; align-items: center; gap: 6px; }
+@media print { .donut { width: 220px; height: 220px; } }
+.fab { position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 6; width: 58px; height: 58px; min-height: 0; padding: 0; border-radius: 50%; font-size: 1.9rem; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+.catchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.chipbtn { min-height: 32px; padding: 4px 11px; border-radius: 99px; background: #fff; color: var(--navy); font-size: .84rem; font-weight: 600; }
+.chipbtn.on { background: var(--navy); color: #fff; }
+.tx { -webkit-tap-highlight-color: transparent; }
+.tx:active { background: #f0f5f2; }
+main#view { padding-bottom: 70px; }

@@ -18,12 +18,12 @@
   // App list -> table, with field names on each side. Order matters: parents before children.
   const COLS = [
     { key: 'accounts', table: 'money_accounts', map: { id: 'id', name: 'name', kind: 'kind', openingBalance: 'opening_balance', openingDate: 'opening_date', sort: 'sort' } },
-    { key: 'tx', table: 'money_tx', map: { id: 'id', accountId: 'account_id', date: 'date', time: 'time', payee: 'payee', amount: 'amount', type: 'type', category: 'category', note: 'note', checkNum: 'check_num', cleared: 'cleared', taxCat: 'tax_cat', receipt: 'receipt', source: 'source' } },
+    { key: 'tx', table: 'money_tx', map: { id: 'id', accountId: 'account_id', date: 'date', time: 'time', payee: 'payee', amount: 'amount', type: 'type', category: 'category', note: 'note', checkNum: 'check_num', cleared: 'cleared', taxCat: 'tax_cat', receipt: 'receipt', source: 'source', bankAmount: 'bank_amount' } },
     { key: 'docs', table: 'money_docs', map: { id: 'id', year: 'year', kind: 'kind', title: 'title', checklist: 'checklist', taxCat: 'tax_cat', amount: 'amount', file: 'file', fileName: 'file_name', txId: 'tx_id', note: 'note' } }
   ];
   const DEFAULTS = { sort: 0, kind: 'checking', type: 'expense', cleared: false, openingBalance: 0 };
   // Docs and accounts share some names, so their own defaults are applied before syncing.
-  const NULLABLE = new Set(['openingDate', 'txId', 'docAmount']);
+  const NULLABLE = new Set(['openingDate', 'txId', 'docAmount', 'bankAmount']);
   // One shape for comparing a row from this device with the cloud's copy of it.
   const norm = (c, o) => {
     const r = {};
@@ -32,6 +32,7 @@
       if (v == null || v === '') v = k in DEFAULTS ? DEFAULTS[k] : NULLABLE.has(k) ? null : '';
       if (c.key === 'docs' && k === 'kind' && (o[k] == null || o[k] === '')) v = 'tax';
       if (c.key === 'docs' && k === 'amount') v = o[k] == null || o[k] === '' ? null : Math.round(Number(o[k]) * 100) / 100;
+      else if (k === 'bankAmount') v = o[k] == null || o[k] === '' ? null : Math.round(Number(o[k]) * 100) / 100;
       else if (k === 'amount' || k === 'openingBalance') v = Math.round((Number(v) || 0) * 100) / 100;
       if (k === 'sort' || k === 'year') v = Number(v) || 0;
       if (k === 'cleared') v = !!v;
