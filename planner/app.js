@@ -962,7 +962,8 @@ function viewFiles() {
     '<input id="fFind" type="search" placeholder="Search all documents" value="' + esc(fileFind) + '">' +
     (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
     '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
-    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? (folderNote(fileFolder) ? '' : '<button type="button" class="ghost small" id="fSticky">📝 Sticky note</button>') + '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    (!searching && folderNote(fileFolder) ? stickyNote(fileFolder) : '') +
     (!searching && /\/Medical$/i.test(fileFolder) ? healthPanel(topOf(fileFolder)) + '<h3 class="filesh">' + esc(topOf(fileFolder)) + '’s medical files</h3>' : '') +
     (subs.length ? '<div class="fgrid">' + subs.map(f => {
       const n = data.docs.filter(d => inTree(d, f)).length, kids = childFolders(f).length, c = pastel(topOf(f));
@@ -990,6 +991,10 @@ function viewFiles() {
     list.splice(at, 0, p); setFolders(list); toast('✓ Folder “' + n + '” made'); viewFiles();
   };
   if ($('fMenu')) $('fMenu').onclick = () => folderMenu(fileFolder);
+  if ($('fSticky')) $('fSticky').onclick = () => editSticky(fileFolder);
+  $('view').querySelectorAll('[data-sticky]').forEach(b => b.onclick = () => editSticky(b.dataset.sticky));
+  $('view').querySelectorAll('.sticky a').forEach(a => a.onclick = e => e.stopPropagation());
+  $('view').querySelectorAll('[data-copy]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); } catch (err) { toast('Couldn’t copy. Press and hold to select it.'); } });
   if (/\/Medical$/i.test(fileFolder) && !searching) wireHealth($('view'), topOf(fileFolder));
   $('view').querySelectorAll('[data-doc]').forEach(r => r.onclick = e => { if (!e.target.dataset.dedit) openDoc(r.dataset.doc); });
   $('view').querySelectorAll('[data-dedit]').forEach(b => b.onclick = e => { e.stopPropagation(); editDoc(b.dataset.dedit); });
@@ -1037,6 +1042,28 @@ async function pasteButton() {
   const box = $('pasteBox'); box.focus();
   box.addEventListener('paste', e => { const files = [...(e.clipboardData ? e.clipboardData.files : [])]; e.preventDefault(); if (!files.length) { toast('That wasn’t a picture or file.'); return; } closeModal(); saveBlobs(files, 'Pasting'); });
 }
+// A sticky note at the top of a folder, for quick info like an ID number or school email.
+const folderNote = p => p && (S().folderNotes || {})[p] || '';
+function stickyNote(p) {
+  const lines = folderNote(p).split('\n');
+  return '<div class="sticky" data-sticky="' + esc(p) + '" role="button" title="Tap to edit">' + lines.map(l => {
+    const t = l.trim(); if (!t) return '<br>';
+    const val = (/:\s*(.+)$/.exec(t) || [])[1] || t;
+    const em = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(val), ph = /^[\d\s().+-]{7,}$/.test(val) && /\d{7}/.test(val.replace(/\D/g, ''));
+    const pre = esc(t.slice(0, t.length - val.length));
+    const shown = em ? pre + '<a href="mailto:' + esc(val) + '">' + esc(val) + '</a>' : ph ? pre + '<a href="tel:' + esc(val.replace(/[^\d+]/g, '')) + '">' + esc(val) + '</a>' : esc(t);
+    return '<div class="sline"><span>' + shown + '</span><button type="button" class="scopy" data-copy="' + esc(val) + '" title="Copy">⧉</button></div>';
+  }).join('') + '</div>';
+}
+function editSticky(p) {
+  openModal('<h2>📝 Sticky note</h2><p class="helper">Shows at the top of ' + esc(p.replace(/\//g, ' › ')) + '.</p><textarea id="snText" rows="7" placeholder="Name&#10;ID: 123456&#10;email@school.edu">' + esc(folderNote(p)) + '</textarea>' +
+    '<div class="row-actions"><button type="button" id="snSave">Save</button><button type="button" class="ghost" id="snCancel">Cancel</button>' + (folderNote(p) ? '<button type="button" class="danger" id="snDel">Remove</button>' : '') + '</div>');
+  const put = v => { const fn = Object.assign({}, S().folderNotes || {}); if (v) fn[p] = v; else delete fn[p]; S().folderNotes = fn; window.save(); closeModal(); viewFiles(); };
+  $('snSave').onclick = () => put($('snText').value.trim());
+  $('snCancel').onclick = closeModal;
+  if ($('snDel')) $('snDel').onclick = () => { if (confirm('Remove this sticky note?')) put(''); };
+  setTimeout(() => $('snText').focus(), 60);
+}
 function folderMenu(p) {
   const n = data.docs.filter(d => inTree(d, p)).length, sub = folderList().filter(f => f.startsWith(p + '/')).length;
   const moveTo = folderList().filter(f => f !== p && !f.startsWith(p + '/') && f !== parentOf(p));
@@ -1053,7 +1080,9 @@ function folderMenu(p) {
     if (np !== p && folderList().includes(np)) { toast('There’s already a folder there with that name.'); return; }
     const swap = f => f === p ? np : f.startsWith(p + '/') ? np + f.slice(p.length) : f;
     setFolders(folderList().map(swap));
-    data.docs.forEach(d => { if (d.folder) d.folder = swap(d.folder); }); window.save();
+    data.docs.forEach(d => { if (d.folder) d.folder = swap(d.folder); });
+    const fn = S().folderNotes || {}; if (Object.keys(fn).some(k => swap(k) !== k)) S().folderNotes = Object.fromEntries(Object.entries(fn).map(([k, v]) => [swap(k), v]));
+    window.save();
     fileFolder = np; closeModal(); viewFiles();
   };
   $('fmDel').onclick = () => {
