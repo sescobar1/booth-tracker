@@ -191,3 +191,5 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .switch { display: inline-flex; align-items: center; gap: 4px; margin: 0; color: var(--ink); }
 .switch input { width: auto; margin: 0; }
 #fFind { margin: 4px 0 2px; }
+/* The page fade-in must never apply to printouts (it left them blank). */
+.print-only, .print-only * { animation: none !important; opacity: 1 !important; transform: none !important; }
