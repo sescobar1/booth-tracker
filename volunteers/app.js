@@ -274,11 +274,13 @@ function viewEvents() {
   const past = data.events.filter(e => e.date < t).sort((a, b) => b.date.localeCompare(a.date));
   $('view').innerHTML =
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') + quickLinks() +
+    (nextGame() ? '<div class="row-actions"><button type="button" id="docNext">📄 Send next game to sign-in sheet <small>(' + esc(fmtDate(nextGame().date)) + ')</small></button>' + (data.settings.signinDoc ? '<a class="button ghost" href="' + esc(data.settings.signinDoc) + '" target="_blank" rel="noopener">Open sign-in sheet</a>' : '') + '</div>' : '') +
     '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
     (data.events.length || !signedIn() ? '' : '<div class="empty"><h2>Welcome!</h2><p>Add an event and the jobs you need filled, then share your sign-up link or QR code.</p></div>') +
     (up.length ? '<h2>Coming up</h2>' + up.map(eventCard).join('') : (data.events.length ? '<p class="helper">No upcoming events. Import sign-ups or add one.</p>' : '')) +
     (past.length ? '<details class="past"><summary>Past events (' + past.length + ')</summary>' + past.map(eventCard).join('') + '</details>' : '');
   $('newEvent').onclick = () => editEvent();
+  if ($('docNext')) $('docNext').onclick = () => sendToDoc(nextGame().id);
   if (window.volSync) window.volSync.renderBox();
 }
 
@@ -401,8 +403,9 @@ function viewEvent(id) {
     '<a class="button" href="#share/' + id + '">📣<span>Share link</span></a></div>' +
     '<div class="segs">' + f('all', 'All ' + c.total) + f('adult', 'Adults ' + c.adults) + f('student', 'Students ' + c.students) + (c.noPhone ? f('nophone', 'Need phone ' + c.noPhone) : '') + '</div>' +
     (rows || '<p class="helper">No jobs or volunteers yet. Tap Edit event to add the jobs you need filled.</p>') +
-    '<div class="row-actions"><a class="button ghost" href="#import/' + id + '">⬆ Import a list into this event</a></div>';
+    '<div class="row-actions"><button type="button" class="ghost" id="evDoc">📄 Send to Google sign-in sheet</button><a class="button ghost" href="#import/' + id + '">⬆ Import a list into this event</a></div>';
   $('evEdit').onclick = () => editEvent(id);
+  $('evDoc').onclick = () => sendToDoc(id);
   $('textAll').onclick = () => openTexter(id);
   $('addVol').onclick = () => addVolunteer(id);
   document.querySelectorAll('.seg').forEach(b => b.onclick = () => { evFilter = b.dataset.f; viewEvent(id); });
@@ -608,12 +611,134 @@ function viewSheet(id) {
     (sheetOpts.style === 'booster' ? '' : '<label class="check"><input type="checkbox" id="shSplit"' + (sheetOpts.split ? ' checked' : '') + '> Separate adult and student sheets</label>') +
     '<label class="check"><input type="checkbox" id="shPhone"' + (sheetOpts.phone ? ' checked' : '') + '> Show cell numbers</label>' +
     '<label>Blank lines for walk-ins <input id="shBlank" type="number" min="0" max="40" value="' + sheetOpts.blanks + '"></label>' +
-    '<button type="button" id="shPrint">🖨 Print</button></div><p class="helper">Blank lines are added to each table for walk-ins. On a phone, Print lets you AirPrint or save as PDF.</p></div>' + sheets;
+    '<button type="button" id="shPrint">🖨 Print</button><button type="button" class="ghost" id="shDoc">📄 Send to Google sign-in sheet</button>' +
+    (data.settings.signinDoc ? '<a class="button ghost" href="' + esc(data.settings.signinDoc) + '" target="_blank" rel="noopener">Open Google Doc</a>' : '') + '</div><p class="helper">Blank lines are added to each table for walk-ins. On a phone, Print lets you AirPrint or save as PDF.</p></div>' + sheets;
   $('shStyle').onchange = e => { sheetOpts.style = e.target.value; viewSheet(id); };
   if ($('shSplit')) $('shSplit').onchange = e => { sheetOpts.split = e.target.checked; viewSheet(id); };
   $('shPhone').onchange = e => { sheetOpts.phone = e.target.checked; viewSheet(id); };
   $('shBlank').onchange = e => { sheetOpts.blanks = Math.max(0, Math.min(40, Number(e.target.value) || 0)); viewSheet(id); };
   $('shPrint').onclick = () => window.print();
+  $('shDoc').onclick = () => sendToDoc(id);
+}
+
+// ---------- Google Doc sign-in sheet ----------
+// The Boosters keep the sign-in sheet as a Google Doc. A small Apps Script, pasted once into the
+// coordinator's Google account, rebuilds that doc for a game when the app sends it.
+const docSetUp = () => !!(data.settings.signinDoc && data.settings.docHook);
+function docToken() {
+  if (!data.settings.docToken) { data.settings.docToken = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join(''); window.save(); }
+  return data.settings.docToken;
+}
+const docIdOf = url => ((url || '').match(/\/d\/([\w-]{20,})/) || [])[1] || '';
+function nextGame() { return data.events.filter(e => e.date >= today()).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))[0]; }
+async function sendToDoc(evId) {
+  const ev = event(evId);
+  if (!ev) return;
+  if (!docSetUp()) { toast('First connect your Google sign-in sheet (More → Google sign-in sheet).'); location.hash = 'more'; setTimeout(() => { const el = $('docCard'); if (el) el.scrollIntoView(); }, 300); return; }
+  const list = slotsFor(evId).map(s => person(s.personId)).filter(Boolean);
+  const uniq = xs => xs.filter((p, i) => xs.indexOf(p) === i).sort((a, b) => sortName(a).localeCompare(sortName(b)));
+  const adults = uniq(list.filter(p => p.type !== 'student')).map(p => ({ name: fullName(p), phone: fmtPhone(p.phone) }));
+  const students = uniq(list.filter(p => p.type === 'student')).map(p => ({ name: fullName(p) }));
+  if (!confirm('Rebuild your Google sign-in sheet for ' + ev.name + ' (' + fmtDate(ev.date) + '): ' + adults.length + ' adults and ' + students.length + ' students?')) return;
+  toast('Sending to your Google sign-in sheet…');
+  try {
+    // Plain-text body keeps this a simple request that Apps Script answers without a CORS preflight.
+    const res = await fetch(data.settings.docHook, { method: 'POST', body: JSON.stringify({ token: docToken(), org: data.settings.org || 'Band Boosters', blanks: 8, title: ev.name + ' – ' + fmtDate(ev.date, true) + (ev.start ? ' – ' + fmtRange(ev.start, ev.end) : ''), adults, students }) });
+    const r = await res.json();
+    if (!r.ok) throw new Error(r.error || 'The sheet did not update.');
+    data.settings.docLast = { eventId: ev.id, at: new Date().toISOString() }; window.save();
+    toast('Sign-in sheet updated: ' + r.adults + ' adults, ' + r.students + ' students.');
+    if (confirm('Done! Open the Google sign-in sheet now?')) window.open(data.settings.signinDoc, '_blank', 'noopener');
+  } catch (e) {
+    toast('Could not update the Google sheet: ' + e.message);
+  }
+}
+function docScript() {
+  return `// Band Volunteers → Volunteer Sign In Sheet
+// Rebuilds your sign-in sheet Google Doc for one game when the Band Volunteers app sends it.
+// (Google Docs keeps version history: File → Version history shows every earlier copy.)
+const DOC_ID = '${docIdOf(data.settings.signinDoc)}';
+const KEY = '${docToken()}';
+
+function doPost(e) {
+  try {
+    const req = JSON.parse(e.postData.contents);
+    if (req.token !== KEY) return reply({ error: 'Wrong key. Copy the code from the app again.' });
+    const doc = DocumentApp.openById(DOC_ID);
+    build(doc.getBody(), req);
+    doc.saveAndClose();
+    return reply({ ok: true, adults: (req.adults || []).length, students: (req.students || []).length });
+  } catch (err) {
+    return reply({ error: String(err.message || err) });
+  }
+}
+
+function doGet() { return reply({ ok: true, ready: true }); }
+
+function reply(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+const NAVY = '#1f3a68', HEAD = '#eef1f7';
+const CREDIT = 'Volunteer Hrs OR Name of Student you are volunteering for';
+const FOOD = 'Food Item & Drink Item';
+const PERK = '1 soda, unlimited volunteer water and 1 food item free';
+
+function build(body, req) {
+  body.clear();
+  body.setMarginTop(36).setMarginBottom(36).setMarginLeft(40).setMarginRight(40);
+  const title = body.getParagraphs()[0];
+  title.setText((req.org || 'Band Boosters') + ' – Volunteer Sign In Sheet');
+  title.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  title.editAsText().setFontSize(16).setBold(true).setForegroundColor(NAVY);
+  const game = body.appendParagraph(req.title || '');
+  game.setAlignment(DocumentApp.HorizontalAlignment.CENTER).setSpacingAfter(8);
+  game.editAsText().setFontSize(12).setBold(true).setForegroundColor('#1d2433');
+  const blanks = Math.max(0, Number(req.blanks) || 8);
+  section(body, 'Adults', req.adults || [], true, blanks, [22, 150, 92, 140, 128]);
+  section(body, 'Students', req.students || [], false, blanks, [22, 180, 160, 170]);
+}
+
+function section(body, label, people, withPhone, blanks, widths) {
+  const head = body.appendParagraph(label);
+  head.setSpacingBefore(10).setSpacingAfter(4);
+  head.editAsText().setFontSize(13).setBold(true).setForegroundColor(NAVY);
+  const cols = withPhone ? ['#', 'Volunteer Name', 'Cell number', CREDIT, FOOD + '\\n(' + PERK + ')'] : ['#', 'Volunteer Name', CREDIT, FOOD];
+  const rows = [cols];
+  people.forEach((p, i) => rows.push(withPhone ? [String(i + 1), p.name, p.phone || '', '', ''] : [String(i + 1), p.name, '', '']));
+  for (let i = 0; i < blanks; i++) rows.push([String(people.length + i + 1)].concat(new Array(cols.length - 1).fill('')));
+  const table = body.appendTable(rows);
+  table.setBorderColor('#888888');
+  widths.forEach((w, i) => table.setColumnWidth(i, w));
+  for (let r = 0; r < table.getNumRows(); r++) {
+    const row = table.getRow(r);
+    row.setMinimumHeight(r === 0 ? 30 : 24);
+    for (let c = 0; c < row.getNumCells(); c++) {
+      const cell = row.getCell(c);
+      cell.setPaddingTop(3).setPaddingBottom(3).setPaddingLeft(5).setPaddingRight(5);
+      cell.setVerticalAlignment(DocumentApp.VerticalAlignment.CENTER);
+      const t = cell.editAsText();
+      t.setFontSize(r === 0 ? 9 : 11).setBold(r === 0 || (c === 1 && r <= people.length));
+      if (r === 0) cell.setBackgroundColor(HEAD);
+      if (c === 0) { t.setForegroundColor('#5d6679'); cell.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER); }
+    }
+  }
+}
+`;
+}
+function docCard() {
+  const ready = docSetUp();
+  return '<div class="card pad" id="docCard"><h2>📄 Google sign-in sheet</h2>' +
+    '<label>Sign-in sheet Google Doc link<input id="mDoc" type="url" value="' + esc(data.settings.signinDoc || '') + '" placeholder="https://docs.google.com/document/d/…"></label>' +
+    '<label>Connection link (from step 4 below)<input id="mHook" type="url" value="' + esc(data.settings.docHook || '') + '" placeholder="https://script.google.com/macros/s/…/exec"></label>' +
+    (ready ? '<p class="chip ok">Connected. Use “Send to Google sign-in sheet” on any game.</p>' : '') +
+    '<details' + (ready ? '' : ' open') + '><summary>One-time setup (about 3 minutes, on a computer)</summary><ol class="steps">' +
+    '<li>Paste your sign-in sheet\'s Google Doc link above.</li>' +
+    '<li>Open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → New project</a>. Delete what\'s there, then tap <b>Copy code</b> below and paste it in. Press the 💾 save icon.</li>' +
+    '<li>Click <b>Deploy → New deployment</b>. Click the ⚙ gear next to "Select type" and choose <b>Web app</b>. Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Click <b>Deploy</b>.</li>' +
+    '<li>Click <b>Authorize access</b> and pick your Google account. If Google says the app isn\'t verified, click <b>Advanced → Go to Untitled project</b> → <b>Allow</b>. (It\'s your own script.) Copy the <b>Web app URL</b> and paste it in the Connection link box above.</li></ol>' +
+    '<div class="row-actions"><button type="button" class="ghost" id="mDocCode">📋 Copy code</button></div>' +
+    '<p class="helper">Each time you send a game, the doc is rebuilt in this app\'s layout (adults, then students, with blank lines for walk-ins). Earlier versions stay under File → Version history. The code includes a private key, so only this app can change your sheet. Your Google account must be able to edit the doc.</p></details></div>';
 }
 
 // ---------- People ----------
@@ -1139,6 +1264,7 @@ function viewMore() {
     '<label>Facebook group link<input id="mFb" type="url" value="' + esc(data.settings.facebook || '') + '" placeholder="https://www.facebook.com/groups/…"></label>' +
     '<label>Welcome note<textarea id="mIntro" rows="2" placeholder="Thank you for supporting the band!">' + esc(data.settings.intro || '') + '</textarea></label>' +
     '<div class="row-actions"><a class="button ghost" href="#share">📣 Share link and QR code</a><a class="button ghost" href="' + esc(signupUrl()) + '" target="_blank" rel="noopener">See the page</a></div></div>' +
+    docCard() +
     '<div class="card pad"><h2>Account and sync</h2><div data-syncbox></div></div>' +
     '<div class="card pad"><h2>Import a list</h2><p class="helper">Move over sign-ups you already have in SignUpGenius, BAND, or a spreadsheet.</p><a class="button ghost" href="#import">⬆ Import</a></div>' +
     '<div class="card pad"><h2>Back up</h2><p class="helper">Your list saves on this device (and in the cloud when signed in). Download a backup now and then.</p>' +
@@ -1161,6 +1287,18 @@ function viewMore() {
   $('mFb').onchange = e => { data.settings.facebook = e.target.value.trim(); window.save(); };
   $('mDrive').onchange = e => { data.settings.drive = e.target.value.trim(); window.save(); };
   $('mBand').onchange = e => { data.settings.band = e.target.value.trim(); window.save(); };
+  $('mDoc').onchange = e => {
+    const v = e.target.value.trim();
+    if (v && !docIdOf(v)) { toast('Paste the whole Google Doc link (it has /document/d/ in it).'); return; }
+    data.settings.signinDoc = v; window.save(); toast('Saved. Copy the code again so it points at this doc.');
+  };
+  $('mHook').onchange = e => {
+    const v = e.target.value.trim();
+    if (v && !/^https:\/\/script\.google\.com\/.+\/exec/.test(v)) { toast('Paste the Web app URL from Apps Script (it ends in /exec).'); return; }
+    data.settings.docHook = v; window.save(); toast(v ? 'Connected. Try “Send next game to sign-in sheet” on Events.' : 'Disconnected.');
+    viewMore();
+  };
+  $('mDocCode').onclick = () => { if (!docIdOf(data.settings.signinDoc)) { toast('Paste your sign-in sheet\'s Google Doc link first.'); return; } copy(docScript(), 'Code'); };
   $('mWhere').onchange = e => { $('mSugWrap').hidden = !e.target.value; if (!e.target.value) { data.settings.signupLink = ''; $('mSug').value = ''; window.save(); } };
   $('mSug').onchange = e => {
     const v = e.target.value.trim();
