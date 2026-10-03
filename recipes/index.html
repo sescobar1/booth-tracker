@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Family Recipes</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#fbf6ee">
+  <link rel="icon" href="../planner/icon.svg">
+  <link rel="apple-touch-icon" href="../planner/icon-180.png">
+  <style>
+    /* Family recipe book: Shaana adds photos of recipes; family opens the share link to read them. */
+    @font-face { font-family: 'Pacifico'; src: url(../fonts/pacifico.woff2) format('woff2'); font-display: swap; }
+    :root { --bg: #fbf6ee; --card: #fffdf9; --ink: #3d2c24; --muted: #8c766a; --line: #eadfd2; --accent: #b5543c; --accent-soft: #f6e1d8; --sage: #7d9b76; --shadow: 0 1px 2px rgba(61,44,36,.06), 0 6px 18px rgba(61,44,36,.07); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1e1916; --card: #2a2420; --ink: #f3ebe4; --muted: #ad9a8e; --line: #3d342e; --accent: #e08a6f; --accent-soft: #3f2a22; --sage: #93b28b; --shadow: 0 1px 2px rgba(0,0,0,.3); } }
+    :root[data-theme="dark"] { --bg: #1e1916; --card: #2a2420; --ink: #f3ebe4; --muted: #ad9a8e; --line: #3d342e; --accent: #e08a6f; --accent-soft: #3f2a22; --sage: #93b28b; --shadow: 0 1px 2px rgba(0,0,0,.3); }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 14px 16px 90px; }
+    header.top { text-align: center; padding: 18px 0 6px; }
+    header.top h1 { font-family: Pacifico, Georgia, serif; font-weight: 400; font-size: clamp(2rem, 7vw, 3rem); margin: 0; color: var(--accent); line-height: 1.25; }
+    header.top p { margin: 4px 0 0; color: var(--muted); }
+    .tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 16px 0 8px; }
+    .tools input { flex: 1 1 220px; }
+    input, textarea, select { width: 100%; font: inherit; padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+    textarea { resize: vertical; }
+    label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; font-weight: 600; }
+    button, .btn { font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: 11px 20px; background: var(--accent); color: #fff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    button.ghost, .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.small { padding: 7px 14px; font-size: 14px; }
+    button.danger { background: transparent; color: #b0473a; border: 1px solid #e3b7ae; }
+    button:disabled { opacity: .5; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip { flex: none; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-weight: 500; font-size: 15px; }
+    .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
+    .rc { background: var(--card); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); cursor: pointer; text-align: left; padding: 0; color: inherit; display: block; text-decoration: none; width: 100%; font-weight: 400; }
+    .rc .pic { aspect-ratio: 4 / 3; background: var(--accent-soft) center / cover no-repeat; display: grid; place-items: center; font-size: 2.6rem; }
+    .rc .txt { padding: 10px 13px 13px; }
+    .rc b { display: block; font-size: 1.05rem; line-height: 1.3; }
+    .rc small { color: var(--muted); }
+    .empty { text-align: center; padding: 40px 12px; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin: 14px 0; box-shadow: var(--shadow); }
+    .share { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .share code { flex: 1 1 100%; font-size: 13px; background: var(--bg); border: 1px dashed var(--line); padding: 8px 10px; border-radius: 10px; word-break: break-all; }
+    /* Recipe page */
+    .back { display: inline-block; margin: 8px 0; color: var(--muted); text-decoration: none; font-weight: 600; background: none; padding: 4px 0; }
+    .rtitle { font-size: clamp(1.7rem, 6vw, 2.4rem); margin: 4px 0 2px; line-height: 1.2; }
+    .meta { color: var(--muted); margin: 0 0 12px; }
+    .gallery { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+    .gallery img { height: min(70vh, 460px); max-width: 92%; flex: none; scroll-snap-align: start; border-radius: 14px; object-fit: contain; background: var(--card); border: 1px solid var(--line); cursor: zoom-in; }
+    .gallery img:only-child { max-width: 100%; }
+    .cols { display: grid; gap: 14px; }
+    @media (min-width: 760px) { .cols { grid-template-columns: 1fr 1.4fr; } }
+    .cols h2 { font-size: 1.1rem; margin: 0 0 8px; color: var(--accent); }
+    .ing { list-style: none; padding: 0; margin: 0; }
+    .ing li { padding: 7px 0 7px 30px; position: relative; border-top: 1px solid var(--line); cursor: pointer; }
+    .ing li:first-child { border-top: 0; }
+    .ing li::before { content: ''; position: absolute; left: 0; top: 10px; width: 18px; height: 18px; border-radius: 6px; border: 2px solid var(--line); }
+    .ing li.got { color: var(--muted); text-decoration: line-through; }
+    .ing li.got::before { background: var(--sage); border-color: var(--sage); }
+    .steps { padding-left: 1.4em; margin: 0; }
+    .steps li { margin: 0 0 10px; padding-left: 4px; }
+    .notes { white-space: pre-wrap; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+    /* Big photo viewer */
+    #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 50; display: flex; align-items: center; justify-content: center; overflow: auto; }
+    #zoom img { max-width: 100%; max-height: 100%; touch-action: pinch-zoom; }
+    #zoom button { position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px; background: rgba(255,255,255,.9); color: #222; }
+    /* Add / edit */
+    .drop { border: 2px dashed var(--line); border-radius: 16px; padding: 18px; text-align: center; color: var(--muted); }
+    .drop .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+    .thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .thumb { position: relative; width: 96px; height: 96px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--bg) center / cover; }
+    .thumb button { position: absolute; padding: 0; width: 28px; height: 28px; justify-content: center; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; }
+    .thumb .x { top: 4px; right: 4px; }
+    .thumb .l { bottom: 4px; left: 4px; }
+    .thumb em { position: absolute; left: 4px; top: 4px; background: var(--accent); color: #fff; font-size: 11px; font-style: normal; padding: 1px 7px; border-radius: 999px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hint { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+    #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 14px; z-index: 60; max-width: 90%; text-align: center; }
+    .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); padding: 14px 22px; box-shadow: 0 6px 20px rgba(0,0,0,.2); z-index: 10; }
+    footer { text-align: center; color: var(--muted); font-size: 14px; margin-top: 30px; }
+    .signin { max-width: 380px; margin: 30px auto; }
+    @media print {
+      body { background: #fff; color: #000; }
+      .noprint, .back, .actions, .fab, footer, .chips, .tools { display: none !important; }
+      .gallery { display: block; }
+      .gallery img { height: auto; max-height: 5in; max-width: 100%; margin: 0 0 10px; border: 0; page-break-inside: avoid; }
+      .card { box-shadow: none; border: 0; padding: 0; }
+      .cols { grid-template-columns: 1fr 1.4fr; }
+    }
+  </style>
+</head>
+<body>
+<main id="app"><p class="empty">Opening the recipe book…</p></main>
+<div id="toast" hidden></div>
+<script src="../planner/config.js"></script>
+<script src="../planner/vendor/supabase.js"></script>
+<script>
+(() => {
+  const CFG = window.PLANNER_CONFIG, P = CFG.sync, BUCKET = 'recipes';
+  const CATS = ['Main dishes', 'Sides', 'Soups', 'Breakfast', 'Desserts', 'Baking', 'Drinks', 'Holidays', 'Other'];
+  const ICON = { 'Main dishes': '🍲', Sides: '🥗', Soups: '🥣', Breakfast: '🥞', Desserts: '🍰', Baking: '🍪', Drinks: '🥤', Holidays: '🎄', Other: '🍽' };
+  const token = new URLSearchParams(location.search).get('t') || '';
+  // Same sign-in as the Planner on this device, so Shaana is already signed in here.
+  const sb = window.supabase.createClient(P.url, P.key, { auth: { storageKey: (CFG.storageKey || 'plannerApp') + 'Auth', persistSession: true, autoRefreshToken: true } });
+  const $ = id => document.getElementById(id), app = $('app');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const photoUrl = p => P.url + '/storage/v1/object/public/' + BUCKET + '/' + p.split('/').map(encodeURIComponent).join('/');
+  const lines = s => String(s || '').split('\n').map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean);
+  let user = null, book = { title: 'Family Recipes', recipes: [] }, share = null, cat = 'All', q = '';
+  function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); }
+
+  async function load() {
+    if (token) {
+      const { data, error } = await sb.rpc('family_recipes_book', { p_token: token });
+      if (error || !data) { app.innerHTML = '<div class="empty"><h1>🍽</h1><p>This recipe link doesn’t work. Ask for a new one.</p></div>'; return false; }
+      book = data; return true;
+    }
+    const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
+    if (error) { toast(error.message); return false; }
+    share = sh;
+    book = { title: (sh && sh.title) || 'Family Recipes', recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, added: r.created_at })) };
+    book.recipes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    return true;
+  }
+  const shareLink = () => share ? location.origin + location.pathname + '?t=' + share.token : '';
+  const owner = () => !token && user;
+
+  function route() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (id === 'new') return owner() ? edit(null) : list();
+    if (id.startsWith('edit/')) return owner() ? edit(id.slice(5)) : list();
+    const r = book.recipes.find(x => x.id === id);
+    r ? show(r) : list();
+  }
+
+  function list() {
+    document.title = book.title;
+    const rs = book.recipes.filter(r => (cat === 'All' || r.category === cat) && (!q || (r.title + ' ' + r.from + ' ' + r.ingredients + ' ' + r.category).toLowerCase().includes(q.toLowerCase())));
+    const cats = CATS.filter(c => book.recipes.some(r => r.category === c));
+    app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
+      (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see the recipes and photos (they can’t change anything).</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
+      (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' +
+        (cats.length > 1 ? '<div class="chips">' + ['All'].concat(cats).map(c => '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + (ICON[c] ? ICON[c] + ' ' : '') + esc(c) + '</button>').join('') + '</div>' : '') +
+        (rs.length ? '<div class="grid">' + rs.map(r => '<a class="rc" href="#' + r.id + '"><div class="pic"' + (r.photos && r.photos[0] ? ' style="background-image:url(\'' + esc(photoUrl(r.photos[0].path)) + '\')">' : '>' + (ICON[r.category] || '🍽')) + '</div><div class="txt"><b>' + esc(r.title) + '</b><small>' + esc([r.from ? 'From ' + r.from : '', r.category].filter(Boolean).join(' · ')) + '</small></div></a>').join('') + '</div>' : '<p class="empty">No recipes match.</p>')
+        : '<div class="empty"><p style="font-size:3rem;margin:0">📸</p><p>' + (owner() ? 'No recipes yet. Tap <b>＋ Add a recipe</b> and take a picture of a recipe card, a cookbook page or the finished dish.' : 'No recipes yet. Check back soon!') + '</p></div>') +
+      (owner() ? '<a class="btn fab" href="#new">＋ Add a recipe</a>' : '') +
+      '<footer>Made with love by the Escobar family 💛' + (owner() ? ' · <button type="button" class="small ghost" id="out">Sign out</button>' : '') + '</footer>';
+    if ($('q')) $('q').oninput = e => { q = e.target.value; const pos = e.target.selectionStart; list(); $('q').focus(); $('q').setSelectionRange(pos, pos); };
+    app.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { cat = b.dataset.cat; list(); });
+    if (owner()) {
+      $('shCopy').onclick = async () => { try { await navigator.clipboard.writeText(shareLink()); toast('Link copied'); } catch (e) { prompt('Copy this link:', shareLink()); } };
+      $('shShare').onclick = async () => { const text = 'Here’s our family recipe book 🍽💛 ' + shareLink(); if (navigator.share) { try { await navigator.share({ title: book.title, text: 'Here’s our family recipe book 🍽💛', url: shareLink() }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text); };
+      $('shName').onclick = async () => { const n = prompt('Name of the recipe book:', book.title); if (!n || !n.trim()) return; const { error } = await sb.from('family_recipe_share').update({ title: n.trim() }).eq('owner', user.id); if (error) return toast(error.message); book.title = share.title = n.trim(); list(); };
+      $('out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+    }
+  }
+
+  function show(r) {
+    document.title = r.title + ' · ' + book.title;
+    const ing = lines(r.ingredients), steps = lines(r.steps);
+    app.innerHTML = '<a class="back" href="#">‹ All recipes</a>' +
+      '<h1 class="rtitle">' + esc(r.title) + '</h1><p class="meta">' + esc([r.from ? 'From ' + r.from : '', r.category].filter(Boolean).join(' · ')) + '</p>' +
+      ((r.photos || []).length ? '<div class="gallery">' + r.photos.map((p, k) => '<img src="' + esc(photoUrl(p.path)) + '" alt="' + esc(r.title) + ' photo ' + (k + 1) + '" data-zoom="' + k + '" loading="lazy">').join('') + '</div>' + (r.photos.length > 1 ? '<p class="hint noprint">Swipe for more photos · tap one to see it big</p>' : '<p class="hint noprint">Tap the photo to see it big</p>') : '') +
+      (ing.length || steps.length || r.notes ? '<div class="cols">' +
+        (ing.length ? '<div class="card"><h2>Ingredients</h2><ul class="ing">' + ing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
+        (steps.length ? '<div class="card"><h2>Directions</h2><ol class="steps">' + steps.map(x => '<li>' + esc(x) + '</li>').join('') + '</ol></div>' : '') +
+        (r.notes ? '<div class="card" style="grid-column:1/-1"><h2>Notes</h2><div class="notes">' + esc(r.notes) + '</div></div>' : '') + '</div>' : '') +
+      '<div class="actions"><button type="button" class="ghost" id="pr">🖨 Print</button><button type="button" class="ghost" id="sh">📤 Send this recipe</button>' + (owner() ? '<a class="btn" href="#edit/' + r.id + '">✏️ Edit</a>' : '') + '</div>';
+    window.scrollTo(0, 0);
+    app.querySelectorAll('.ing li').forEach(li => li.onclick = () => li.classList.toggle('got'));
+    app.querySelectorAll('[data-zoom]').forEach(img => img.onclick = () => zoom(img.src));
+    $('pr').onclick = () => window.print();
+    $('sh').onclick = async () => {
+      const url = (token ? location.href.split('#')[0] : shareLink()) + '#' + r.id;
+      if (navigator.share) { try { await navigator.share({ title: r.title, url }); } catch (e) {} } else { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch (e) { prompt('Copy this link:', url); } }
+    };
+  }
+  function zoom(src) {
+    const z = document.createElement('div'); z.id = 'zoom'; z.innerHTML = '<img alt=""><button type="button">Close ✕</button>'; z.querySelector('img').src = src;
+    z.onclick = e => { if (e.target === z || e.target.tagName === 'BUTTON') z.remove(); };
+    document.body.appendChild(z);
+  }
+
+  // Photos are shrunk on the phone before upload (about 1800 px, JPEG) so they load fast for family.
+  function shrink(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const max = 1800, s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+        const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url); c.toBlob(b => b ? res({ blob: b, w, h }) : rej(new Error('Could not read that photo')), 'image/jpeg', 0.82);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read that photo')); };
+      img.src = url;
+    });
+  }
+  function edit(id) {
+    const r = id ? book.recipes.find(x => x.id === id) : null;
+    if (id && !r) return list();
+    // Each photo is either saved ({path}) or new ({file, preview}).
+    let pics = r ? (r.photos || []).map(p => Object.assign({}, p)) : [];
+    const removed = [];
+    app.innerHTML = '<a class="back" href="' + (r ? '#' + r.id : '#') + '">‹ Cancel</a><h1 class="rtitle">' + (r ? 'Edit recipe' : 'Add a recipe') + '</h1>' +
+      '<div class="card"><div class="drop"><b>📸 Photos</b><p class="hint">The recipe card, cookbook page, or the finished dish. Add as many as you like. The first one is the cover.</p><div class="row"><button type="button" id="cam">📷 Take a photo</button><button type="button" class="ghost" id="lib">🖼 Choose photos</button></div>' +
+      '<input type="file" id="fCam" accept="image/*" capture="environment" hidden><input type="file" id="fLib" accept="image/*" multiple hidden></div><div class="thumbs" id="thumbs"></div>' +
+      '<label for="eT">Recipe name</label><input id="eT" value="' + esc(r ? r.title : '') + '" placeholder="Grandma’s chicken and dumplings" required>' +
+      '<div class="two"><div><label for="eC">Kind</label><select id="eC">' + CATS.map(c => '<option' + (r && r.category === c || !r && c === 'Main dishes' ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div><div><label for="eF">From</label><input id="eF" value="' + esc(r ? r.from : '') + '" placeholder="Grandma, Aunt Rosa…"></div></div>' +
+      '<p class="hint" style="margin-top:14px">Typing it out is optional; the photo is enough. Typed ingredients can be checked off while cooking and are searchable.</p>' +
+      '<label for="eI">Ingredients (one per line)</label><textarea id="eI" rows="6" placeholder="2 cups flour&#10;1 tsp salt">' + esc(r ? r.ingredients : '') + '</textarea>' +
+      '<label for="eS">Directions (one step per line)</label><textarea id="eS" rows="6">' + esc(r ? r.steps : '') + '</textarea>' +
+      '<label for="eN">Notes / memories</label><textarea id="eN" rows="3" placeholder="We make this every Christmas Eve…">' + esc(r ? r.notes : '') + '</textarea>' +
+      '<div class="actions"><button type="button" id="save">Save recipe</button>' + (r ? '<button type="button" class="danger" id="del">Delete</button>' : '') + '</div></div>';
+    window.scrollTo(0, 0);
+    const draw = () => {
+      $('thumbs').innerHTML = pics.map((p, k) => '<div class="thumb" style="background-image:url(\'' + esc(p.preview || photoUrl(p.path)) + '\')">' + (k === 0 ? '<em>Cover</em>' : '') + '<button type="button" class="x" data-x="' + k + '" aria-label="Remove photo">✕</button>' + (k ? '<button type="button" class="l" data-l="' + k + '" aria-label="Move earlier">‹</button>' : '') + '</div>').join('');
+      $('thumbs').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const [p] = pics.splice(+b.dataset.x, 1); if (p.path) removed.push(p.path); draw(); });
+      $('thumbs').querySelectorAll('[data-l]').forEach(b => b.onclick = () => { const k = +b.dataset.l; [pics[k - 1], pics[k]] = [pics[k], pics[k - 1]]; draw(); });
+    };
+    const add = files => { [...files].forEach(f => pics.push({ file: f, preview: URL.createObjectURL(f) })); draw(); };
+    $('cam').onclick = () => $('fCam').click(); $('lib').onclick = () => $('fLib').click();
+    $('fCam').onchange = e => { add(e.target.files); e.target.value = ''; };
+    $('fLib').onchange = e => { add(e.target.files); e.target.value = ''; };
+    draw();
+    $('save').onclick = async () => {
+      const title = $('eT').value.trim(); if (!title) { toast('Give the recipe a name.'); $('eT').focus(); return; }
+      if (!pics.length && !$('eI').value.trim() && !$('eS').value.trim()) { toast('Add a photo or type the recipe.'); return; }
+      const btn = $('save'); btn.disabled = true;
+      try {
+        const out = [];
+        for (let k = 0; k < pics.length; k++) {
+          const p = pics[k];
+          if (p.path) { out.push({ path: p.path, w: p.w, h: p.h }); continue; }
+          btn.textContent = 'Uploading photo ' + (k + 1) + ' of ' + pics.length + '…';
+          const { blob, w, h } = await shrink(p.file), path = user.id + '/' + crypto.randomUUID() + '.jpg';
+          const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+          if (error) throw error;
+          p.path = path; out.push({ path, w, h });
+        }
+        btn.textContent = 'Saving…';
+        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), photos: out, updated_at: new Date().toISOString() };
+        const res = r ? await sb.from('family_recipes').update(row).eq('id', r.id).select().single() : await sb.from('family_recipes').insert(row).select().single();
+        if (res.error) throw res.error;
+        if (removed.length) await sb.storage.from(BUCKET).remove(removed);
+        await load(); location.hash = '#' + res.data.id; route(); toast('✓ Saved');
+      } catch (e) { toast('Couldn’t save: ' + (e.message || e)); btn.disabled = false; btn.textContent = 'Save recipe'; }
+    };
+    if (r) $('del').onclick = async () => {
+      if (!confirm('Delete ' + r.title + ' and its photos?')) return;
+      const { error } = await sb.from('family_recipes').delete().eq('id', r.id);
+      if (error) return toast(error.message);
+      const paths = (r.photos || []).map(p => p.path).filter(Boolean); if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+      await load(); location.hash = ''; list(); toast('Deleted');
+    };
+  }
+
+  function signIn() {
+    app.innerHTML = '<header class="top"><h1>Family Recipes</h1><p>Sign in with your Planner email and password to add recipes.</p></header>' +
+      '<form class="card signin" id="si"><label for="em">Email</label><input id="em" type="email" autocomplete="email" required><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required><div class="actions"><button>Sign in</button></div><p class="hint">Family members don’t sign in. Send them the share link instead.</p></form>';
+    $('si').onsubmit = async e => {
+      e.preventDefault();
+      const { data, error } = await sb.auth.signInWithPassword({ email: $('em').value.trim(), password: $('pw').value });
+      if (error) return toast(error.message);
+      user = data.user; if (await load()) route();
+    };
+  }
+
+  window.addEventListener('hashchange', route);
+  (async () => {
+    if (!token) {
+      const { data } = await sb.auth.getSession();
+      user = data.session && data.session.user;
+      if (!user) return signIn();
+    }
+    if (await load()) route();
+  })();
+})();
+</script>
+</body>
+</html>

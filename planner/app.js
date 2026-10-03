@@ -2850,6 +2850,7 @@ function editShop(id) {
 function viewRecipes() {
   const rs = recipes();
   $('view').innerHTML = mealTabs('recipes') +
+    '<a class="card pad tip" href="../recipes/"><b>📸 Family recipe book</b><span class="sub">Photos of family recipes to share with everyone →</span></a>' +
     '<div class="row-actions"><button type="button" id="rNew">＋ New recipe</button>' + (rs.length ? '' : '<button type="button" class="ghost" id="rStarter">Add 10 family favorites</button>') + '</div>' +
     (SLOTS.map(s => { const l = rs.filter(r => (r.list || 'Dinner') === s); return l.length ? '<div class="card pad"><h3>' + s + '</h3>' + l.map(r => '<div class="recrow" data-redit="' + r.id + '"><div class="who"><b>' + esc(r.title) + '</b><span class="sub">' + r.notes.split('\n').filter(Boolean).length + ' ingredients' + (r.location ? ' · has link' : '') + '</span></div><span class="chev">›</span></div>').join('') + '</div>' : ''; }).join('') ||
       '<div class="card pad"><p class="helper">Save your go-to meals with their ingredients. When you plan them, the shopping list fills itself in.</p></div>');
@@ -3304,6 +3305,7 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="../recipes/"><b>Family recipes</b><span class="sub">📸 Recipe photos to share with family →</span></a>' +
     '<a class="card pad tip" href="#meds"><b>Medicines</b><span class="sub">💊 Medicine & vitamin reminders for everyone →</span></a>' +
     '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
     '<a class="card pad tip" href="#tasks/atu"><b>ATU</b><span class="sub">🎓 ATU tasks and the 🍿 SNA Snack Closet order →</span></a>' +
