@@ -450,10 +450,22 @@
     const heads = lines.filter(isHead);
     if (!heads.length) return pdfLooseRows(lines);
     const out = [heads[0].cells.map(c => c.str)], data = [], lone = [];
-    let cols = null, itemCol = -1;
+    let cols = null, itemCol = -1, dateCol = -1, amtCol = -1, moneyAfter = 0;
+    const MONEY = /^-?\$?\d{1,5}(,\d{3})*\.\d{2}$/, DATE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$|^\d{4}-\d{2}-\d{2}$/;
+    const MONEY_HEADS = ['PRICE', 'DISCOUNT', 'SALE', 'SALES', 'GROSS', 'GROSSSALE', 'PAYOUT', 'NETPAYOUT', 'NET', 'COMMISSION', 'FEE', 'TAX', 'TOTAL', 'AMOUNT', ...NET_SALE];
     for (const l of lines) {
-      if (isHead(l)) { cols = l.cells.map(c => ({ x: c.x, end: c.end })); itemCol = l.cells.findIndex(c => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(hkey(c.str))); continue; }
+      if (isHead(l)) {
+        cols = l.cells.map(c => ({ x: c.x, end: c.end }));
+        const h = l.cells.map(c => hkey(c.str));
+        itemCol = h.findIndex(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x));
+        dateCol = h.findIndex(x => ['DATESOLD', 'DATE', 'SOLDDATE'].includes(x));
+        amtCol = h.findIndex(x => NET_SALE.includes(x)); if (amtCol < 0) amtCol = h.indexOf('NET'); if (amtCol < 0) amtCol = h.findIndex(x => ['PAYOUT', 'NETPAYOUT'].includes(x));
+        moneyAfter = h.slice(amtCol + 1).filter(x => MONEY_HEADS.includes(x)).length;
+        continue;
+      }
       if (!cols) continue;
+      // A wrapped piece of an item name: one line of words with no numbers.
+      if (l.cells.length === 1 && /[a-z]/i.test(l.cells[0].str) && !/\d/.test(l.cells[0].str) && !/^(page|total|printed|report|today|yesterday)\b/i.test(l.cells[0].str)) { lone.push({ l, text: l.cells[0].str }); continue; }
       const row = cols.map(() => '');
       l.cells.forEach(c => {
         // The column whose header overlaps this cell, or the nearest one.
@@ -461,14 +473,24 @@
         if (k < 0) { let best = 1e9; cols.forEach((h, i) => { const d = Math.min(Math.abs(c.x - h.x), Math.abs(c.end - h.end)); if (d < best) { best = d; k = i; } }); }
         row[k] = row[k] ? row[k] + ' ' + c.str : c.str;
       });
+      // Sale lines that start with a date are read in order, so columns that shift between tables don't matter:
+      // the words after the date (and flag) up to the first number are the item; the amount is counted from the right.
+      const di = l.cells.findIndex(c => DATE.test(c.str));
+      if (di >= 0 && itemCol >= 0 && amtCol >= 0) {
+        const money = l.cells.filter(c => MONEY.test(c.str.replace(/\s/g, '')));
+        const firstMoney = l.cells.findIndex((c, i) => i > di && MONEY.test(c.str.replace(/\s/g, '')));
+        const words = l.cells.slice(di + 1, firstMoney < 0 ? undefined : firstMoney).map(c => c.str).filter(t => /[a-z]/i.test(t) && !/^(cc|cash|card|credit|debit|split|sold|refund|void)$/i.test(t));
+        row[itemCol] = words.join(' ');
+        if (money.length > moneyAfter) row[amtCol] = money[money.length - 1 - moneyAfter].str;
+        if (dateCol >= 0) row[dateCol] = l.cells[di].str;
+      }
       const filled = row.filter(Boolean).length;
-      if (filled === 1 && itemCol >= 0 && row[itemCol]) { if (!/page \d|total|printed|report/i.test(row[itemCol])) lone.push({ l, text: row[itemCol] }); continue; }
-      if (filled) { data.push({ l, row, before: [], after: [] }); out.push(row); }
+      if (filled) { data.push({ l, row, before: [], after: [], sale: di >= 0 || (amtCol >= 0 && !!row[amtCol]) }); out.push(row); }
     }
     // A wrapped name can sit above or below its sale line; join each piece to the closest line on that page.
     lone.forEach(({ l, text }) => {
       let best = null, d = 1e9;
-      data.forEach(x => { const dd = Math.abs(x.l.y - l.y); if (x.l.page === l.page && dd < d) { d = dd; best = x; } });
+      data.forEach(x => { const dd = Math.abs(x.l.y - l.y); if (x.sale && x.l.page === l.page && dd < d) { d = dd; best = x; } });
       if (best && d < l.size * 2.6) (l.y > best.l.y ? best.before : best.after).push(text);
     });
     data.forEach(x => { x.row[itemCol] = [...x.before, x.row[itemCol], ...x.after].filter(Boolean).join(' '); });
