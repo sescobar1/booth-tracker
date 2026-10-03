@@ -27,6 +27,11 @@ var data = (() => {
   return blank();
 })();
 // Devices set up before the concession stand text existed get it once (and keep it deleted if removed).
+// The 9-12th grade student instructions, kept in More → Sign-up page and sent with this message.
+if (!data.settings.hasStudentInfo) {
+  if (!data.templates.some(t => t.id === 'stuinfo')) data.templates.push({ id: 'stuinfo', name: 'Student volunteer info', text: '{studentinfo}' });
+  data.settings.hasStudentInfo = true;
+}
 if (!data.settings.hasConcession) {
   if (!data.templates.some(t => t.id === 'conc')) data.templates.unshift(Object.assign({}, CONCESSION_TEMPLATE));
   data.settings.hasConcession = true;
@@ -232,6 +237,7 @@ function fillMessage(text, ev, slot, p) {
     .replace(/\{location\}/g, (ev && ev.location) || 'the band room')
     .replace(/\{from\}/g, data.settings.from || data.settings.org || 'Band Boosters')
     .replace(/\{link\}/g, signupUrl(ev && ev.id))
+    .replace(/\{studentinfo\}/g, data.settings.studentInfo || '')
     .replace(/\s+–\s*$/, '');
 }
 
@@ -1257,7 +1263,7 @@ function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<div class="card pad"><h2>Your info</h2><div class="grid2"><label>Group name<input id="mOrg" value="' + esc(data.settings.org) + '"></label>' +
     '<label>Sign texts as<input id="mFrom" value="' + esc(data.settings.from) + '" placeholder="Shaana, Volunteer Coordinator"></label></div></div>' +
-    '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {arrive} {when} (tomorrow night) {day} (tomorrow) {stillneed} {open} {job} {location} {from} {link}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
+    '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {arrive} {when} (tomorrow night) {day} (tomorrow) {stillneed} {open} {job} {location} {from} {link} {studentinfo}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
     '<div class="card pad"><h2>Sign-up page</h2><label>Page title<input id="mTitle" value="' + esc(data.settings.title || '') + '" placeholder="Band Booster & Parent Volunteer Opportunities"></label>' +
     '<label>Where volunteers sign up<select id="mWhere"><option value="">My own sign-up page</option><option value="sug"' + (data.settings.signupLink ? ' selected' : '') + '>SignUpGenius</option></select></label>' +
     '<label' + (data.settings.signupLink ? '' : ' hidden') + ' id="mSugWrap">SignUpGenius sign-up link (open your sign-up, tap Share, copy the link)<input id="mSug" type="url" value="' + esc(data.settings.signupLink || '') + '" placeholder="https://www.signupgenius.com/go/…"></label>' +
@@ -1265,6 +1271,7 @@ function viewMore() {
     '<label>Google Drive<input id="mDrive" type="url" value="' + esc(data.settings.drive || '') + '" placeholder="https://drive.google.com/…"></label>' +
     '<label>BAND<input id="mBand" type="url" value="' + esc(data.settings.band || '') + '" placeholder="https://www.band.us/band/…"></label>' +
     '<label>Facebook group link<input id="mFb" type="url" value="' + esc(data.settings.facebook || '') + '" placeholder="https://www.facebook.com/groups/…"></label>' +
+    '<label>Instructions for student volunteers (shown when a student signs up, and in the “Student volunteer info” message)<textarea id="mStuInfo" rows="6">' + esc(data.settings.studentInfo || '') + '</textarea></label>' +
     '<label>Welcome note<textarea id="mIntro" rows="2" placeholder="Thank you for supporting the band!">' + esc(data.settings.intro || '') + '</textarea></label>' +
     '<div class="row-actions"><a class="button ghost" href="#share">📣 Share link and QR code</a><a class="button ghost" href="' + esc(signupUrl()) + '" target="_blank" rel="noopener">See the page</a></div></div>' +
     docCard() +
@@ -1309,6 +1316,7 @@ function viewMore() {
     data.settings.signupLink = v; window.save(); toast(v ? 'Your Share screen and QR code now point to SignUpGenius.' : 'Using your own sign-up page.');
   };
   $('mIntro').onchange = e => { data.settings.intro = e.target.value.trim(); window.save(); };
+  $('mStuInfo').onchange = e => { data.settings.studentInfo = e.target.value.trim(); window.save(); };
   $('mBackup').onclick = () => download('band-volunteers-backup-' + today() + '.json', JSON.stringify(data, null, 1), 'application/json');
   $('mRestore').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;

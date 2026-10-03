@@ -81,6 +81,7 @@
       '<div class="grid2"><label>First name<input id="fFirst" autocomplete="given-name" value="' + esc(me.first || '') + '"></label><label>Last name<input id="fLast" autocomplete="family-name" value="' + esc(me.last || '') + '"></label></div>' +
       '<label id="fPhoneLbl"' + (me.type === 'student' ? ' hidden' : '') + '>Cell phone (for reminder texts)<input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" value="' + esc(me.phone || '') + '" placeholder="(501) 555-0123"></label>' +
       '<label>Email (optional)<input id="fEmail" type="email" autocomplete="email" value="' + esc(me.email || '') + '"></label>' +
+      (board.settings && board.settings.studentInfo ? '<details class="stuinfo" id="fStuInfo"' + (me.type === 'student' ? '' : ' hidden') + ' open><summary>📋 Please read: student volunteer information</summary>' + linkify(board.settings.studentInfo) + '</details>' : '') +
       '<label id="fParentLbl">' + (me.type === 'student' ? 'Parent\'s name (optional)' : 'Your student\'s name (optional)') + '<input id="fParent" value="' + esc(me.parent || '') + '"></label>' +
       '<div class="row-actions"><button type="button" id="fGo">Sign me up</button><button type="button" class="ghost" id="fCancel">Cancel</button></div>' +
       '<p class="helper">Phone numbers and emails are only seen by the volunteer coordinator.</p>');
@@ -89,6 +90,7 @@
       type = b.dataset.t; $('fType').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b));
       $('fParentLbl').firstChild.textContent = type === 'student' ? 'Parent\'s name (optional)' : 'Your student\'s name (optional)';
       $('fPhoneLbl').hidden = type === 'student'; // students don't give phone numbers
+      if ($('fStuInfo')) $('fStuInfo').hidden = type !== 'student';
     });
     $('fCancel').onclick = closeModal;
     $('fGo').onclick = async () => {
@@ -105,7 +107,7 @@
       }
       store.set('Me', v);
       store.set('Tokens', [data.token].concat(store.get('Tokens', [])).slice(0, 50));
-      done(data);
+      done(data, v.type);
       load();
     };
   }
@@ -127,9 +129,11 @@
     document.body.appendChild(a); a.click(); a.remove();
   }
 
-  function done(x) {
+  function done(x, type) {
+    const info = type === 'student' && board.settings && board.settings.studentInfo;
     openModal('<h2>🎉 You\'re signed up!</h2><p><b>' + esc(x.role) + '</b><br>' + esc(x.event) + '<br>' + esc(fmtDate(x.date)) + (x.start ? ' · ' + esc(fmtRange(x.start, x.end)) : '') + (x.location ? '<br>📍 ' + esc(x.location) : '') + '</p>' +
-      '<p>Thank you for supporting the band! You\'ll get a reminder text before your shift.</p>' +
+      (info ? '<p>Thank you for supporting the band!</p><details class="stuinfo" open><summary>📋 What to know before your shift</summary>' + linkify(info) + '</details>'
+        : '<p>Thank you for supporting the band! You\'ll get a reminder text before your shift.</p>') +
       '<div class="row-actions stack"><button type="button" id="dCal">📅 Add to my calendar</button><button type="button" class="ghost" id="dMore">Sign up for something else</button></div>' +
       '<p class="helper">Plans change? Come back to this page on this phone and tap Cancel under My sign-ups.</p>');
     $('dCal').onclick = () => addToCalendar(x);
