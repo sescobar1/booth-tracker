@@ -911,6 +911,7 @@ function viewFiles() {
     (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
     '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
     '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    (!searching && /\/Medical$/i.test(fileFolder) ? healthPanel(topOf(fileFolder)) + '<h3 class="filesh">' + esc(topOf(fileFolder)) + '’s medical files</h3>' : '') +
     (subs.length ? '<div class="fgrid">' + subs.map(f => {
       const n = data.docs.filter(d => inTree(d, f)).length, kids = childFolders(f).length, c = pastel(topOf(f));
       return '<button type="button" class="ftile" data-ff="' + esc(f) + '" style="--fc:' + c[0] + ';--fb:' + c[1] + '">' + FOLDER_ICON + '<b>' + esc(leafOf(f)) + '</b><span>' + (n ? n + (n === 1 ? ' file' : ' files') : 'Empty') + (kids ? ' · ' + kids + (kids === 1 ? ' folder' : ' folders') : '') + '</span></button>';
@@ -937,6 +938,7 @@ function viewFiles() {
     list.splice(at, 0, p); setFolders(list); toast('✓ Folder “' + n + '” made'); viewFiles();
   };
   if ($('fMenu')) $('fMenu').onclick = () => folderMenu(fileFolder);
+  if (/\/Medical$/i.test(fileFolder) && !searching) wireHealth($('view'), topOf(fileFolder));
   $('view').querySelectorAll('[data-doc]').forEach(r => r.onclick = e => { if (!e.target.dataset.dedit) openDoc(r.dataset.doc); });
   $('view').querySelectorAll('[data-dedit]').forEach(b => b.onclick = e => { e.stopPropagation(); editDoc(b.dataset.dedit); });
 }
@@ -1467,6 +1469,7 @@ function editTemplate(id) {
 
 // ---------- Trackers (habits and personal logs) ----------
 // Each log is a planner item of kind "track" (list = tracker id, date = the day). Trackers never go to the calendar feed.
+// They also show on the subscribed Google/iPhone calendars (as all-day entries without alerts).
 const DEFAULT_TRACKERS = [
   { id: 'nails', name: 'Nails', icon: '💅', cycle: false },
   { id: 'us', name: 'Us', icon: '❤️', cycle: false },
@@ -1490,7 +1493,7 @@ function trackStats(t) {
 function toggleTrack(id, d, quiet) {
   const t = trackers().find(x => x.id === id), have = loggedOn(id, d);
   if (have) { data.items = data.items.filter(i => i !== have); if (!quiet) toast('Removed ' + t.icon + ' for ' + fmtDate(d, 'rel')); }
-  else { data.items.push(newItem({ kind: 'track', list: id, date: d, title: t.name })); if (!quiet) toast(t.icon + ' Logged for ' + fmtDate(d, 'rel')); }
+  else { data.items.push(newItem({ kind: 'track', list: id, date: d, title: t.icon + ' ' + t.name })); if (!quiet) toast(t.icon + ' Logged for ' + fmtDate(d, 'rel')); }
   window.save();
 }
 // Little icons for a day on the calendar (and a faint one on a predicted cycle day).
@@ -1510,7 +1513,7 @@ function wireTrack(root, after) {
 }
 function viewTrack() {
   const ts = trackers(), tdy = today();
-  $('view').innerHTML = '<a class="back" href="#today">‹ Today</a><h1>Trackers</h1><p class="helper">Tap to log today. These stay private in your planner — they never go to Google or your iPhone calendar.</p>' +
+  $('view').innerHTML = '<a class="back" href="#today">‹ Today</a><h1>Trackers</h1><p class="helper">Tap to log today. Logged days also show on your Google and iPhone “My Planner” calendars.</p>' +
     ts.map(t => {
       const s = trackStats(t), weeks = [];
       for (let k = 55; k >= 0; k--) { const d = addDays(tdy, -k); weeks.push('<i class="dot' + (s.dates.includes(d) ? ' on' : '') + (d === tdy ? ' now' : '') + '" title="' + esc(fmtDate(d)) + '"></i>'); }
@@ -1519,6 +1522,7 @@ function viewTrack() {
       return '<div class="card pad tcard"><div class="mini-head"><h2><span class="ticon">' + t.icon + '</span> ' + esc(t.name) + '</h2><button type="button" class="trk big' + (loggedOn(t.id, tdy) ? ' on' : '') + '" data-trk="' + esc(t.id) + '" data-trkd="' + tdy + '">' + (loggedOn(t.id, tdy) ? '✓ Today' : '+ Today') + '</button></div>' +
         '<p class="tfacts">' + facts.map(esc).join(' · ') + '</p>' +
         (t.cycle && s.next ? '<p class="tnext">' + t.icon + ' Next one expected around <b>' + esc(fmtDate(s.next, 'rel')) + '</b>' + (daysBetween(tdy, s.next) > 0 ? ' (in ' + daysBetween(tdy, s.next) + ' days)' : daysBetween(tdy, s.next) === 0 ? ' (today)' : ' (' + -daysBetween(tdy, s.next) + ' days late)') + '</p>' : t.cycle ? '<p class="helper">Log 2 or more start days and it will predict the next one.</p>' : '') +
+        (t.cycle ? '<p><a href="#files" data-goto-med="' + esc(t.name) + '">Open health record ›</a></p>' : '') +
         '<div class="dots" title="Last 8 weeks">' + weeks.join('') + '</div>' +
         '<div class="row-actions"><label class="tother">Log another day<input type="date" data-tday="' + esc(t.id) + '" max="' + tdy + '"></label><button type="button" class="ghost small" data-thist="' + esc(t.id) + '">History</button><button type="button" class="ghost small" data-tedit="' + esc(t.id) + '">Edit</button></div></div>';
     }).join('') +
@@ -1528,6 +1532,7 @@ function viewTrack() {
   $('view').querySelectorAll('[data-thist]').forEach(b => b.onclick = () => trackHistory(b.dataset.thist));
   $('view').querySelectorAll('[data-tedit]').forEach(b => b.onclick = () => editTracker(b.dataset.tedit));
   $('tNew').onclick = () => editTracker();
+  $('view').querySelectorAll('[data-goto-med]').forEach(a => a.onclick = () => { const who = (folderList().find(f => /\/Medical$/i.test(f) && a.dataset.gotoMed.toLowerCase().includes(topOf(f).toLowerCase())) || ''); fileFolder = who; });
 }
 function trackHistory(id) {
   const t = trackers().find(x => x.id === id), logs = logsOf(id).reverse();
@@ -1557,6 +1562,86 @@ function editTracker(id) {
     if (!confirm('Delete the ' + t.name + ' tracker' + (n ? ' and its ' + n + ' logged days' : '') + '?')) return;
     S().trackers = list.filter(x => x.id !== id); data.items = data.items.filter(i => !(i.kind === 'track' && i.list === id)); window.save(); closeModal(); route();
   };
+}
+
+// ---------- Health records ----------
+// Opening any "<Person>/Medical" folder shows that person's record above their medical files.
+// Stored as planner items of kind "health" (list = person): title "growth" (weight/height), "visit" (doctor visit),
+// or "info" (one card of key facts). Details are JSON in notes.
+const hj = i => { try { return JSON.parse(i.notes || '{}'); } catch (e) { return {}; } };
+const healthOf = (who, type) => data.items.filter(i => i.kind === 'health' && i.list === who && i.title === type).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+const cycleTrackerFor = who => trackers().find(t => t.cycle && t.name.toLowerCase().includes(who.toLowerCase()));
+const inches = v => { const s = String(v || '').trim(); const m = s.match(/^(\d+)\s*(?:'|ft|feet)\s*(\d+(?:\.\d+)?)?/i); if (m) return +m[1] * 12 + (+m[2] || 0); const n = parseFloat(s); return isNaN(n) ? null : n; };
+const feetIn = n => n == null ? '' : Math.floor(n / 12) + '′ ' + (Math.round((n % 12) * 10) / 10) + '″';
+function sparkline(points, color) {
+  if (points.length < 2) return '';
+  const xs = points.map(p => new Date(p[0]).getTime()), ys = points.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), W = 260, H = 60;
+  const pt = (x, y) => (8 + (x - x0) / Math.max(1, x1 - x0) * (W - 16)).toFixed(1) + ',' + (H - 8 - (y - y0) / Math.max(.01, y1 - y0) * (H - 16)).toFixed(1);
+  return '<svg class="sparkln" viewBox="0 0 ' + W + ' ' + H + '"><polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + points.map(p => pt(new Date(p[0]).getTime(), p[1])).join(' ') + '"/>' + points.map(p => '<circle cx="' + pt(new Date(p[0]).getTime(), p[1]).split(',')[0] + '" cy="' + pt(new Date(p[0]).getTime(), p[1]).split(',')[1] + '" r="3" fill="' + color + '"/>').join('') + '</svg>';
+}
+function healthPanel(who) {
+  const info = healthOf(who, 'info')[0], iv = info ? hj(info) : {};
+  const growth = healthOf(who, 'growth'), visits = healthOf(who, 'visit');
+  const ct = cycleTrackerFor(who), cs = ct ? trackStats(ct) : null, starts = ct ? logsOf(ct.id).map(l => l.date).reverse() : [];
+  const tdy = today();
+  const g = growth.map(x => Object.assign({ date: x.date, id: x.id }, hj(x)));
+  const wPts = g.filter(x => x.weight).map(x => [x.date, +x.weight]).reverse(), hPts = g.filter(x => inches(x.height) != null).map(x => [x.date, inches(x.height)]).reverse();
+  const infoRows = [['Doctor', iv.doctor], ['Doctor’s phone', iv.phone], ['Allergies', iv.allergies], ['Medications', iv.meds], ['Conditions', iv.conditions], ['Blood type', iv.blood], ['Insurance', iv.insurance], ['Other', iv.other]].filter(r => r[1]);
+  return '<div class="health">' +
+    '<div class="card pad hcard"><div class="mini-head"><h2>' + esc(who) + '’s health record</h2><button type="button" class="ghost small" data-hinfo="' + esc(who) + '">Edit info</button></div>' +
+      (infoRows.length ? '<dl class="hinfo">' + infoRows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + (k === 'Doctor’s phone' ? '<a href="tel:' + esc(String(v).replace(/[^\d+]/g, '')) + '">' + esc(v) + '</a>' : esc(v)) + '</dd>').join('') + '</dl>' : '<p class="helper">Add her doctor, allergies, medications and insurance so it’s all in one place.</p>') + '</div>' +
+    (ct ? '<div class="card pad hcard"><div class="mini-head"><h2>' + ct.icon + ' Period</h2><button type="button" class="trk big' + (loggedOn(ct.id, tdy) ? ' on' : '') + '" data-trk="' + esc(ct.id) + '" data-trkd="' + tdy + '">' + (loggedOn(ct.id, tdy) ? '✓ Started today' : '+ Started today') + '</button></div>' +
+      (cs.next ? '<p class="tnext">Next one expected around <b>' + esc(fmtDate(cs.next, 'rel')) + '</b>' + (daysBetween(tdy, cs.next) > 0 ? ' (in ' + daysBetween(tdy, cs.next) + ' days)' : daysBetween(tdy, cs.next) === 0 ? ' (today)' : ' (' + -daysBetween(tdy, cs.next) + ' days late)') + (cs.avg ? ' · cycle about ' + cs.avg + ' days' : '') + '</p>' : '<p class="helper">Log two or more start days to see a prediction.</p>') +
+      (starts.length ? '<table class="mini htable"><thead><tr><th>Started</th><th>Days since the one before</th></tr></thead><tbody>' + starts.slice(0, 12).map((d, k) => '<tr><td>' + esc(fmtDate(d)) + '</td><td>' + (starts[k + 1] ? daysBetween(starts[k + 1], d) : '—') + '</td></tr>').join('') + '</tbody></table>' : '') +
+      '<div class="row-actions"><label class="tother">Started on another day<input type="date" data-tday="' + esc(ct.id) + '" max="' + tdy + '"></label><button type="button" class="ghost small" data-thist="' + esc(ct.id) + '">Edit list</button></div></div>' : '') +
+    '<div class="card pad hcard"><div class="mini-head"><h2>Height &amp; weight</h2><button type="button" class="small" data-hgrow="' + esc(who) + '">＋ Add</button></div>' +
+      (g.length ? '<div class="grow"><div><span>Weight</span><b>' + esc(g.find(x => x.weight) ? g.find(x => x.weight).weight + ' lb' : '—') + '</b>' + sparkline(wPts, '#c99a8e') + '</div><div><span>Height</span><b>' + esc(feetIn(hPts.length ? hPts[hPts.length - 1][1] : null) || '—') + '</b>' + sparkline(hPts, '#7d9b76') + '</div></div>' +
+        '<table class="mini htable"><thead><tr><th>Date</th><th>Weight</th><th>Height</th></tr></thead><tbody>' + g.map(x => '<tr data-hedit="' + x.id + '"><td>' + esc(fmtDate(x.date)) + '</td><td>' + esc(x.weight ? x.weight + ' lb' : '') + '</td><td>' + esc(inches(x.height) != null ? feetIn(inches(x.height)) : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="helper">Add her height and weight at each check-up to see how she’s growing.</p>') + '</div>' +
+    '<div class="card pad hcard"><div class="mini-head"><h2>Doctor visits</h2><button type="button" class="small" data-hvisit="' + esc(who) + '">＋ Add visit</button></div>' +
+      (visits.length ? visits.map(v => { const o = hj(v); return '<div class="hvisit" data-hedit="' + v.id + '"><b>' + esc(fmtDate(v.date)) + ' · ' + esc(o.reason || 'Visit') + '</b><span class="sub">' + esc([o.doctor, o.followup ? 'Next: ' + fmtDate(o.followup) : ''].filter(Boolean).join(' · ')) + '</span>' + (o.notes ? '<p class="notes">' + esc(o.notes) + '</p>' : '') + (o.meds ? '<p class="sub">💊 ' + esc(o.meds) + '</p>' : '') + '</div>'; }).join('') : '<p class="helper">Write down what the doctor said, medicines and the next appointment.</p>') + '</div>' +
+    '</div>';
+}
+function wireHealth(root, who) {
+  wireTrack(root, viewFiles);
+  root.querySelectorAll('[data-tday]').forEach(i => i.onchange = () => { if (i.value) { if (!loggedOn(i.dataset.tday, i.value)) toggleTrack(i.dataset.tday, i.value); viewFiles(); } });
+  root.querySelectorAll('[data-thist]').forEach(b => b.onclick = () => trackHistory(b.dataset.thist));
+  root.querySelectorAll('[data-hinfo]').forEach(b => b.onclick = () => editHealthInfo(who));
+  root.querySelectorAll('[data-hgrow]').forEach(b => b.onclick = () => editHealth(who, 'growth'));
+  root.querySelectorAll('[data-hvisit]').forEach(b => b.onclick = () => editHealth(who, 'visit'));
+  root.querySelectorAll('[data-hedit]').forEach(b => b.onclick = () => { const it = data.items.find(i => i.id === b.dataset.hedit); if (it) editHealth(who, it.title, it); });
+}
+function editHealthInfo(who) {
+  let it = healthOf(who, 'info')[0]; const v = it ? hj(it) : {};
+  const f = (k, l, ph) => '<label>' + l + '<input data-hi="' + k + '" value="' + esc(v[k] || '') + '" placeholder="' + esc(ph || '') + '"></label>';
+  openModal('<h2>' + esc(who) + '’s key info</h2>' + f('doctor', 'Doctor / clinic', 'Dr. …, Russellville Pediatrics') + f('phone', 'Doctor’s phone', '479-…') + f('allergies', 'Allergies', 'None known') + f('meds', 'Medications', '') + f('conditions', 'Conditions', '') + f('blood', 'Blood type', '') + f('insurance', 'Insurance (plan & member #)', '') +
+    '<label>Other<textarea data-hi="other" rows="3">' + esc(v.other || '') + '</textarea></label><div class="row-actions"><button type="button" id="hiSave">Save</button><button type="button" class="ghost" id="hiCancel">Cancel</button></div>');
+  $('hiCancel').onclick = closeModal;
+  $('hiSave').onclick = () => {
+    const o = {}; document.querySelectorAll('[data-hi]').forEach(i => { if (i.value.trim()) o[i.dataset.hi] = i.value.trim(); });
+    if (!it) { it = newItem({ kind: 'health', list: who, title: 'info', date: today() }); data.items.push(it); }
+    it.notes = JSON.stringify(o); window.save(); closeModal(); viewFiles();
+  };
+}
+function editHealth(who, type, it) {
+  const v = it ? hj(it) : {}, growth = type === 'growth';
+  openModal('<h2>' + (growth ? 'Height & weight' : 'Doctor visit') + '</h2><label>Date<input id="hDate" type="date" value="' + esc(it ? it.date : today()) + '"></label>' +
+    (growth ? '<div class="grid2"><label>Weight (lb)<input id="hW" inputmode="decimal" value="' + esc(v.weight || '') + '" placeholder="98.5"></label><label>Height<input id="hH" value="' + esc(v.height || '') + '" placeholder="4 ft 11 in, or 59"></label></div><label>Note<input id="hN" value="' + esc(v.note || '') + '" placeholder="From the check-up"></label>'
+      : '<label>Doctor / clinic<input id="hDoc" value="' + esc(v.doctor || (hj(healthOf(who, 'info')[0] || {}).doctor || '')) + '"></label><label>Reason<input id="hR" value="' + esc(v.reason || '') + '" placeholder="Well check, sick visit, sports physical…"></label>' +
+        '<label>What the doctor said<textarea id="hNotes" rows="5">' + esc(v.notes || '') + '</textarea></label><label>Medicines<input id="hM" value="' + esc(v.meds || '') + '" placeholder="Amoxicillin 2x a day for 10 days"></label>' +
+        '<label>Next appointment<input id="hF" type="date" value="' + esc(v.followup || '') + '"></label><label class="check"><input type="checkbox" id="hCal"' + (it ? '' : ' checked') + '> Put the next appointment on my calendar</label>') +
+    '<div class="row-actions"><button type="button" id="hSave">Save</button><button type="button" class="ghost" id="hCancel">Cancel</button>' + (it ? '<button type="button" class="danger" id="hDel">Delete</button>' : '') + '</div>');
+  $('hCancel').onclick = closeModal;
+  $('hSave').onclick = () => {
+    const o = growth ? { weight: $('hW').value.trim(), height: $('hH').value.trim(), note: $('hN').value.trim() } : { doctor: $('hDoc').value.trim(), reason: $('hR').value.trim(), notes: $('hNotes').value.trim(), meds: $('hM').value.trim(), followup: $('hF').value };
+    if (growth && !o.weight && !o.height) { toast('Add a weight or height.'); return; }
+    const rec = it || newItem({ kind: 'health', list: who, title: type });
+    Object.assign(rec, { date: $('hDate').value || today(), notes: JSON.stringify(o) });
+    if (!it) data.items.push(rec);
+    if (!growth && o.followup && $('hCal') && $('hCal').checked) data.items.push(newItem({ kind: 'event', title: who + ' – ' + (o.doctor || 'doctor') + ' appointment', date: o.followup, allDay: true, notes: o.reason ? 'Follow-up: ' + o.reason : '', color: COLORS[2] }));
+    window.save(); closeModal(); viewFiles(); toast('✓ Saved' + (!growth && o.followup && $('hCal') && $('hCal').checked ? ' · appointment added to your calendar (set the time there)' : ''));
+  };
+  if (it) $('hDel').onclick = () => { if (!confirm('Delete this entry?')) return; data.items = data.items.filter(i => i !== it); window.save(); closeModal(); viewFiles(); };
 }
 
 // ---------- More: calendars, feed, lists ----------
