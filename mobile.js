@@ -415,6 +415,8 @@
     if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))) return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad(m[1]) + '-' + pad(m[2]);
     const d = new Date(s); return s && !isNaN(d) ? isoLocal(d) : '';
   }
+  // Sales count at the net sale amount when the report has that column; payout is the fallback.
+  const NET_SALE = ['NETSALE', 'NETSALES', 'NETSALEAMOUNT', 'NETSALESAMOUNT', 'NETAMOUNT', 'NETPRICE', 'NETTOTAL'];
   const hkey = v => String(v ?? '').toUpperCase().replace(/[^A-Z]/g, '');
   function textRows(text) {
     return text.replace(/\r/g, '').split('\n').filter(l => l.trim()).map(l => l.includes('\t') ? l.split('\t') : csvLine(l));
@@ -444,7 +446,7 @@
         lines.push({ page: n, y: r.y, size: r.size, cells });
       });
     }
-    const isHead = l => { const h = l.cells.map(c => hkey(c.str)); return h.some(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x)) && h.some(x => ['PAYOUT', 'NETPAYOUT', 'NET'].includes(x)); };
+    const isHead = l => { const h = l.cells.map(c => hkey(c.str)); return h.some(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x)) && h.some(x => ['PAYOUT', 'NETPAYOUT', 'NET', ...NET_SALE].includes(x)); };
     const heads = lines.filter(isHead);
     if (!heads.length) return pdfLooseRows(lines);
     const out = [heads[0].cells.map(c => c.str)], data = [], lone = [];
@@ -495,7 +497,7 @@
   }
   function importRelic(rows) {
     const msg = $('relicMsg');
-    const hi = rows.findIndex(r => { const h = r.map(hkey); return (h.includes('BARCODEID') && h.includes('CURRENTSTOCK')) || (h.some(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x)) && h.some(x => ['PAYOUT', 'NETPAYOUT', 'NET'].includes(x))); });
+    const hi = rows.findIndex(r => { const h = r.map(hkey); return (h.includes('BARCODEID') && h.includes('CURRENTSTOCK')) || (h.some(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x)) && h.some(x => ['PAYOUT', 'NETPAYOUT', 'NET', ...NET_SALE].includes(x))); });
     if (hi < 0) { msg.textContent = 'I could not find the sales report column headers. Include the header row (DETAIL, PAYOUT, DATE SOLD) or use the inventory export (Barcode ID, Current Stock).'; return; }
     const h = rows[hi].map(hkey), col = (...names) => h.findIndex(x => names.includes(x)), body = rows.slice(hi + 1);
     if (h.includes('BARCODEID') && h.includes('CURRENTSTOCK')) {
@@ -511,25 +513,36 @@
       msg.textContent = 'Store inventory updated: ' + inv.length + ' items.';
       return;
     }
-    const c = { item: col('DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'), pay: col('PAYOUT', 'NETPAYOUT', 'NET'), date: col('DATESOLD', 'DATE', 'SOLDDATE'), status: col('STATUS') };
+    const net = col(...NET_SALE) >= 0 ? col(...NET_SALE) : col('NET');
+    const c = { item: col('DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'), pay: col('PAYOUT', 'NETPAYOUT'), net, date: col('DATESOLD', 'DATE', 'SOLDDATE'), status: col('STATUS') };
+    const amtCol = c.net >= 0 ? c.net : c.pay;
     const incoming = {}; let skippedStatus = 0, outside = 0;
     for (const r of body) {
-      const item = cleanName(r[c.item]), amount = Math.round(numberValue(r[c.pay]) * 100) / 100, date = c.date >= 0 ? isoDate(r[c.date]) : '';
+      const item = cleanName(r[c.item]), amount = Math.round(numberValue(r[amtCol]) * 100) / 100, date = c.date >= 0 ? isoDate(r[c.date]) : '';
+      const payout = c.pay >= 0 && c.pay !== amtCol ? Math.round(numberValue(r[c.pay]) * 100) / 100 : null;
       if (!item || !(amount > 0) || /^total/i.test(item)) continue;
       if (c.status >= 0 && /refund|void|cancel/i.test(String(r[c.status] || ''))) { skippedStatus++; continue; }
       const m = date ? monthOf(date) : currentMonth;
       if (!months.includes(m)) { outside++; continue; }
-      (incoming[m] = incoming[m] || []).push({ item, amount, date, booth: 'Unassigned' });
+      (incoming[m] = incoming[m] || []).push(payout != null ? { item, amount, payout, date, booth: 'Unassigned' } : { item, amount, date, booth: 'Unassigned' });
     }
-    let added = 0, dupes = 0; const perMonth = [];
+    let added = 0, dupes = 0, fixed = 0; const perMonth = [];
     for (const [m, list] of Object.entries(incoming)) {
-      const have = {};
-      allRows('sales', m).forEach(x => { const k = (x.date || '') + '|' + groupKey(x.item) + '|' + x.amount.toFixed(2); have[k] = (have[k] || 0) + 1; });
-      const fresh = list.filter(x => { const k = x.date + '|' + groupKey(x.item) + '|' + x.amount.toFixed(2); if (have[k]) { have[k]--; dupes++; return false; } return true; });
+      const have = {}, mine = {};
+      const key = (x, amt) => (x.date || '') + '|' + groupKey(x.item) + '|' + Number(amt).toFixed(2);
+      allRows('sales', m).forEach(x => { const k = key(x, x.amount); have[k] = (have[k] || 0) + 1; });
+      (data.sales[m] || []).forEach(x => { const k = key(x, x.amount); (mine[k] = mine[k] || []).push(x); });
+      const fresh = list.filter(x => {
+        const k = key(x, x.amount); if (have[k]) { have[k]--; dupes++; return false; }
+        // Sales imported earlier at the payout amount switch to the net sale amount instead of being added twice.
+        const kp = x.payout != null ? key(x, x.payout) : '';
+        if (kp && have[kp] && mine[kp] && mine[kp].length) { have[kp]--; const old = mine[kp].shift(); old.amount = x.amount; old.payout = x.payout; fixed++; return false; }
+        return true;
+      });
       if (fresh.length) { (data.sales[m] = data.sales[m] || []).push(...fresh); perMonth.push(m + ': ' + fresh.length); added += fresh.length; }
     }
     data.lastRelicImport = todayIso(); save(); render();
-    msg.textContent = (added ? 'Added ' + added + ' new sale' + (added === 1 ? '' : 's') + ' (' + perMonth.join(', ') + ').' : 'No new sales to add.') +
+    msg.textContent = (c.net >= 0 ? 'Using net sale amounts. ' : '') + (added ? 'Added ' + added + ' new sale' + (added === 1 ? '' : 's') + ' (' + perMonth.join(', ') + ').' : 'No new sales to add.') + (fixed ? ' Changed ' + fixed + ' earlier sale' + (fixed === 1 ? '' : 's') + ' to the net sale amount.' : '') +
       (dupes ? ' Skipped ' + dupes + ' already in the tracker.' : '') + (skippedStatus ? ' Skipped ' + skippedStatus + ' refunds.' : '') + (outside ? ' ' + outside + ' rows were outside the tracker\'s months.' : '');
     if (added) toast(added + ' ' + STORE_SHORT + ' sales imported.');
   }
