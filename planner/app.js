@@ -2360,7 +2360,8 @@ function viewShop() {
     '<a class="wm" href="' + esc(walmartUrl(i)) + '" target="_blank" rel="noopener" title="Open on ' + esc(storeOf(i.location)) + '">' + esc(storeOf(i.location)) + (i.location ? ' ✓' : '') + '</a></div>';
   $('view').innerHTML = mealTabs('shop') +
     '<div class="quickbar"><input id="shopAdd" placeholder="Add an item… “paper towels”, “2 gallons milk”"><button type="button" id="shopGo">Add</button></div>' +
-    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
+    usualsHtml(need) +
+    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><a class="button ghost" href="https://www.samsclub.com/" target="_blank" rel="noopener">Open Sam’s Club</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
     '<p class="helper">📤 <b>Send to Salvador</b> texts him the list. For a live list he can check off at the store, sign in to this Planner on his phone with your account (More → Account and sync): changes show up on both phones.</p>' +
     '<p class="helper">Tap the store button (Walmart, or the store you saved for that item) to find each item and add it to your cart (pickup or delivery). Check it off here as you go. To always open the exact product you buy, tap an item and paste its Walmart link.</p>' +
     (groups.length ? groups.map(([a, l]) => '<div class="card pad"><h3>' + esc(a) + '</h3>' + l.map(row).join('') + '</div>').join('') : '<div class="card pad"><p class="helper">Your list is empty. Plan meals, then tap <b>Add ingredients to shopping list</b>, or add items above.</p></div>') +
@@ -2372,6 +2373,11 @@ function viewShop() {
     window.save(); viewShop(); setTimeout(() => $('shopAdd').focus(), 50);
   };
   $('shopGo').onclick = add; $('shopAdd').onkeydown = e => { if (e.key === 'Enter') add(); };
+  $('view').querySelectorAll('[data-usual]').forEach(b => b.onclick = () => {
+    const k = b.dataset.usual, name = k.charAt(0).toUpperCase() + k.slice(1);
+    data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(name), notes: storeOf(S().walmart[k]), location: S().walmart[k] }));
+    window.save(); viewShop(); toast('✓ ' + name + ' added · ' + storeOf(S().walmart[k]));
+  });
   $('view').querySelectorAll('[data-got]').forEach(b => b.onclick = () => { const i = data.items.find(x => x.id === b.dataset.got); i.done = !i.done; window.save(); viewShop(); });
   $('view').querySelectorAll('[data-shopedit]').forEach(b => b.onclick = () => editShop(b.dataset.shopedit));
   $('shopCopy').onclick = () => {
@@ -2385,6 +2391,15 @@ function viewShop() {
   };
   if ($('shopClear')) $('shopClear').onclick = () => { data.items = data.items.filter(i => !(i.kind === 'shop' && i.done)); window.save(); viewShop(); };
   if ($('shopGot')) $('shopGot').onclick = () => { showGot = !showGot; viewShop(); };
+}
+// Things you always buy at a certain store (saved links), as one-tap buttons, grouped by store.
+function usualsHtml(need) {
+  const saved = S().walmart || {}, onList = new Set(need.map(i => i.title.toLowerCase()));
+  const keys = Object.keys(saved).filter(k => /^https:\/\//.test(saved[k]) && !onList.has(k)).sort();
+  if (!keys.length) return '';
+  const byStore = {}; keys.forEach(k => { const st = storeOf(saved[k]); (byStore[st] = byStore[st] || []).push(k); });
+  return '<div class="card pad usuals"><h3>Your usual items</h3>' + Object.keys(byStore).sort().map(st => '<p class="lbl">' + esc(st) + '</p><div class="qfreq">' + byStore[st].map(k => '<button type="button" class="qf" data-usual="' + esc(k) + '">＋ ' + esc(k.charAt(0).toUpperCase() + k.slice(1)) + '</button>').join('') + '</div>').join('') +
+    '<p class="helper">Tap to add it to the list with its saved link. To save a new one, tap an item on the list and paste its product link.</p></div>';
 }
 function editShop(id) {
   const it = data.items.find(i => i.id === id); if (!it) return;
