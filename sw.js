@@ -1,5 +1,5 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'booth-tracker-v45';
+const CACHE = 'booth-tracker-v46';
 const ASSETS = ['./', 'index.html', 'mobile.js', 'sync.js', 'vendor/supabase.js', 'mobile.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'profit-worksheet-data.json', 'relic-inventory-2026-10-02.csv', 'recipe-cards.html', 'fonts/pacifico.woff2', 'fonts/patrick-hand.woff2'];
 
 self.addEventListener('install', e => {
