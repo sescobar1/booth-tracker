@@ -325,3 +325,8 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .qf small { opacity: .65; font-size: 11px; }
 .qt:active, .qf:active { transform: scale(.95); }
 .nick { font-size: .8rem; color: var(--muted); font-family: Inter, sans-serif; margin-left: 4px; }
+.pstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 10px 0; }
+.pstat { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.pstat small { color: var(--muted); font-size: 11px; }
+.pstat b { font-size: 1.1rem; }
+.pstat em { font-style: normal; font-size: 11px; color: var(--sage); }

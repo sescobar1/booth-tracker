@@ -1632,6 +1632,21 @@ function sparkline(points, color) {
   const pt = (x, y) => (8 + (x - x0) / Math.max(1, x1 - x0) * (W - 16)).toFixed(1) + ',' + (H - 8 - (y - y0) / Math.max(.01, y1 - y0) * (H - 16)).toFixed(1);
   return '<svg class="sparkln" viewBox="0 0 ' + W + ' ' + H + '"><polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + points.map(p => pt(new Date(p[0]).getTime(), p[1])).join(' ') + '"/>' + points.map(p => '<circle cx="' + pt(new Date(p[0]).getTime(), p[1]).split(',')[0] + '" cy="' + pt(new Date(p[0]).getTime(), p[1]).split(',')[1] + '" r="3" fill="' + color + '"/>').join('') + '</svg>';
 }
+// How many days a period lasted (kept in the start day's note, like "5 days").
+const periodLog = (ct, d) => logsOf(ct.id).find(l => l.date === d);
+const periodDays = (ct, d) => { const l = periodLog(ct, d), m = l && /^(\d+)\s*day/.exec(l.notes || ''); return m ? +m[1] : null; };
+// Like Flo: previous cycle, previous period and how much the cycle varies.
+function periodSummary(ct, starts) {
+  const gaps = starts.slice(0, -1).map((d, k) => daysBetween(starts[k + 1], d));
+  const lens = starts.map(d => periodDays(ct, d)).filter(Boolean);
+  const box = (k, v, note) => '<div class="pstat"><small>' + k + '</small><b>' + v + '</b>' + (note ? '<em>' + note + '</em>' : '') + '</div>';
+  const lastLen = periodDays(ct, starts[0]) || lens[0];
+  return '<div class="pstats">' +
+    (gaps.length ? box('Previous cycle', gaps[0] + ' days', gaps[0] >= 21 && gaps[0] <= 45 ? '✓ normal' : '') : '') +
+    (lastLen ? box('Previous period', lastLen + ' days', lastLen >= 2 && lastLen <= 7 ? '✓ normal' : '') : '') +
+    (gaps.length > 1 ? box('Cycle range', Math.min(...gaps) + '–' + Math.max(...gaps) + ' days') : '') +
+    '</div>' + (gaps.some(g => g > 45) ? '<p class="helper">Cycles can vary a lot for 2–3 years after a first period. The prediction leaves out the very long gaps.</p>' : '');
+}
 function healthPanel(who) {
   const info = healthOf(who, 'info')[0], iv = info ? hj(info) : {};
   const growth = healthOf(who, 'growth'), visits = healthOf(who, 'visit');
@@ -1645,7 +1660,7 @@ function healthPanel(who) {
       (infoRows.length ? '<dl class="hinfo">' + infoRows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + (k === 'Doctor’s phone' ? '<a href="tel:' + esc(String(v).replace(/[^\d+]/g, '')) + '">' + esc(v) + '</a>' : esc(v)) + '</dd>').join('') + '</dl>' : '<p class="helper">Add her doctor, allergies, medications and insurance so it’s all in one place.</p>') + '</div>' +
     (ct ? '<div class="card pad hcard"><div class="mini-head"><h2>' + ct.icon + ' Period</h2><button type="button" class="trk big' + (loggedOn(ct.id, tdy) ? ' on' : '') + '" data-trk="' + esc(ct.id) + '" data-trkd="' + tdy + '">' + (loggedOn(ct.id, tdy) ? '✓ Started today' : '+ Started today') + '</button></div>' +
       (cs.next ? '<p class="tnext">Next one expected around <b>' + esc(fmtDate(cs.next, 'rel')) + '</b>' + (daysBetween(tdy, cs.next) > 0 ? ' (in ' + daysBetween(tdy, cs.next) + ' days)' : daysBetween(tdy, cs.next) === 0 ? ' (today)' : ' (' + -daysBetween(tdy, cs.next) + ' days late)') + (cs.avg ? ' · cycle about ' + cs.avg + ' days' : '') + '</p>' : '<p class="helper">Log two or more start days to see a prediction.</p>') +
-      (starts.length ? '<table class="mini htable"><thead><tr><th>Started</th><th>Days since the one before</th></tr></thead><tbody>' + starts.slice(0, 12).map((d, k) => '<tr><td>' + esc(fmtDate(d)) + '</td><td>' + (starts[k + 1] ? daysBetween(starts[k + 1], d) : '—') + '</td></tr>').join('') + '</tbody></table>' : '') +
+      (starts.length ? periodSummary(ct, starts) + '<table class="mini htable"><thead><tr><th>Started</th><th>Lasted</th><th>Cycle</th></tr></thead><tbody>' + starts.slice(0, 12).map((d, k) => { const n = periodDays(ct, d); return '<tr><td>' + esc(fmtDate(d)) + '</td><td><button type="button" class="linkish" data-plen="' + esc(ct.id) + '" data-pd="' + d + '">' + (n ? n + ' days' : '＋ add') + '</button></td><td>' + (k ? daysBetween(d, starts[k - 1]) + ' days' : 'now ' + (daysBetween(d, today()) + 1) + ' days') + '</td></tr>'; }).join('') + '</tbody></table><p class="helper">Tap “Lasted” to change how many days it lasted.</p>' : '') +
       '<div class="row-actions"><label class="tother">Started on another day<input type="date" data-tday="' + esc(ct.id) + '" max="' + tdy + '"></label><button type="button" class="ghost small" data-thist="' + esc(ct.id) + '">Edit list</button></div></div>' : '') +
     '<div class="card pad hcard"><div class="mini-head"><h2>Height &amp; weight</h2><button type="button" class="small" data-hgrow="' + esc(who) + '">＋ Add</button></div>' +
       (g.length ? '<div class="grow"><div><span>Weight</span><b>' + esc(g.find(x => x.weight) ? g.find(x => x.weight).weight + ' lb' : '—') + '</b>' + sparkline(wPts, '#c99a8e') + '</div><div><span>Height</span><b>' + esc(feetIn(hPts.length ? hPts[hPts.length - 1][1] : null) || '—') + '</b>' + sparkline(hPts, '#7d9b76') + '</div></div>' +
@@ -1658,6 +1673,14 @@ function wireHealth(root, who) {
   wireTrack(root, viewFiles);
   root.querySelectorAll('[data-tday]').forEach(i => i.onchange = () => { if (i.value) { if (!loggedOn(i.dataset.tday, i.value)) toggleTrack(i.dataset.tday, i.value); viewFiles(); } });
   root.querySelectorAll('[data-thist]').forEach(b => b.onclick = () => trackHistory(b.dataset.thist));
+  root.querySelectorAll('[data-plen]').forEach(b => b.onclick = () => {
+    const ct = trackers().find(t => t.id === b.dataset.plen), l = ct && periodLog(ct, b.dataset.pd); if (!l) return;
+    const v = prompt('How many days did the period that started ' + fmtDate(l.date) + ' last?', periodDays(ct, l.date) || '');
+    if (v === null) return;
+    const n = parseInt(v, 10), rest = (l.notes || '').replace(/^\d+\s*days?\s*/, '');
+    l.notes = n > 0 && n < 30 ? n + ' days' + (rest ? ' ' + rest : '') : rest;
+    window.save(); viewFiles();
+  });
   root.querySelectorAll('[data-hinfo]').forEach(b => b.onclick = () => editHealthInfo(who));
   root.querySelectorAll('[data-hgrow]').forEach(b => b.onclick = () => editHealth(who, 'growth'));
   root.querySelectorAll('[data-hvisit]').forEach(b => b.onclick = () => editHealth(who, 'visit'));
