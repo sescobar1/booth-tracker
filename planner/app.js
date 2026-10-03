@@ -177,16 +177,32 @@ function calendarOccurrences(events, from, to) {
 }
 
 // ---------- Connected calendars ----------
+// Google "embed" or "share" links name the calendar but aren't a feed; turn them into the calendar's iCal address.
+// (That address only works if the calendar is public; private ones need the "Secret address in iCal format".)
+function calendarFeedUrl(url) {
+  const u = String(url || '').trim();
+  try {
+    const x = new URL(u.replace(/^webcals?:/i, 'https:'));
+    if (/calendar\.google\.com$/i.test(x.hostname) && !/\/ical\//.test(x.pathname)) {
+      const id = x.searchParams.get('src') || x.searchParams.get('cid');
+      if (id) return 'https://calendar.google.com/calendar/ical/' + encodeURIComponent(/@/.test(id) ? id : atobSafe(id)) + '/public/basic.ics';
+    }
+  } catch (e) {}
+  return u;
+}
+const atobSafe = s => { try { const d = atob(s.replace(/-/g, '+').replace(/_/g, '/')); return /@/.test(d) ? d : s; } catch (e) { return s; } };
 async function refreshCalendar(cal, quiet) {
   const sb = client();
   if (!sb || !signedIn()) { if (!quiet) toast('Sign in (More) to connect calendars.'); return false; }
   try {
-    const { data: text, error } = await sb.functions.invoke('planner-ics', { body: { url: cal.url } });
+    const { data: text, error } = await sb.functions.invoke('planner-ics', { body: { url: calendarFeedUrl(cal.url) } });
     if (error) {
       let msg = error.message;
       try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      if (/\/public\/basic\.ics/.test(calendarFeedUrl(cal.url)) && /40[34]|calendar/i.test(msg)) msg = 'Google keeps this calendar private. Paste its “Secret address in iCal format” instead (Edit).';
       throw new Error(msg);
     }
+    delete cal.lastError;
     const events = parseIcs(typeof text === 'string' ? text : await new Response(text).text());
     cache.set('cal_' + cal.id, { at: Date.now(), events });
     if (!quiet) toast('✓ ' + cal.name + ': ' + events.length + ' events');
