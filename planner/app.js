@@ -180,7 +180,8 @@ function calendarOccurrences(events, from, to) {
 // Google "embed" or "share" links name the calendar but aren't a feed; turn them into the calendar's iCal address.
 // (That address only works if the calendar is public; private ones need the "Secret address in iCal format".)
 function calendarFeedUrl(url) {
-  const u = String(url || '').trim();
+  // Anything typed after ".ics" by accident ("basic.ics4") is dropped.
+  const u = String(url || '').trim().replace(/(\.ics)[^?#\/]*$/i, '$1');
   try {
     const x = new URL(u.replace(/^webcals?:/i, 'https:'));
     if (/calendar\.google\.com$/i.test(x.hostname) && !/\/ical\//.test(x.pathname)) {
