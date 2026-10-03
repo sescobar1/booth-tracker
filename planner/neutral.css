@@ -459,3 +459,15 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .daypick small { color: var(--muted); }
 .idea-chip small { color: var(--muted); }
 .idea-chip.soon { border-color: #ecc9c0; }
+/* On hand: inventory walk-through, barcode scanner, work lunches; Plan my week */
+.invq { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 16px 0; }
+.invq b { font-size: 2.2rem; min-width: 50px; text-align: center; }
+.invq button { width: 56px; height: 56px; border-radius: 50%; font-size: 1.5rem; padding: 0; }
+.scanbox { position: relative; border-radius: 18px; overflow: hidden; background: #111; aspect-ratio: 4 / 3; }
+.scanbox video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scanline { position: absolute; left: 10%; right: 10%; top: 50%; height: 2px; background: #ff5a5a; box-shadow: 0 0 8px #ff5a5a; }
+.lunchcard .switch { font-size: 12px; }
+.wkplan { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.wkrow2 { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; }
+.wkrow2 > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.wkrow2 select { margin: 0; }

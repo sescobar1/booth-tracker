@@ -222,7 +222,7 @@ async function refreshAll(force) {
     for (const c of cals) await refreshCalendar(c, true);
     if (S().showBand !== false) await loadBand();
     if (S().showBills !== false) await loadBills();
-    giftCheck();
+    giftCheck(); lunchCheck();
   } finally { refreshing = false; }
   route();
 }
@@ -1308,6 +1308,7 @@ const FREEZERS_DEFAULT = [{ id: 'pantry', name: 'Pantry', icon: '🥫' }, { id: 
 const freezers = () => {
   if (!S().freezers) S().freezers = FREEZERS_DEFAULT.map(f => Object.assign({}, f));
   if (!S().freezers.some(f => f.id === 'pantry')) S().freezers = [Object.assign({}, FREEZERS_DEFAULT[0])].concat(S().freezers);
+  if (!S().freezers.some(f => f.id === 'fridge')) { const l = S().freezers.slice(), at = l.findIndex(f => f.id === 'pantry') + 1; l.splice(at, 0, { id: 'fridge', name: 'Fridge', icon: '🥛' }); S().freezers = l; }
   return S().freezers;
 };
 // Category, icon, how many months it keeps its best quality, and words that point to it.
@@ -1337,12 +1338,23 @@ const PANTRY_CATS = [
   ['Drinks', '🧃', 12, /\b(coffee|tea|juice|soda|water|gatorade|drink mix|kool[- ]?aid|cocoa mix|creamer)\b/i],
   ['Pantry other', '📦', 12, /$^/]
 ];
-const fzCat = name => (FZ_CATS.find(c => c[0] === name) || PANTRY_CATS.find(c => c[0] === name) || FZ_CATS[FZ_CATS.length - 1]);
+// The fridge, with shelf lives in months (0.13 ≈ 4 days for leftovers).
+const FRIDGE_CATS = [
+  ['Leftovers', '🍱', 0.13, /\bleftovers?\b/i],
+  ['Dairy & eggs', '🥛', 0.6, /\b(milk|eggs?|cheese|butter|yogurt|sour cream|cream cheese|half and half|creamer|cottage|whipped)\b/i],
+  ['Produce', '🥬', 0.3, /\b(lettuce|tomato(es)?|onions?|peppers?|carrots?|celery|apples?|grapes|berries|strawberries|lemons?|limes?|cucumbers?|salad|spinach|broccoli|fruit|vegetables?|avocados?|bananas?)\b/i],
+  ['Deli & meat', '🥓', 0.2, /\b(deli|lunch meat|turkey|ham|bologna|hot ?dogs?|bacon|chicken|beef|sausage|pepperoni|salami)\b/i],
+  ['Fridge drinks', '🧃', 1, /\b(juice|soda|water|tea|lemonade|beer|wine|coke|pepsi|dr pepper)\b/i],
+  ['Fridge condiments', '🫙', 3, /\b(ketchup|mustard|mayo|dressing|ranch|sauce|salsa|pickles?|jelly|jam|syrup)\b/i],
+  ['Fridge other', '📦', 1, /$^/]
+];
+const catsFor = where => where === 'pantry' ? PANTRY_CATS : where === 'fridge' ? FRIDGE_CATS : FZ_CATS;
+const fzCat = name => (FZ_CATS.find(c => c[0] === name) || PANTRY_CATS.find(c => c[0] === name) || FRIDGE_CATS.find(c => c[0] === name) || FZ_CATS[FZ_CATS.length - 1]);
 const fzGuess = (text, where) => {
-  if (where === 'pantry') return (PANTRY_CATS.find(c => c[3].test(text)) || PANTRY_CATS[PANTRY_CATS.length - 1])[0];
+  if (where === 'pantry' || where === 'fridge') { const cs = catsFor(where); return (cs.find(c => c[3].test(text)) || cs[cs.length - 1])[0]; }
   const g = /\bground\b/i.test(text) ? FZ_CATS[1] : FZ_CATS.find(c => c[3].test(text)); return (g || FZ_CATS[FZ_CATS.length - 1])[0];
 };
-const catOrder = k => { const a = PANTRY_CATS.findIndex(c => c[0] === k); return a >= 0 ? a : 100 + FZ_CATS.findIndex(c => c[0] === k); };
+const catOrder = k => { let a = FRIDGE_CATS.findIndex(c => c[0] === k); if (a >= 0) return a; a = PANTRY_CATS.findIndex(c => c[0] === k); return a >= 0 ? 50 + a : 100 + FZ_CATS.findIndex(c => c[0] === k); };
 // "3 bags peas" → 3 × peas · bag; "2 lb ground beef" → 1 × ground beef · 2 lb; "Pizza x2" / "Pizza (2)" → 2 × pizza.
 function fzParse(line) {
   let t = line.replace(/^[\s\-•*–—☐□▢\[\]✓✔]+/, '').replace(/\s+/g, ' ').trim(), qty = 1, size = '';
@@ -1362,6 +1374,7 @@ let fzOn = 'all', fzFind = '', fzShowUsed = false, fzWhereSel = '';
 // Common things for each place, for one-tap adding.
 const FZ_STAPLES = {
   pantry: ['Canned green beans', 'Canned corn', 'Rice', 'Spaghetti', 'Pasta sauce', 'Mac & cheese', 'Chicken broth', 'Peanut butter', 'Cereal', 'Oatmeal', 'Flour', 'Sugar', 'Ramen', 'Chips', 'Crackers', 'Coffee', 'Canned tomatoes', 'Taco seasoning'],
+  fridge: ['Milk', 'Eggs', 'Butter', 'Shredded cheese', 'Sliced cheese', 'Sour cream', 'Lunch meat', 'Lettuce', 'Tomatoes', 'Onions', 'Yogurt', 'Coffee creamer', 'Ketchup', 'Ranch', 'Leftovers'],
   kitchen: ['Frozen pizza', 'Chicken nuggets', 'French fries', 'Mixed veggies', 'Peas', 'Corn', 'Waffles', 'Ice cream', 'Tater tots', 'Broccoli'],
   drink: ['Ice', 'Popsicles', 'Freeze pops', 'Lemonade concentrate', 'Juice'],
   deep: ['Ground beef', 'Chicken breasts', 'Chicken thighs', 'Pork chops', 'Roast', 'Sausage', 'Bacon', 'Brisket', 'Steaks', 'Fish', 'Shrimp', 'Whole turkey']
@@ -1379,29 +1392,48 @@ const fzAge = it => Math.max(0, daysBetween(it.date || today(), today()));
 const fzOld = it => fzAge(it) > fzCat(it.location)[2] * 30 * 0.8;
 const fzAgeText = it => { const d = fzAge(it); return d < 14 ? (d === 0 ? 'today' : d + (d === 1 ? ' day' : ' days')) : d < 60 ? Math.round(d / 7) + ' wk' : Math.round(d / 30) + ' mo'; };
 const fzName = id => (freezers().find(f => f.id === id) || { name: 'Freezer', icon: '🧊' });
+const keepMin = it => it.sort || 0; // "Always keep at least" (0 = off); grab-and-go work lunches have color 'work'.
+const isLunch = it => it.color === 'work';
+// Put something on the shopping list once, in the right aisle.
+function addToShop(it, why) {
+  if (data.items.some(x => x.kind === 'shop' && !x.done && x.title.toLowerCase() === it.title.toLowerCase())) return false;
+  data.items.push(newItem({ kind: 'shop', title: it.title, list: it.list === 'pantry' || it.list === 'fridge' ? aisleOf(it.title) : 'Frozen', notes: [it.notes, why].filter(Boolean).join(' · '), location: (S().walmart || {})[it.title.toLowerCase()] || '' }));
+  return true;
+}
+// Use one: the count goes down; dropping below "always keep" adds it to the shopping list.
+function useOne(it, n) {
+  it.priority = Math.max(0, (it.priority || 1) - (n || 1));
+  if (!it.priority) { it.done = true; it.endDate = today(); }
+  const low = keepMin(it) && it.priority < keepMin(it) && addToShop(it, 'keep ' + keepMin(it));
+  return low;
+}
 function viewFreezer() {
   const fz = freezers(), all = fzItems(), have = all.filter(i => !i.done && (i.priority || 0) > 0);
   const q = fzFind.trim().toLowerCase();
   const shown = have.filter(i => (fzOn === 'all' || i.list === fzOn) && (!q || (i.title + ' ' + i.location + ' ' + i.notes).toLowerCase().includes(q)));
   const soon = shown.filter(fzOld).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const used = all.filter(i => i.done).sort((a, b) => (b.endDate || '').localeCompare(a.endDate || '')).slice(0, 15);
+  const lunches = have.filter(isLunch);
   const count = id => have.filter(i => id === 'all' || i.list === id).reduce((n, i) => n + (i.priority || 1), 0);
-  const row = i => { const c = fzCat(i.location), old = fzOld(i);
+  const row = i => { const c = fzCat(i.location), old = fzOld(i), qn = i.priority || 1, below = keepMin(i) && qn < keepMin(i), low = below || (i.list === 'pantry' && qn <= 1 && !keepMin(i));
     return '<div class="fzrow' + (old ? ' old' : '') + '"><button type="button" class="tick" data-fzuse="' + i.id + '" title="Used one" aria-label="Used one"></button>' +
-      '<button type="button" class="fzname" data-fzedit="' + i.id + '"><span>' + c[1] + ' ' + esc(i.title) + (i.notes ? ' <small>' + esc(i.notes) + '</small>' : '') + '</span><small>' + (fzOn === 'all' ? esc(fzName(i.list).name) + ' · ' : '') + (fzAge(i) === 0 ? 'added today' : 'had ' + fzAgeText(i)) + (i.list === 'pantry' && (i.priority || 1) <= 1 ? ' · low' : '') + (old ? ' · use soon' : '') + '</small></button>' +
-      '<span class="fzqty">' + (i.list === 'pantry' && (i.priority || 1) <= 1 ? '<button type="button" class="ghost small" data-fzshop="' + i.id + '" aria-label="Add to shopping list">🛒</button>' : '') + '<button type="button" class="ghost small" data-fzminus="' + i.id + '" aria-label="One less">−</button><b>' + (i.priority || 1) + '</b><button type="button" class="ghost small" data-fzplus="' + i.id + '" aria-label="One more">＋</button></span></div>'; };
+      '<button type="button" class="fzname" data-fzedit="' + i.id + '"><span>' + c[1] + ' ' + esc(i.title) + (i.notes ? ' <small>' + esc(i.notes) + '</small>' : '') + (isLunch(i) ? ' <em class="cwho">💼 lunch</em>' : '') + '</span><small>' + (fzOn === 'all' ? esc(fzName(i.list).name) + ' · ' : '') + (fzAge(i) === 0 ? 'added today' : 'had ' + fzAgeText(i)) + (below ? ' · below ' + keepMin(i) : low ? ' · low' : keepMin(i) ? ' · keep ' + keepMin(i) : '') + (old ? ' · use soon' : '') + '</small></button>' +
+      '<span class="fzqty">' + (low ? '<button type="button" class="ghost small" data-fzshop="' + i.id + '" aria-label="Add to shopping list">🛒</button>' : '') + '<button type="button" class="ghost small" data-fzminus="' + i.id + '" aria-label="One less">−</button><b>' + qn + '</b><button type="button" class="ghost small" data-fzplus="' + i.id + '" aria-label="One more">＋</button></span></div>'; };
   const groups = {}; shown.forEach(i => { const k = fzCat(i.location)[0]; (groups[k] = groups[k] || []).push(i); });
   $('view').innerHTML = mealTabs('freezer') +
     '<div class="fztabs">' + [{ id: 'all', name: 'Everything', icon: '🏠' }].concat(fz).map(f => '<button type="button" class="fztab' + (fzOn === f.id ? ' on' : '') + '" data-fzon="' + f.id + '"><span>' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + count(f.id) + ' items</small></button>').join('') + '</div>' +
-    '<div class="quickbar fzbar"><input id="fzAdd" placeholder="Add: “4 cans corn”, “2 lb ground beef”, “Pizza x2”"><select id="fzWhere" aria-label="Which freezer">' + fz.map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select><button type="button" id="fzGo">Add</button></div>' +
+    '<div class="quickbar fzbar"><input id="fzAdd" placeholder="Add: “4 cans corn”, “2 lb ground beef”, “Pizza x2”"><select id="fzWhere" aria-label="Where">' + fz.map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select><button type="button" id="fzGo">Add</button></div>' +
     fzSuggestList(fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) +
-    '<div class="row-actions tight fztools"><button type="button" class="ghost small" id="fzUp">📷 Upload a list</button><input id="fzFind" type="search" placeholder="Search food on hand" value="' + esc(fzFind) + '"></div>' +
+    '<div class="row-actions tight fztools"><button type="button" class="ghost small" id="fzScan">▥ Scan a barcode</button><button type="button" class="ghost small" id="fzUp">📷 Upload a list</button><button type="button" class="ghost small" id="fzCheck">✓ Take inventory</button><input id="fzFind" type="search" placeholder="Search food on hand" value="' + esc(fzFind) + '"></div>' +
     (have.length && !q ? '<a class="card pad tip" href="#meals"><b>🍳 What can I make?</b><span class="sub">' + mealIdeas('Dinner').length + ' meal ideas from what you have →</span></a>' : '') +
+    (!q && (fzOn === 'all' || lunches.some(i => i.list === fzOn)) ? '<div class="card pad lunchcard"><div class="mini-head"><h2>💼 Work lunches</h2><label class="switch"><input type="checkbox" id="fzLunchRem"' + (S().lunchReminders !== false ? ' checked' : '') + '> pack-lunch reminder</label></div>' +
+      (lunches.length ? lunches.map(i => '<div class="mini-row"><span>' + fzCat(i.location)[1] + ' ' + esc(i.title) + ' <small class="sub">' + esc(fzName(i.list).name) + '</small></span><b>' + (i.priority || 1) + ' left</b></div>').join('') : '<p class="helper">Tap any meal below and check “💼 Work lunch” to keep track of grab-and-go lunches.</p>') +
+      '<p class="helper">The night before a “Work” day on your calendar you get a 🥡 “Pack lunch” reminder at 8 PM.</p></div>' : '') +
     (soon.length && !q ? '<div class="card pad fzsoon"><h2>⏰ Use these soon</h2>' + soon.slice(0, 6).map(row).join('') + '</div>' : '') +
     (shown.length ? Object.keys(groups).sort((a, b) => catOrder(a) - catOrder(b)).map(k => '<div class="card pad"><h3>' + fzCat(k)[1] + ' ' + esc(k) + ' <small>' + groups[k].reduce((n, i) => n + (i.priority || 1), 0) + '</small></h3>' + groups[k].sort((a, b) => a.title.localeCompare(b.title)).map(row).join('') + '</div>').join('')
-      : '<div class="card pad"><p class="helper">' + (q ? 'Nothing matches “' + esc(fzFind) + '”.' : 'Nothing here yet. Type something above, or tap 📷 Upload a list.') + '</p></div>') +
+      : '<div class="card pad"><p class="helper">' + (q ? 'Nothing matches “' + esc(fzFind) + '”.' : 'Nothing here yet. Type something above, scan a barcode, or tap 📷 Upload a list.') + '</p></div>') +
     (used.length ? '<button type="button" class="linkish" id="fzUsedT">' + (fzShowUsed ? 'Hide' : 'Show') + ' recently used (' + used.length + ')</button>' + (fzShowUsed ? '<div class="card pad">' + used.map(i => '<div class="fzrow used"><span class="fzname"><span>' + fzCat(i.location)[1] + ' ' + esc(i.title) + '</span><small>Used up ' + esc(fmtDate(i.endDate || today(), 'rel')) + ' · ' + esc(fzName(i.list).name) + '</small></span><span class="fzqty"><button type="button" class="ghost small" data-fzshop="' + i.id + '">🛒 Buy again</button><button type="button" class="ghost small" data-fzback="' + i.id + '">↩ Put back</button></span></div>').join('') + '</div>' : '') : '') +
-    '<p class="helper">Tap the box when you use one. ＋ and − change how many. Tap a name to edit it or move it somewhere else. Pantry things down to their last one say “low” with a 🛒 button. Things kept past their best-quality time show under “Use these soon”.</p>';
+    '<p class="helper">Tap the box when you use one. ＋ and − change how many. Tap a name to edit it, move it, set “always keep at least”, or mark it as a work lunch. Things running low get a 🛒 button.</p>';
   const v = $('view'), find = id => data.items.find(i => i.id === id), redraw = () => { const y = window.scrollY; viewFreezer(); window.scrollTo(0, y); };
   v.querySelectorAll('[data-fzon]').forEach(b => b.onclick = () => { fzOn = b.dataset.fzon; fzWhereSel = ''; viewFreezer(); });
   const add = () => {
@@ -1415,6 +1447,9 @@ function viewFreezer() {
   $('fzGo').onclick = add; $('fzAdd').onkeydown = e => { if (e.key === 'Enter') add(); };
   $('fzFind').oninput = e => { fzFind = e.target.value; clearTimeout(viewFreezer.t); viewFreezer.t = setTimeout(() => { viewFreezer(); const f = $('fzFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   $('fzUp').onclick = freezerImport;
+  $('fzScan').onclick = scanBarcode;
+  $('fzCheck').onclick = () => takeInventory(fzOn);
+  if ($('fzLunchRem')) $('fzLunchRem').onchange = e => { S().lunchReminders = e.target.checked; window.save(); if (e.target.checked) lunchCheck(); toast(e.target.checked ? '🥡 Pack-lunch reminders on' : 'Pack-lunch reminders off'); };
   const wireSug = () => v.querySelectorAll('[data-fzsug]').forEach(b => b.onclick = () => {
     const where = $('fzWhere').value, t = b.dataset.fzsug, same = have.find(i => i.list === where && i.title.toLowerCase() === t.toLowerCase());
     if (same) same.priority = (same.priority || 1) + 1;
@@ -1425,9 +1460,8 @@ function viewFreezer() {
   $('fzWhere').onchange = () => { fzWhereSel = $('fzWhere').value; $('fzSug').outerHTML = fzSuggestList($('fzWhere').value); wireSug(); };
   v.querySelectorAll('[data-fzuse],[data-fzminus]').forEach(b => b.onclick = () => {
     const it = find(b.dataset.fzuse || b.dataset.fzminus); if (!it) return;
-    it.priority = Math.max(0, (it.priority || 1) - 1);
-    if (!it.priority) { it.done = true; it.endDate = today(); toast('✓ Used the last ' + it.title + '. “Buy again” is under Recently used.'); }
-    else toast('✓ Used 1 ' + it.title + ' · ' + it.priority + ' left');
+    const shop = useOne(it);
+    toast((it.priority ? '✓ Used 1 ' + it.title + ' · ' + it.priority + ' left' : '✓ Used the last ' + it.title) + (shop ? ' · 🛒 added to your shopping list' : !it.priority ? '. “Buy again” is under Recently used.' : ''));
     if (b.dataset.fzuse) celebrate(b);
     window.save(); redraw();
   });
@@ -1435,8 +1469,7 @@ function viewFreezer() {
   v.querySelectorAll('[data-fzedit]').forEach(b => b.onclick = () => editFreezerItem(b.dataset.fzedit));
   if ($('fzUsedT')) $('fzUsedT').onclick = () => { fzShowUsed = !fzShowUsed; viewFreezer(); };
   v.querySelectorAll('[data-fzback]').forEach(b => b.onclick = () => { const it = find(b.dataset.fzback); it.done = false; it.endDate = null; it.priority = 1; window.save(); redraw(); toast('↩ Put back'); });
-  v.querySelectorAll('[data-fzshop]').forEach(b => b.onclick = () => { const it = find(b.dataset.fzshop); if (data.items.some(x => x.kind === 'shop' && !x.done && x.title.toLowerCase() === it.title.toLowerCase())) { toast(it.title + ' is already on your shopping list'); return; }
-    data.items.push(newItem({ kind: 'shop', title: it.title, list: it.list === 'pantry' ? aisleOf(it.title) : 'Frozen', notes: it.notes || '', location: (S().walmart || {})[it.title.toLowerCase()] || '' })); window.save(); toast('🛒 ' + it.title + ' added to your shopping list'); });
+  v.querySelectorAll('[data-fzshop]').forEach(b => b.onclick = () => { const it = find(b.dataset.fzshop); if (!addToShop(it)) { toast(it.title + ' is already on your shopping list'); return; } window.save(); toast('🛒 ' + it.title + ' added to your shopping list'); });
 }
 function fzSuggestList(where) {
   const sug = fzSuggest(where);
@@ -1444,33 +1477,133 @@ function fzSuggestList(where) {
 }
 function editFreezerItem(id) {
   const it = data.items.find(i => i.id === id); if (!it) return;
+  const shelf = fzCat(it.location)[2], keeps = shelf < 1 ? Math.round(shelf * 30) + ' days' : shelf + ' months';
   openModal('<h2>' + fzCat(it.location)[1] + ' ' + esc(it.title) + '</h2>' +
     '<label>What<input id="feN" value="' + esc(it.title) + '"></label>' +
     '<div class="grid2"><label>How many<input id="feQ" type="number" min="0" inputmode="numeric" value="' + (it.priority || 1) + '"></label><label>Size / notes<input id="feS" value="' + esc(it.notes || '') + '" placeholder="2 lb, family size…"></label></div>' +
-    '<div class="grid2"><label>Freezer<select id="feF">' + freezers().map(f => '<option value="' + f.id + '"' + (f.id === it.list ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></label>' +
-    '<label>Kind<select id="feC">' + (it.list === 'pantry' ? PANTRY_CATS : FZ_CATS).map(c => '<option' + (c[0] === it.location ? ' selected' : '') + '>' + c[0] + '</option>').join('') + '</select></label></div>' +
-    '<label>Went in the freezer<input id="feD" type="date" value="' + esc(it.date || '') + '"></label>' +
-    '<p class="helper">Best quality for about ' + fzCat(it.location)[2] + ' months · ' + (fzAge(it) === 0 ? 'it went in today' : 'it’s been in ' + fzAgeText(it)) + '.</p>' +
+    '<div class="grid2"><label>Where<select id="feF">' + freezers().map(f => '<option value="' + f.id + '"' + (f.id === it.list ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></label>' +
+    '<label>Kind<select id="feC">' + catsFor(it.list).map(c => '<option' + (c[0] === it.location ? ' selected' : '') + '>' + c[0] + '</option>').join('') + '</select></label></div>' +
+    '<div class="grid2"><label>Always keep at least<input id="feMin" type="number" min="0" inputmode="numeric" value="' + (keepMin(it) || '') + '" placeholder="0 = off"></label><label>Went in on<input id="feD" type="date" value="' + esc(it.date || '') + '"></label></div>' +
+    '<label class="check"><input type="checkbox" id="feLunch"' + (isLunch(it) ? ' checked' : '') + '> 💼 Work lunch (grab-and-go)</label>' +
+    '<p class="helper">Best quality for about ' + keeps + ' · ' + (fzAge(it) === 0 ? 'it went in today' : 'you’ve had it ' + fzAgeText(it)) + '. With “always keep”, it goes on the shopping list when you drop below that.' + (it.repeat ? ' · barcode ' + esc(it.repeat) : '') + '</p>' +
     '<div class="row-actions"><button type="button" id="feSave">Save</button><button type="button" class="ghost" id="feX">Cancel</button><button type="button" class="danger" id="feDel">Delete</button></div>');
   $('feX').onclick = closeModal;
   $('feSave').onclick = () => {
     const n = $('feN').value.trim(); if (!n) { toast('Type what it is.'); return; }
-    const q = Math.max(0, parseInt($('feQ').value, 10) || 0);
-    const where = $('feF').value, movedKind = (where === 'pantry') !== (it.list === 'pantry');
-    Object.assign(it, { title: n, priority: q, notes: $('feS').value.trim(), list: where, location: movedKind ? fzGuess(n, where) : $('feC').value, date: $('feD').value || it.date, done: q === 0, endDate: q === 0 ? it.endDate || today() : null });
-    window.save(); closeModal(); viewFreezer();
+    const q = Math.max(0, parseInt($('feQ').value, 10) || 0), min = Math.max(0, parseInt($('feMin').value, 10) || 0);
+    const where = $('feF').value, movedKind = !catsFor(where).some(c => c[0] === $('feC').value);
+    Object.assign(it, { title: n, priority: q, notes: $('feS').value.trim(), list: where, location: movedKind ? fzGuess(n, where) : $('feC').value, date: $('feD').value || it.date, done: q === 0, endDate: q === 0 ? it.endDate || today() : null, sort: min, color: $('feLunch').checked ? 'work' : '' });
+    const shop = min && q < min && addToShop(it, 'keep ' + min);
+    window.save(); closeModal(); viewFreezer(); if (shop) toast('🛒 ' + it.title + ' is below ' + min + ', so it’s on your shopping list');
   };
   $('feDel').onclick = () => { if (!confirm('Delete ' + it.title + ' from the list?')) return; data.items = data.items.filter(i => i !== it); window.save(); closeModal(); viewFreezer(); };
+}
+// Walk through one place (or everything), one thing at a time: still there? how many?
+function takeInventory(where) {
+  const list = fzItems().filter(i => !i.done && (i.priority || 0) > 0 && (where === 'all' || i.list === where)).sort((a, b) => (a.list + catOrder(a.location) + a.title).localeCompare(b.list + catOrder(b.location) + b.title));
+  if (!list.length) { toast('Nothing to check here yet.'); return; }
+  let k = 0, changed = 0;
+  const step = () => {
+    if (k >= list.length) { S().lastInventory = today(); window.save(); closeModal(); viewFreezer(); toast('✓ Inventory done' + (changed ? ' · ' + changed + ' updated' : ' · everything matched')); return; }
+    const it = list[k];
+    openModal('<p class="sub">' + (k + 1) + ' of ' + list.length + ' · ' + esc(fzName(it.list).name) + '</p><h2>' + fzCat(it.location)[1] + ' ' + esc(it.title) + (it.notes ? ' <small>' + esc(it.notes) + '</small>' : '') + '</h2>' +
+      '<div class="invq"><button type="button" class="ghost" id="ivM">−</button><b id="ivN">' + (it.priority || 1) + '</b><button type="button" class="ghost" id="ivP">＋</button></div>' +
+      '<div class="row-actions"><button type="button" id="ivOk">✓ That’s right</button><button type="button" class="danger" id="ivGone">All gone</button></div>' +
+      '<div class="row-actions tight"><button type="button" class="ghost small" id="ivBack"' + (k ? '' : ' disabled') + '>‹ Back</button><button type="button" class="ghost small" id="ivStop">Stop for now</button></div>');
+    let n = it.priority || 1;
+    $('ivM').onclick = () => { n = Math.max(0, n - 1); $('ivN').textContent = n; };
+    $('ivP').onclick = () => { n++; $('ivN').textContent = n; };
+    $('ivOk').onclick = () => { if (n !== (it.priority || 1)) { changed++; if (n) it.priority = n; else useOne(it, it.priority || 1); window.save(); } k++; step(); };
+    $('ivGone').onclick = () => { useOne(it, it.priority || 1); changed++; window.save(); k++; step(); };
+    $('ivBack').onclick = () => { if (k) { k--; step(); } };
+    $('ivStop').onclick = () => { closeModal(); viewFreezer(); };
+  };
+  step();
+}
+// Scan a barcode with the camera: a known product gets used/added; a new one is looked up on Open Food Facts.
+async function scanBarcode() {
+  openModal('<h2>▥ Scan a barcode</h2><div class="scanbox"><video id="scVid" playsinline muted></video><i class="scanline"></i></div><p class="helper" id="scMsg">Starting the camera…</p>' +
+    '<label>Or type the number<input id="scCode" inputmode="numeric" placeholder="0 12345 67890 5"></label><div class="row-actions"><button type="button" class="ghost" id="scGo">Look it up</button><button type="button" class="ghost" id="scX">Cancel</button></div>');
+  let stream = null, reader = null, done = false;
+  const stop = () => { done = true; try { reader && reader.reset && reader.reset(); } catch (e) {} if (stream) stream.getTracks().forEach(t => t.stop()); };
+  $('scX').onclick = () => { stop(); closeModal(); };
+  $('scGo').onclick = () => { const c = $('scCode').value.replace(/\D/g, ''); if (c.length >= 6) { stop(); gotCode(c); } };
+  const msg = t => { if ($('scMsg')) $('scMsg').textContent = t; };
+  try {
+    const vid = $('scVid');
+    if ('BarcodeDetector' in window) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      vid.srcObject = stream; await vid.play(); msg('Point the camera at the barcode.');
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
+      const tick = async () => { if (done || !$('scVid')) return; try { const r = await det.detect(vid); if (r.length) { stop(); gotCode(r[0].rawValue); return; } } catch (e) {} setTimeout(tick, 250); };
+      tick();
+    } else {
+      await loadScript(CDN + '@zxing/library@0.21.3/umd/index.min.js', () => window.ZXing);
+      reader = new ZXing.BrowserMultiFormatReader(); msg('Point the camera at the barcode.');
+      reader.decodeFromConstraints({ video: { facingMode: 'environment' } }, vid, r => { if (r && !done) { const c = r.getText(); stop(); gotCode(c); } });
+    }
+  } catch (e) { msg('The camera didn’t start (' + (e.message || e.name) + '). You can type the number under the barcode instead.'); }
+}
+async function gotCode(code) {
+  const known = fzItems().filter(i => i.repeat === code).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0))[0];
+  if (known) {
+    openModal('<h2>' + fzCat(known.location)[1] + ' ' + esc(known.title) + '</h2><p class="helper">' + esc(fzName(known.list).name) + ' · ' + (known.done ? 'all used up' : (known.priority || 1) + ' on hand') + '</p>' +
+      '<div class="row-actions">' + (known.done ? '' : '<button type="button" id="gcUse">✓ Used one</button>') + '<button type="button" class="ghost" id="gcAdd">＋ Add one</button><button type="button" class="ghost" id="gcAgain">Scan another</button></div>');
+    if ($('gcUse')) $('gcUse').onclick = () => { const shop = useOne(known); window.save(); closeModal(); viewFreezer(); toast('✓ Used 1 ' + known.title + (shop ? ' · 🛒 added to your shopping list' : '')); };
+    $('gcAdd').onclick = () => { if (known.done) { known.done = false; known.endDate = null; known.priority = 0; } known.priority = (known.priority || 0) + 1; window.save(); closeModal(); viewFreezer(); toast('✓ Added 1 ' + known.title); };
+    $('gcAgain').onclick = scanBarcode;
+    return;
+  }
+  openModal('<h2>New item</h2><p class="helper" id="gcMsg">Looking up ' + esc(code) + '…</p><label>What<input id="gcN" list="gcHave" placeholder="Name"></label><datalist id="gcHave">' + fzItems().filter(i => !i.done).map(i => '<option value="' + esc(i.title) + '">').join('') + '</datalist>' +
+    '<div class="grid2"><label>Where<select id="gcW">' + freezers().map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></label><label>How many<input id="gcQ" type="number" min="1" value="1"></label></div>' +
+    '<p class="helper">If it’s something already on your list, pick its name and the barcode gets linked to it.</p><div class="row-actions"><button type="button" id="gcSave">Add</button><button type="button" class="ghost" id="gcX">Cancel</button></div>');
+  $('gcX').onclick = closeModal;
+  $('gcSave').onclick = () => {
+    const n = $('gcN').value.trim(), w = $('gcW').value, q = Math.max(1, parseInt($('gcQ').value, 10) || 1); if (!n) { toast('Type what it is.'); return; }
+    const same = fzItems().find(i => !i.done && i.list === w && i.title.toLowerCase() === n.toLowerCase());
+    if (same) { same.priority = (same.priority || 1) + q; same.repeat = code; }
+    else data.items.push(newItem({ kind: 'freezer', title: n, list: w, priority: q, notes: '', location: fzGuess(n, w), date: today(), allDay: true, repeat: code }));
+    window.save(); closeModal(); viewFreezer(); toast('✓ Added ' + q + ' × ' + n + ' · next time just scan it');
+  };
+  try {
+    const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?fields=product_name,brands,quantity');
+    const j = await r.json(), p = j && j.product;
+    if ($('gcN') && p && (p.product_name || p.brands)) { const nm = [(p.brands || '').split(',')[0].trim(), (p.product_name || '').trim()].filter(Boolean).join(' '); if (!$('gcN').value) $('gcN').value = nm; $('gcMsg').textContent = 'Found it' + (p.quantity ? ' · ' + p.quantity : '') + '. Change the name if you like.'; }
+    else if ($('gcMsg')) $('gcMsg').textContent = 'Not in the product database. Type what it is.';
+  } catch (e) { if ($('gcMsg')) $('gcMsg').textContent = 'Couldn’t look it up. Type what it is.'; }
+}
+// 🥡 Pack-lunch reminder the night before each "Work" day on the calendar (8 PM).
+function lunchCheck() {
+  if (S().lunchReminders === false) return;
+  const t = today(), made = Object.assign({}, S().lunchMade || {}); let changed = false;
+  const lunches = fzItems().filter(i => !i.done && (i.priority || 0) > 0 && isLunch(i));
+  const days = [...new Set(agenda(addDays(t, 1), addDays(t, 14)).filter(e => e.kind !== 'task' && /\bwork(ing)?\b/i.test(e.title || '')).map(e => e.date))];
+  days.forEach(d => {
+    const id = 'lunch-' + d; if (made[id] || data.items.some(i => i.id === id)) return;
+    data.items.push(newItem({ id, kind: 'task', title: '🥡 Pack lunch for tomorrow', date: addDays(d, -1), list: 'Home', remind: -1200,
+      notes: lunches.length ? 'Grab-and-go: ' + lunches.map(i => i.title + ' (' + (i.priority || 1) + ' left, ' + fzName(i.list).name.toLowerCase() + ')').join(', ') : 'Add grab-and-go lunches in Meals → On hand.' }));
+    made[id] = d; changed = true;
+  });
+  Object.keys(made).forEach(k => { if (made[k] < addDays(t, -30)) delete made[k]; });
+  S().lunchMade = made;
+  // A monthly "check the pantry and freezers" task, made once (delete it to stop).
+  if (!S().stockTask) {
+    const first = isoDay(new Date(+t.slice(0, 4), +t.slice(5, 7), 1));
+    data.items.push(newItem({ id: 'stock-check', kind: 'task', title: '🧊 Check the pantry, fridge & freezers', date: first, repeat: 'monthly', list: 'Home', notes: 'Meals → 🥫 On hand → ✓ Take inventory' }));
+    S().stockTask = true; changed = true;
+  }
+  if (changed) window.save();
 }
 // Which freezer a heading line means: "Deep freezer:", "Big freezer", "Drink fridge", "Kitchen".
 function fzHeading(l) {
   const h = l.replace(/[:\-–—]+\s*$/, '').trim().toLowerCase();
   if (h.length > 30 || /\d/.test(h)) return null;
   const fz = freezers(), exact = fz.find(f => f.name.toLowerCase() === h); if (exact) return exact;
-  if (!/:$/.test(l.trim()) && !/freez|fridge|pantry|cupboard|cabinet/.test(h)) return null;
+  if (!/:$/.test(l.trim()) && !/freez|fridge|refrigerator|pantry|cupboard|cabinet/.test(h)) return null;
   if (/pantry|cupboard|cabinet|shelf|shelves/.test(h)) return fz.find(f => f.id === 'pantry');
   if (/deep|chest|big/.test(h)) return fz.find(f => f.id === 'deep');
   if (/drink|beverage|garage|mini/.test(h)) return fz.find(f => f.id === 'drink');
+  if (/\bfridge\b|refrigerator/.test(h) && !/freez/.test(h)) return fz.find(f => f.id === 'fridge');
   if (/kitchen|main|top|upstairs/.test(h)) return fz.find(f => f.id === 'kitchen');
   return fz.find(f => h.split(/\s+/).some(w => w.length > 3 && f.name.toLowerCase().includes(w)));
 }
@@ -1945,7 +2078,7 @@ function viewMeals(sub) {
   const planned = data.items.filter(i => i.kind === 'meal' && i.date >= days[0] && i.date <= days[6]).length;
   $('view').innerHTML = mealTabs('plan') +
     '<div class="cal-head"><button type="button" class="ghost small" id="mPrev">‹</button><h2>' + esc(weekTitle(mealWeek)) + '</h2><button type="button" class="ghost small" id="mNext">›</button></div>' +
-    '<div class="row-actions center"><button type="button" id="mShop">Add ingredients to shopping list</button><button type="button" class="ghost small" id="mCopy">Copy last week</button></div>' +
+    '<div class="row-actions center"><button type="button" id="mShop">Add ingredients to shopping list</button><button type="button" class="ghost small" id="mCopy">Copy last week</button><button type="button" class="ghost small" id="mWeek">✨ Plan my week</button></div>' +
     '<p class="helper center">' + planned + ' meals planned · tap any slot to fill it</p>' + ideasCard(days) +
     days.map(d => {
       const dt = new Date(d + 'T12:00'), ms = mealsOn(d);
@@ -1957,6 +2090,7 @@ function viewMeals(sub) {
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   wireIdeas($('view'), mealIdeas('Dinner').slice(0, 12), days, () => { const y = window.scrollY; viewMeals(); window.scrollTo(0, y); });
   $('mShop').onclick = () => { const n = addWeekToShopping(days), sk = addWeekToShopping.skipped; toast((n ? '✓ Added ' + n + ' items to your shopping list' : 'Nothing new to add (or the meals have no recipes yet).') + (sk ? ' · skipped ' + sk + ' you already have' : '')); if (n) location.hash = 'meals/shop'; };
+  $('mWeek').onclick = () => planWeek(days);
   $('mCopy').onclick = () => {
     const prev = data.items.filter(i => i.kind === 'meal' && i.date >= addDays(mealWeek, -7) && i.date < mealWeek);
     if (!prev.length) { toast('Nothing planned last week to copy.'); return; }
@@ -1977,7 +2111,8 @@ function editMeal(date, slot) {
     '<p class="lbl">Quick picks</p><div class="catchips">' + ['Leftovers', 'Eat out', 'Takeout', 'Sandwiches', 'Cereal', 'School lunch'].map(x => '<button type="button" class="chipbtn" data-quick="' + x + '">' + x + '</button>').join('') + '</div>' +
     '<label>Or type it<input id="mlTitle" value="' + esc(cur ? cur.title : '') + '" placeholder="Pot roast"></label>' +
     '<label>Notes<input id="mlNotes" value="' + esc(cur ? cur.notes : '') + '" placeholder="Thaw meat the night before"></label>' +
-    '<div class="row-actions"><button type="button" id="mlSave">Save</button><button type="button" class="ghost" id="mlCancel">Cancel</button>' + (cur ? '<button type="button" class="danger" id="mlDel">Clear</button>' : '') + '</div>');
+    '<div class="row-actions"><button type="button" id="mlSave">Save</button><button type="button" class="ghost" id="mlCancel">Cancel</button>' + (cur ? '<button type="button" class="danger" id="mlDel">Clear</button>' : '') + '</div>' +
+    (cur ? '<div class="row-actions"><button type="button" class="' + (cur.done ? 'ghost' : '') + '" id="mlCooked">' + (cur.done ? '✓ Cooked' : '✓ We cooked it') + '</button></div><p class="helper">“We cooked it” takes what you used out of 🥫 On hand.</p>' : ''));
   const put = (title, recipeId) => {
     if (!title) { toast('Pick or type a meal.'); return; }
     const m = cur || newItem({ kind: 'meal', date, list: slot });
@@ -1988,12 +2123,13 @@ function editMeal(date, slot) {
   document.querySelectorAll('[data-rec]').forEach(b => b.onclick = () => { const r = rs.find(x => x.id === b.dataset.rec); put(r.title, r.id); });
   document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => put(b.dataset.quick, ''));
   document.querySelectorAll('[data-idea]').forEach(b => b.onclick = () => {
-    const m = ideas[+b.dataset.idea], r = ideaRecipe(m), frozen = m.have.filter(h => h.item.list !== 'pantry');
+    const m = ideas[+b.dataset.idea], r = ideaRecipe(m), frozen = m.have.filter(h => needsThaw(h.item));
     if (frozen.length && !$('mlNotes').value.trim()) $('mlNotes').value = 'Thaw ' + frozen.map(h => h.item.title.toLowerCase() + ' (' + fzName(h.item.list).name.toLowerCase() + ')').join(', ') + ' the night before';
     put(m.title, r.id);
   });
   $('mlSave').onclick = () => { const t = $('mlTitle').value.trim(), r = rs.find(x => x.title.toLowerCase() === t.toLowerCase()); put(t, r ? r.id : ''); };
   $('mlCancel').onclick = closeModal;
+  if (cur) $('mlCooked').onclick = () => { if (cur.done) { cur.done = false; window.save(); closeModal(); route(); toast('Unmarked'); return; } cookedIt(cur); };
   if (cur) $('mlDel').onclick = () => { data.items = data.items.filter(i => i !== cur); window.save(); closeModal(); route(); };
 }
 // ---------- Meal ideas from what's on hand ----------
@@ -2018,7 +2154,27 @@ const MEAL_IDEAS = [
   ['Steak night', 'Dinner', '2 steaks\nPotatoes\n1 bag broccoli'],
   ['Roast turkey dinner', 'Dinner', '1 whole turkey\n1 box stuffing\nPotatoes\nGreen beans'],
   ['Chili mac', 'Dinner', '1 lb ground beef\n1 lb macaroni\n1 can chili beans\n1 can diced tomatoes\nShredded cheese'],
-  ['Waffles & fruit', 'Breakfast', 'Waffles\nSyrup\nBerries']
+  ['Waffles & fruit', 'Breakfast', 'Waffles\nSyrup\nBerries'],
+  // Built around what's in Shaana's pantry and freezers.
+  ['Roast chicken & veggies', 'Dinner', '1 whole chicken\nPotatoes\nCarrots\nOnion\nButter'],
+  ['Homemade chicken & dumplings', 'Dinner', '1 whole chicken\nBisquick\nCream of chicken soup\nCarrots\nCelery'],
+  ['Ham & pinto beans with cornbread', 'Dinner', 'Ham\n5 lb pinto beans\nOnion\nCornbread muffins'],
+  ['Salmon patties & mac and cheese', 'Dinner', '2 cans salmon\nItalian bread crumbs\n2 eggs\nMac & cheese\nGreen beans'],
+  ['Tuna noodle casserole', 'Dinner', '3 cans tuna\nPenne noodles\nCream of mushroom soup\nPeas\nShredded cheese'],
+  ['Chicken chili with kidney beans', 'Dinner', 'Shredded chicken\n2 cans kidney beans\nRotel\nCrushed tomatoes\nCorn\nChili seasoning'],
+  ['Chicken penne alfredo', 'Dinner', 'Diced chicken breast\nPenne noodles\nAlfredo sauce\nPeas'],
+  ['Stuffed manicotti', 'Dinner', 'Manicotti noodles\nRicotta cheese\nMozzarella cheese\nCrushed tomatoes\nTomato sauce'],
+  ['BBQ ribs, corn & fries', 'Dinner', 'Ribs\nBBQ sauce\nCorn\nFrench fries'],
+  ['Sausage, pancakes & eggs', 'Breakfast', 'Jimmy Dean sausage\nPancake mix\nSyrup\nEggs'],
+  ['Homemade tortillas & chicken tacos', 'Dinner', 'Maseca\nShredded chicken\nRefried beans\nShredded cheese\nSalsa'],
+  ['Stuffed chicken breasts & potatoes', 'Dinner', 'Broccoli & cheese stuffed chicken breasts\nInstant potatoes\nGreen beans'],
+  ['Fish, tater tots & lemon', 'Dinner', 'Whole fish\nTater tots\nLemons'],
+  ['Hot dogs & burgers night', 'Dinner', 'Hot dogs & hamburgers\nHamburger buns\nCurly fries'],
+  ['Chicken strips & fries', 'Dinner', 'Chicken strips\nFrench fries\nRanch'],
+  ['Rotel chicken spaghetti', 'Dinner', 'Spaghetti noodles\nDiced chicken breast\nRotel\nCream of chicken soup\nShredded cheese'],
+  ['Chicken & rice casserole', 'Dinner', '1 bag chicken\nRice\nCream of chicken soup\nCream of mushroom soup\nPeas'],
+  ['Individual pizzas & salad', 'Dinner', 'Individual pizzas\nBagged salad'],
+  ['Ravioli & garlic bread', 'Dinner', 'Cheese ravioli\nTomato sauce\nBread']
 ];
 const ALWAYS_HAVE = /^(salt|pepper|salt (&|and) pepper|black pepper|oil|olive oil|vegetable oil|cooking spray|water|ice)$/i;
 const ING_SKIP = /\b(frozen|canned|can|cans|of|fresh|shredded|sliced|diced|chopped|large|small|medium|whole|boneless|skinless|lean|family|size|bag|bags|box|jar|packet|pack|package|bunch|baby|jumbo|regular|lb|lbs|oz)\b/g;
@@ -2029,8 +2185,20 @@ function ingTokens(s) {
 // Does this ingredient match something on hand? All the words of the shorter name have to be in the longer one.
 function onHandFor(line, stock) {
   const a = ingTokens(line); if (!a.length) return null;
-  return stock.find(i => { const b = ingTokens(i.title); if (!b.length) return false; const [s, l] = a.length <= b.length ? [a, b] : [b, a]; return s.every(w => l.includes(w)); }) || null;
+  let best = null, gap = 99;
+  stock.forEach(i => {
+    const b = ingTokens(i.title); if (!b.length) return;
+    const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+    if (!s.every(w => l.includes(w)) || (s.length === 1 && l.length > (GENERIC_ING.test(s[0]) ? 1 : 2))) return;
+    const g = l.length - s.length; if (g < gap) { gap = g; best = i; }
+  });
+  return best;
 }
+// One plain word like “cheese” only matches something named just that (not “Mac & cheese”).
+const GENERIC_ING = /^(cheese|sauce|soup|bean|mix|oil|cream|seasoning|syrup|juice|milk|noodle|pasta|bread|meat|fruit|vegetable)$/;
+const isFrozenPlace = l => l !== 'pantry' && l !== 'fridge';
+// Meat and frozen meals need a night in the fridge to thaw; fries, veggies and bread don't.
+const needsThaw = it => isFrozenPlace(it.list) && ['Beef', 'Ground meat', 'Chicken & turkey', 'Pork', 'Fish & seafood', 'Meals & leftovers'].includes(it.location);
 const onHand = () => fzItems().filter(i => !i.done && (i.priority || 0) > 0);
 const MAIN_KINDS = ['Beef', 'Ground meat', 'Chicken & turkey', 'Pork', 'Fish & seafood', 'Meals & leftovers'];
 // Every meal we know, best first: things that use what you have (especially what needs using soon), then fewest to buy.
@@ -2055,7 +2223,7 @@ function ideaRecipe(m) {
   const r = newItem({ kind: 'recipe', title: m.title, list: m.slot, notes: m.notes }); data.items.push(r); return r;
 }
 const ideaHtml = (m, n) => '<div class="idea' + (m.soon ? ' soon' : '') + '"><div class="ideat"><b>' + (m.recipe ? '⭐ ' : '') + esc(m.title) + '</b>' + (m.soon ? '<span class="chip">⏰ uses ' + esc(m.have.find(h => fzOld(h.item)).item.title.toLowerCase()) + '</span>' : '') + '</div>' +
-  '<p class="ihave">✓ ' + m.have.map(h => esc(h.item.title) + (h.item.list !== 'pantry' ? ' <small>(' + esc(fzName(h.item.list).name.replace(/ freezer$/i, '').toLowerCase()) + ')</small>' : '')).join(', ') + '</p>' +
+  '<p class="ihave">✓ ' + m.have.map(h => esc(h.item.title) + (needsThaw(h.item) ? ' <small>(' + esc(fzName(h.item.list).name.replace(/ freezer$/i, '').toLowerCase()) + ')</small>' : '')).join(', ') + '</p>' +
   (m.need.length ? '<p class="ineed">Need: ' + m.need.slice(0, 5).map(esc).join(', ') + (m.need.length > 5 ? ' +' + (m.need.length - 5) : '') + '</p>' : '<p class="ineed ok">You have everything!</p>') +
   '<div class="row-actions tight"><button type="button" class="small" data-iplan="' + n + '">＋ Plan it</button>' + (m.need.length ? '<button type="button" class="ghost small" data-ineed="' + n + '">🛒 Add what I need</button>' : '') + '</div></div>';
 function ideasCard(days) {
@@ -2083,7 +2251,7 @@ function wireIdeas(root, ideas, days, redraw) {
 function planIdea(m, days, redraw) {
   const t = today(), slot = m.slot === 'Lunch' || m.slot === 'Breakfast' || m.slot === 'Snack' ? m.slot : 'Dinner';
   const choices = (days || []).concat([0, 1, 2, 3, 4, 5, 6].map(k => addDays(t, k))).filter((d, k, a) => d >= t && a.indexOf(d) === k).sort().slice(0, 10);
-  const frozen = m.have.filter(h => h.item.list !== 'pantry');
+  const frozen = m.have.filter(h => needsThaw(h.item));
   // Something frozen needs a night to thaw, so start looking tomorrow.
   const firstFree = choices.find(d => (!frozen.length || d > t) && !mealsOn(d).some(x => x.list === slot)) || choices[0];
   openModal('<h2>Plan ' + esc(m.title) + '</h2>' +
@@ -2095,14 +2263,67 @@ function planIdea(m, days, redraw) {
   $('modalBody').querySelectorAll('[data-pday]').forEach(b => b.onclick = () => { day = b.dataset.pday; $('modalBody').querySelectorAll('[data-pday]').forEach(x => x.classList.toggle('on', x === b)); });
   $('piX').onclick = closeModal;
   $('piGo').onclick = () => {
-    const sl = $('piSlot').value, r = ideaRecipe(m), cur = data.items.find(i => i.kind === 'meal' && i.date === day && i.list === sl);
+    const sl = $('piSlot').value, cur = data.items.find(i => i.kind === 'meal' && i.date === day && i.list === sl);
     if (cur && !confirm('Replace ' + cur.title + ' on ' + fmtDate(day, 'rel') + '?')) return;
-    const thaw = frozen.length && $('piThaw') && $('piThaw').checked;
-    const note = frozen.length ? 'Thaw ' + frozen.map(h => h.item.title.toLowerCase() + ' (' + fzName(h.item.list).name.toLowerCase() + ')').join(', ') + ' the night before' : '';
-    if (cur) Object.assign(cur, { title: m.title, location: r.id, notes: note }); else data.items.push(newItem({ kind: 'meal', date: day, list: sl, title: m.title, location: r.id, notes: note }));
-    if (thaw) data.items.push(newItem({ kind: 'task', title: '🧊 Take out ' + frozen.map(h => h.item.title.toLowerCase()).join(' & ') + ' for ' + m.title, date: addDays(day, -1) < t ? t : addDays(day, -1), list: 'Home', remind: -1080, notes: note }));
+    const thaw = planMeal(m, day, sl, frozen.length && $('piThaw') && $('piThaw').checked);
     window.save(); closeModal(); (redraw || route)();
     toast('✓ ' + m.title + ' planned for ' + fmtDate(day, 'rel') + (thaw ? ' · thaw reminder set' : ''));
+  };
+}
+// Put a meal idea on a day: saved as a recipe, with a thaw note and (optionally) a reminder the night before at 6 PM.
+function planMeal(m, day, slot, thaw) {
+  const t = today(), r = ideaRecipe(m), frozen = m.have.filter(h => needsThaw(h.item));
+  const note = frozen.length ? 'Thaw ' + frozen.map(h => h.item.title.toLowerCase() + ' (' + fzName(h.item.list).name.toLowerCase() + ')').join(', ') + ' the night before' : '';
+  const cur = data.items.find(i => i.kind === 'meal' && i.date === day && i.list === slot);
+  if (cur) Object.assign(cur, { title: m.title, location: r.id, notes: note, done: false }); else data.items.push(newItem({ kind: 'meal', date: day, list: slot, title: m.title, location: r.id, notes: note }));
+  if (thaw && frozen.length) data.items.push(newItem({ kind: 'task', title: '🧊 Take out ' + frozen.map(h => h.item.title.toLowerCase()).join(' & ') + ' for ' + m.title, date: addDays(day, -1) < t ? t : addDays(day, -1), list: 'Home', remind: -1080, notes: note }));
+  return !!(thaw && frozen.length);
+}
+// ✨ Plan my week: fill the empty dinners from what's on hand, oldest first, without using more than you have or repeating a meal.
+function planWeek(days) {
+  const t = today();
+  // Late in the week? Plan the next 7 days instead.
+  if (days.filter(d => d >= t).length < 4) days = [0, 1, 2, 3, 4, 5, 6].map(k => addDays(t, k));
+  const open = days.filter(d => d >= t && !mealsOn(d).some(x => x.list === 'Dinner'));
+  if (!open.length) { toast('Every dinner this week is already planned.'); return; }
+  const ideas = mealIdeas('Dinner'), useCount = {}, picks = [], usedTitles = new Set(mealsOn ? days.flatMap(d => mealsOn(d).map(x => x.title.toLowerCase())) : []);
+  const fits = m => !usedTitles.has(m.title.toLowerCase()) && m.have.every(h => (useCount[h.item.id] || 0) < (h.item.priority || 1));
+  open.forEach(d => {
+    // Frozen things need a night to thaw, so today only gets pantry/fridge meals.
+    const m = ideas.find(x => fits(x) && (d > t || !x.have.some(h => needsThaw(h.item))));
+    if (!m) return;
+    usedTitles.add(m.title.toLowerCase()); m.have.forEach(h => { useCount[h.item.id] = (useCount[h.item.id] || 0) + 1; });
+    picks.push({ d, m });
+  });
+  if (!picks.length) { toast('Not enough on hand to plan more dinners. Add to 🥫 On hand or recipes.'); return; }
+  openModal('<h2>✨ Plan my week</h2><p class="helper">Dinners from what you have, using the oldest things first. Change any of them, or uncheck one to leave that night open.</p>' +
+    '<div class="wkplan">' + picks.map((p, k) => '<div class="wkrow2"><label class="check"><input type="checkbox" data-pwon="' + k + '" checked></label><div><b>' + esc(fmtDate(p.d, 'rel')) + '</b><select data-pwsel="' + k + '">' +
+      ideas.filter(x => p.d > t || !x.have.some(h => needsThaw(h.item))).slice(0, 15).map((x, n) => '<option value="' + ideas.indexOf(x) + '"' + (x === p.m ? ' selected' : '') + '>' + esc(x.title) + (x.need.length ? ' (need ' + x.need.length + ')' : ' ✓') + '</option>').join('') + '</select></div></div>').join('') + '</div>' +
+    '<label class="check"><input type="checkbox" id="pwThaw" checked> Remind me the night before to take meat out of the freezer</label>' +
+    '<div class="row-actions"><button type="button" id="pwGo">Plan ' + picks.length + ' dinners</button><button type="button" class="ghost" id="pwX">Cancel</button></div>');
+  $('pwX').onclick = closeModal;
+  $('pwGo').onclick = () => {
+    let n = 0, need = 0;
+    picks.forEach((p, k) => { if (!$('modalBody').querySelector('[data-pwon="' + k + '"]').checked) return; const m = ideas[+$('modalBody').querySelector('[data-pwsel="' + k + '"]').value]; planMeal(m, p.d, 'Dinner', $('pwThaw').checked); n++; need += m.need.length; });
+    window.save(); closeModal(); if (picks[0] && picks[0].d > addDays(mealWeek, 6)) mealWeek = weekStart(picks[0].d); viewMeals();
+    toast('✨ Planned ' + n + ' dinners' + (need ? ' · tap “Add ingredients to shopping list” for the ' + need + ' things you need' : ''));
+  };
+}
+// ✓ We cooked it: take what was used out of On hand, and put any leftovers in the fridge.
+function cookedIt(meal, after) {
+  const r = data.items.find(i => i.id === meal.location && i.kind === 'recipe'), stock = onHand();
+  const used = r ? r.notes.split('\n').map(x => x.trim()).filter(Boolean).map(l => onHandFor(l, stock)).filter(Boolean).filter((x, k, a) => a.indexOf(x) === k) : [];
+  openModal('<h2>✓ We cooked ' + esc(meal.title) + '</h2>' +
+    (used.length ? '<p class="lbl">Take these out of On hand</p>' + used.map((it, k) => '<label class="check"><input type="checkbox" data-cku="' + k + '" checked> ' + fzCat(it.location)[1] + ' ' + esc(it.title) + ' <small class="sub">' + esc(fzName(it.list).name) + ' · ' + (it.priority || 1) + ' → ' + Math.max(0, (it.priority || 1) - 1) + '</small></label>').join('') : '<p class="helper">Nothing from On hand is linked to this meal.</p>') +
+    '<label class="check"><input type="checkbox" id="ckLeft"> 🍱 We have leftovers (they go in the fridge, “use within 4 days”)</label>' +
+    '<div class="row-actions"><button type="button" id="ckGo">Done</button><button type="button" class="ghost" id="ckX">Cancel</button></div>');
+  $('ckX').onclick = closeModal;
+  $('ckGo').onclick = () => {
+    const shop = [];
+    used.forEach((it, k) => { if ($('modalBody').querySelector('[data-cku="' + k + '"]').checked && useOne(it)) shop.push(it.title); });
+    if ($('ckLeft').checked) data.items.push(newItem({ kind: 'freezer', title: 'Leftover ' + meal.title.toLowerCase(), list: 'fridge', priority: 1, notes: '', location: 'Leftovers', date: today(), allDay: true }));
+    meal.done = true; window.save(); closeModal(); (after || route)();
+    toast('✓ Marked as cooked' + (used.length ? ' · On hand updated' : '') + (shop.length ? ' · 🛒 ' + shop.join(', ') + ' added to your list' : ''));
   };
 }
 // Every ingredient from the week's recipes goes on the list once; amounts and meal names are noted.
@@ -2136,7 +2357,8 @@ function viewShop() {
     '<a class="wm" href="' + esc(walmartUrl(i)) + '" target="_blank" rel="noopener" title="Find on Walmart">' + (i.location ? 'Walmart ✓' : 'Walmart') + '</a></div>';
   $('view').innerHTML = mealTabs('shop') +
     '<div class="quickbar"><input id="shopAdd" placeholder="Add an item… “paper towels”, “2 gallons milk”"><button type="button" id="shopGo">Add</button></div>' +
-    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><button type="button" class="ghost small" id="shopCopy">Copy list</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
+    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
+    '<p class="helper">📤 <b>Send to Salvador</b> texts him the list. For a live list he can check off at the store, sign in to this Planner on his phone with your account (More → Account and sync): changes show up on both phones.</p>' +
     '<p class="helper">Tap <b>Walmart</b> to find each item and add it to your cart (pickup or delivery). Check it off here as you go. To always open the exact product you buy, tap an item and paste its Walmart link.</p>' +
     (groups.length ? groups.map(([a, l]) => '<div class="card pad"><h3>' + esc(a) + '</h3>' + l.map(row).join('') + '</div>').join('') : '<div class="card pad"><p class="helper">Your list is empty. Plan meals, then tap <b>Add ingredients to shopping list</b>, or add items above.</p></div>') +
     (got.length ? '<button type="button" class="linkish" id="shopGot">' + (showGot ? 'Hide' : 'Show') + ' ' + got.length + ' in the cart</button>' + (showGot ? '<div class="card pad">' + got.map(row).join('') + '</div>' : '') : '');
@@ -2152,6 +2374,11 @@ function viewShop() {
   $('shopCopy').onclick = () => {
     const text = groups.map(([a, l]) => a + ':\n' + l.map(i => '• ' + i.title + (i.notes ? ' (' + i.notes.split(' · ')[0] + ')' : '')).join('\n')).join('\n\n');
     navigator.clipboard && navigator.clipboard.writeText(text).then(() => toast('Copied. Paste it into a text or note.'), () => toast('Could not copy.'));
+  };
+  $('shopSend').onclick = async () => {
+    const text = '🛒 Shopping list\n\n' + groups.map(([a, l]) => a + ':\n' + l.map(i => '☐ ' + i.title + (i.notes ? ' (' + i.notes.split(' · ')[0] + ')' : '')).join('\n')).join('\n\n');
+    if (navigator.share) { try { await navigator.share({ title: 'Shopping list', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    location.href = 'sms:&body=' + encodeURIComponent(text);
   };
   if ($('shopClear')) $('shopClear').onclick = () => { data.items = data.items.filter(i => !(i.kind === 'shop' && i.done)); window.save(); viewShop(); };
   if ($('shopGot')) $('shopGot').onclick = () => { showGot = !showGot; viewShop(); };
