@@ -17,11 +17,11 @@
 
   // App list -> table, with field names on each side. Order matters: parents before children.
   const COLS = [
-    { key: 'items', table: 'planner_items', map: { id: 'id', kind: 'kind', title: 'title', date: 'date', endDate: 'end_date', start: 'start_time', end: 'end_time', allDay: 'all_day', done: 'done', list: 'list', priority: 'priority', notes: 'notes', location: 'location', repeat: 'repeat', color: 'color', sort: 'sort' } },
+    { key: 'items', table: 'planner_items', map: { id: 'id', kind: 'kind', title: 'title', date: 'date', endDate: 'end_date', start: 'start_time', end: 'end_time', allDay: 'all_day', done: 'done', list: 'list', priority: 'priority', notes: 'notes', location: 'location', repeat: 'repeat', color: 'color', sort: 'sort', driver: 'driver', remind: 'remind' } },
     { key: 'docs', table: 'planner_docs', map: { id: 'id', title: 'title', folder: 'folder', file: 'file', fileName: 'file_name', size: 'size', itemId: 'item_id', note: 'note' } }
   ];
   const DEFAULTS = { sort: 0, kind: 'event', allDay: false, done: false, priority: 0, size: 0 };
-  const NULLABLE = new Set(['date', 'endDate', 'itemId']);
+  const NULLABLE = new Set(['date', 'endDate', 'itemId', 'remind']);
   // One shape for comparing a row from this device with the cloud's copy of it.
   const norm = (c, o) => {
     const r = {};
@@ -30,6 +30,7 @@
       if (v == null || v === '') v = k in DEFAULTS ? DEFAULTS[k] : NULLABLE.has(k) ? null : '';
       if (k === 'sort' || k === 'priority' || k === 'size') v = Number(v) || 0;
       if (k === 'allDay' || k === 'done') v = !!v;
+      if (k === 'remind') v = v == null || v === '' ? null : Number(v);
       if (k === 'date' || k === 'endDate') v = v ? String(v).slice(0, 10) : null;
       r[k] = v;
     });

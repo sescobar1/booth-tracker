@@ -1,6 +1,6 @@
 // The planner as a calendar feed, so Google Calendar, Outlook or an iPhone can subscribe to it.
 // Calendar apps can't sign in, so the link carries a long secret key instead (checked by planner_feed in the database).
-type Item = { id: string; kind: string; title: string; date: string; end_date: string | null; start_time: string; end_time: string; all_day: boolean; done: boolean; notes: string; location: string; repeat: string; updated_at: string };
+type Item = { id: string; kind: string; title: string; date: string; end_date: string | null; start_time: string; end_time: string; all_day: boolean; done: boolean; notes: string; location: string; repeat: string; driver: string; remind: number | null; updated_at: string };
 
 const esc = (s: string) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 // Lines over 75 characters are folded, as the iCal format asks.
@@ -36,8 +36,15 @@ Deno.serve(async (req: Request) => {
     }
     lines.push('SUMMARY:' + esc((task ? (i.done ? '✓ ' : '☐ ') : '') + (i.title || '(no title)')));
     if (i.location) lines.push('LOCATION:' + esc(i.location));
-    if (i.notes) lines.push('DESCRIPTION:' + esc(i.notes));
+    const desc = [i.driver ? 'Driving: ' + i.driver : '', i.notes].filter(Boolean).join('\n');
+    if (desc) lines.push('DESCRIPTION:' + esc(desc));
     if (RR[i.repeat]) lines.push('RRULE:' + RR[i.repeat]);
+    // Alerts: events default to 30 minutes before; tasks with a due date ring at 9 AM that day. remind = -1 means no alert.
+    const mins = i.remind == null ? (timed ? 30 : task ? -540 : null) : i.remind;
+    if (mins != null && mins >= -1440 && mins !== -1 && !(task && i.done)) {
+      const trig = timed ? (mins >= 0 ? '-PT' + mins + 'M' : 'PT' + (-mins) + 'M') : (mins < 0 ? 'PT' + (-mins) + 'M' : '-PT' + mins + 'M');
+      lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc(i.title || 'Reminder'), 'TRIGGER:' + trig, 'END:VALARM');
+    }
     lines.push('END:VEVENT');
   }
   lines.push('END:VCALENDAR');
