@@ -443,3 +443,6 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .fzqty .small { padding: 2px 10px; min-height: 30px; }
 .fzsoon { border: 1px solid #ecc9c0; background: #fdf4f1; }
 .fzrow.used .fzname span { color: var(--muted); }
+.fzsug { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
+.fzsug .lbl { width: 100%; margin: 0 0 2px; }
+.fzsug .qf { padding: 6px 12px; font-size: 13px; }
