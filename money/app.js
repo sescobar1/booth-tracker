@@ -150,9 +150,9 @@ function balances(acc) {
 function route() {
   if (location.hash.startsWith('#add')) { quickAdd(); return; }
   const [tab, arg] = (location.hash.slice(1) || 'register').split('/');
-  const tabOf = { reports: 'register', import: 'more', accounts: 'more', recurring: 'more', siri: 'more' };
+  const tabOf = { reports: 'register', import: 'more', accounts: 'more', recurring: 'more', siri: 'more', inbox: 'register', calendar: 'register', rules: 'more', budgets: 'more' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri };
+  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar };
   (views[tab] || viewRegister)(arg);
 }
 window.render = () => { const y = window.scrollY; firstSort(); runRecurring(); if (pendingAdd) { finishQuickAdd(); return; } if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
@@ -163,12 +163,13 @@ $('topAdd').onclick = () => {
     '<button type="button" data-addk="expense">− Expense<span>money out</span></button>' +
     '<button type="button" class="income-btn" data-addk="income">+ Income<span>money in</span></button>' +
     '<button type="button" class="ghost" data-addk="rexpense">🔁 Recurring bill<span>every month</span></button>' +
-    '<button type="button" class="ghost" data-addk="rincome">🔁 Recurring deposit<span>paycheck, etc.</span></button></div>' +
+    '<button type="button" class="ghost" data-addk="rincome">🔁 Recurring deposit<span>paycheck, etc.</span></button>' +
+    '<button type="button" class="ghost wide" data-addk="scan">📷 Scan a receipt<span>fills in the store, total and date</span></button></div>' +
     '<div class="row-actions"><button type="button" class="ghost" id="addX">Cancel</button></div>');
   $('addX').onclick = closeModal;
   document.querySelectorAll('[data-addk]').forEach(b => b.onclick = () => {
     const k = b.dataset.addk; closeModal();
-    if (k[0] === 'r') editRecurring(null, k.slice(1)); else editTx(null, k);
+    if (k === 'scan') { editTx(null, 'expense'); $('tScan').click(); } else if (k[0] === 'r') editRecurring(null, k.slice(1)); else editTx(null, k);
   });
 };
 
@@ -189,7 +190,7 @@ function viewRegister() {
   const months = [...new Set(b.list.map(t => t.date.slice(0, 7)))].sort().reverse();
   const q = regSearch.toLowerCase();
   const shown = b.list.filter(t => (!regMonth || t.date.startsWith(regMonth)) && (!regCat || (t.category || '') === regCat) &&
-    (!q || [t.payee, t.note, t.category, t.checkNum, String(t.amount)].join(' ').toLowerCase().includes(q))).reverse();
+    (!q || [t.payee, t.note, t.category, t.checkNum, String(t.amount), tagsOf(t).map(x => '#' + x).join(' ')].join(' ').toLowerCase().includes(q))).reverse();
   let lastDate = '', rows = '';
   shown.forEach(t => {
     if (t.date !== lastDate) { rows += '<div class="day">' + esc(fmtDate(t.date, true)) + '</div>'; lastDate = t.date; }
@@ -197,13 +198,15 @@ function viewRegister() {
       '<button type="button" class="clr" data-clear="' + t.id + '" title="' + (t.cleared ? 'Cleared – tap to unclear' : 'Not cleared – tap to clear') + '">' + (t.cleared ? '✓' : '') + '</button>' +
       '<div class="who"><b>' + (String(t.id).startsWith('rec_') ? '🔁 ' : '') + esc(t.payee || '(no payee)') + '</b>' +
       '<span class="sub">' + esc([t.category, t.checkNum ? '#' + t.checkNum : '', t.note].filter(Boolean).join(' · ')) + '</span>' +
+      (tagsOf(t).length ? '<span class="sub">' + tagsOf(t).map(x => '<span class="chip tagc">#' + esc(x) + '</span>').join(' ') + '</span>' : '') +
       (t.taxCat || t.receipt ? '<span class="sub">' + (t.taxCat ? '<span class="chip tax">🧾 ' + esc(t.taxCat) + '</span> ' : '') + (t.receipt ? '<span class="chip">📎 receipt</span>' : '') + '</span>' : '') + '</div>' +
       '<div class="amt"><b class="' + t.type + '">' + (t.type === 'income' ? '+' : '−') + money(t.amount).replace('−', '') + '</b>' + (t.bankAmount != null && Math.abs(bankAmt(t) - t.amount) >= 0.005 ? '<span class="sub bankamt">bank ' + money(bankAmt(t)) + '</span>' : '') + '<span class="sub">' + money(b.running[t.id]) + '</span></div></div>';
   });
   const accOpts = data.accounts.length > 1 ? '<select id="accPick">' + data.accounts.slice().sort((a, c) => a.sort - c.sort).map(a => '<option value="' + a.id + '"' + (a.id === acc.id ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select>' : '<b>' + esc(acc.name) + '</b>';
   const monthIn = regMonth ? b.list.filter(t => t.date.startsWith(regMonth)) : [];
+  const needCat = b.list.filter(t => !t.category).length;
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Spending &amp; reports</a></div>' +
+    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
     '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
     '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
     (balView === 'bank'
@@ -211,9 +214,11 @@ function viewRegister() {
         '<div class="bal-row"><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '<span>Register: <b>' + money(b.balance) + '</b></span></div></div>'
       : '<div class="bal"><span>Register balance (after pending)</span><b class="' + (b.balance < 0 ? 'neg' : '') + '">' + money(b.balance) + '</b></div>' +
         '<div class="bal-row"><span>Bank: <b>' + money(b.cleared) + '</b></span><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '</div></div>') +
-    comingUp(acc, b.balance) +
+    safeToSpend(acc, b.balance) + budgetCard(acc) + comingUp(acc, b.balance) +
+    (needCat ? '<a class="card pad inbox-link" href="#inbox">🗂 <b>' + needCat + '</b> ' + (needCat === 1 ? 'entry needs' : 'entries need') + ' a category <span class="sub">Sort them →</span></a>' : '') +
+    favRow() +
     '<div class="row-actions quick"><button type="button" id="addExp">− Expense</button><button type="button" class="income-btn" id="addInc">+ Income</button></div>' +
-    '<div class="filters"><input id="regFind" type="search" placeholder="Search payee, note, amount" value="' + esc(regSearch) + '">' +
+    '<div class="filters"><input id="regFind" type="search" placeholder="Search payee, amount, #tag" value="' + esc(regSearch) + '">' +
     '<select id="regMonth"><option value="">All months</option>' + months.map(m => '<option value="' + m + '"' + (m === regMonth ? ' selected' : '') + '>' + esc(monthName(m)) + '</option>').join('') + '</select>' +
     '<select id="regCat"><option value="">All categories</option>' + data.settings.categories.map(c => '<option' + (c === regCat ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></div>' +
     (regMonth ? '<p class="helper">' + esc(monthName(regMonth)) + ': in ' + money(monthIn.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)) + ' · out ' + money(monthIn.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)) + '</p>' : '') +
@@ -222,6 +227,8 @@ function viewRegister() {
   if ($('accPick')) $('accPick').onchange = e => { currentAccount = e.target.value; viewRegister(); };
   $('view').querySelectorAll('[data-uprec]').forEach(x => x.onclick = () => editRecurring(x.dataset.uprec));
   $('view').querySelectorAll('[data-newrec]').forEach(x => x.onclick = () => editRecurring(null, x.dataset.newrec));
+  $('view').querySelectorAll('[data-fav]').forEach(x => x.onclick = () => editTx(null, 'expense', { payee: x.dataset.fav }));
+  $('view').querySelectorAll('[data-budcat]').forEach(x => x.onclick = () => { regCat = x.dataset.budcat; regMonth = today().slice(0, 7); viewRegister(); });
   $('addExp').onclick = () => editTx(null, 'expense');
   $('addInc').onclick = () => editTx(null, 'income');
   $('regFind').oninput = e => { regSearch = e.target.value; clearTimeout(viewRegister.t); viewRegister.t = setTimeout(() => { viewRegister(); const f = $('regFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
@@ -241,7 +248,7 @@ function payeeMemory() {
   data.tx.slice().sort(byTime).forEach(t => { if (t.payee && (t.category || !m[t.payee.trim().toLowerCase()])) m[t.payee.trim().toLowerCase()] = { category: t.category || (m[t.payee.trim().toLowerCase()] || {}).category || '', type: t.type, taxCat: t.taxCat, amount: t.amount }; });
   return m;
 }
-function editTx(id, type) {
+function editTx(id, type, preset) {
   const acc = activeAccount();
   if (!acc) { toast('Add an account first (More → Accounts).'); return; }
   const t = id ? data.tx.find(x => x.id === id) : { accountId: acc.id, date: today(), time: '', payee: '', amount: '', type: type || 'expense', category: '', note: '', checkNum: '', cleared: false, taxCat: '', receipt: '', source: 'Added' };
@@ -249,6 +256,7 @@ function editTx(id, type) {
   const mem = payeeMemory();
   const payees = Object.keys(mem).length ? [...new Set(data.tx.map(x => (x.payee || '').trim()).filter(Boolean))].sort() : [];
   openModal('<h2>' + (id ? 'Edit entry' : kind === 'income' ? 'Add income' : 'Add expense') + '</h2>' +
+    (id ? '' : '<label class="button ghost small file scanbtn">📷 Scan a receipt<input type="file" id="tScan" accept="image/*" capture="environment" hidden></label><p class="helper" id="tScanNote" hidden></p>') +
     '<div class="segs" id="tKind"><button type="button" class="seg' + (kind === 'expense' ? ' on' : '') + '" data-k="expense">− Expense</button><button type="button" class="seg' + (kind === 'income' ? ' on' : '') + '" data-k="income">+ Income</button></div>' +
     '<label>Amount<input id="tAmt" inputmode="decimal" placeholder="0.00" value="' + (t.amount === '' ? '' : Number(t.amount).toFixed(2)) + '" class="big-input"></label>' +
     '<label>Payee<input id="tPayee" list="payees" value="' + esc(t.payee) + '" placeholder="Walmart" autocapitalize="words"></label><datalist id="payees">' + payees.map(p => '<option value="' + esc(p) + '">').join('') + '</datalist>' +
@@ -259,6 +267,7 @@ function editTx(id, type) {
     (data.accounts.length > 1 ? '<label>Account<select id="tAcc">' + data.accounts.map(a => '<option value="' + a.id + '"' + (a.id === t.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select></label>' : '<span></span>') + '</div>' +
     (t.bankAmount != null && t.bankAmount !== '' ? '<p class="helper">🏦 The bank shows ' + money(t.bankAmount) + '.' + (Math.abs(bankAmt(t) - Number(t.amount)) >= 0.005 ? ' Your register has it rounded.' : '') + '</p>' : '') +
     '<label>Note<input id="tNote" value="' + esc(t.note) + '"></label>' +
+    '<p class="lbl">Tags</p>' + tagChips(tagsOf(t)) +
     '<label class="check"><input type="checkbox" id="tClr"' + (t.cleared ? ' checked' : '') + '> Cleared the bank</label>' +
     (id && String(id).startsWith('rec_') ? '<p class="helper">🔁 This came from a recurring ' + (t.type === 'income' ? 'deposit' : 'bill') + '. <button type="button" class="linkish" id="tRec">Edit the recurring ' + (t.type === 'income' ? 'deposit' : 'bill') + '</button></p>' : '<label class="check"><input type="checkbox" id="tRepeat"> 🔁 Repeats every month (adds it on the ' + ordinal(Number(t.date.slice(8, 10)) || 1) + ')</label>') +
     '<details class="taxbox"' + (t.taxCat || t.receipt ? ' open' : '') + '><summary>🧾 Taxes &amp; receipt</summary>' +
@@ -290,7 +299,7 @@ function editTx(id, type) {
     if (!amount) { toast('Enter the amount.'); return; }
     if (!$('tDate').value) { toast('Pick the date.'); return; }
     if (pendingFile && !signedIn()) { toast('Sign in (More → Account) to save receipt photos.'); return; }
-    Object.assign(t, { amount: Math.abs(amount), type: kind, payee: $('tPayee').value.trim(), category: $('tCat').value.trim(), date: $('tDate').value, checkNum: $('tCheck').value.trim(), note: $('tNote').value.trim(), cleared: $('tClr').checked, taxCat: $('tTax').value, accountId: $('tAcc') ? $('tAcc').value : t.accountId });
+    Object.assign(t, { amount: Math.abs(amount), type: kind, payee: $('tPayee').value.trim(), category: $('tCat').value.trim(), date: $('tDate').value, checkNum: $('tCheck').value.trim(), note: $('tNote').value.trim(), cleared: $('tClr').checked, taxCat: $('tTax').value, tags: pickedTags(), accountId: $('tAcc') ? $('tAcc').value : t.accountId });
     if (!id) { t.id = uid(); t.time = new Date().toTimeString().slice(0, 5); data.tx.push(t); }
     if ($('tRepeat') && $('tRepeat').checked) {
       const r = { id: uid(), accountId: t.accountId, payee: t.payee || t.category || 'Bill', amount: t.amount, type: t.type, category: t.category, taxCat: t.taxCat, every: 'month', day: Number(t.date.slice(8, 10)), start: t.date, through: t.date, paused: false };
@@ -316,7 +325,24 @@ function editTx(id, type) {
     if (!confirm('Delete ' + (t.payee || 'this entry') + ' (' + money(t.amount) + ')?')) return;
     data.tx = data.tx.filter(x => x.id !== id); window.save(); closeModal(); route();
   };
-  setTimeout(() => { if (!id) $('tAmt').focus(); }, 50);
+  wireTagChips();
+  if (preset) {
+    if (preset.payee) { $('tPayee').value = preset.payee; $('tPayee').onchange(); }
+    if (preset.date) $('tDate').value = preset.date;
+  }
+  if ($('tScan')) $('tScan').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    pendingFile = f; $('tFileNote').textContent = '📎 The photo will be saved as the receipt.';
+    const note = $('tScanNote'); note.hidden = false; note.textContent = '🔎 Reading the receipt…';
+    try {
+      const r = await readReceipt(f, p => { note.textContent = '🔎 Reading the receipt… ' + p + '%'; });
+      if (r.total) $('tAmt').value = r.total.toFixed(2);
+      if (r.store) { $('tPayee').value = r.store; $('tCat').value = ''; $('tPayee').onchange(); }
+      if (r.date && r.date <= today() && r.date >= isoDay(new Date(Date.now() - 400 * 864e5))) $('tDate').value = r.date;
+      note.textContent = r.total ? '✓ Found ' + (r.store || 'a store') + ', ' + money(r.total) + '. Check it, then Save.' : 'Couldn\'t read the total. Type it in; the photo is still attached.';
+    } catch (err) { note.textContent = err.message + ' The photo is still attached.'; }
+  };
+  setTimeout(() => { if (!id && !(preset && preset.payee)) $('tAmt').focus(); else if (preset && preset.payee) $('tAmt').focus(); }, 50);
 }
 
 // ---------- private files ----------
@@ -529,6 +555,252 @@ function editRecurring(id, type) {
   };
 }
 
+// ---------- Favorites (one-tap quick add) ----------
+// Her pinned list if she made one, otherwise the payees she enters most by hand (last 4 months).
+function favorites() {
+  const pinned = (data.settings.favorites || []).filter(Boolean);
+  if (pinned.length) return pinned.slice(0, 8);
+  const since = isoDay(new Date(Date.now() - 120 * 864e5)), count = {}, name = {};
+  data.tx.filter(t => t.type === 'expense' && t.date >= since && t.payee && !String(t.id).startsWith('rec_')).forEach(t => {
+    const k = looseName(t.payee); count[k] = (count[k] || 0) + (t.source === 'Bank' ? 1 : 3); if (!name[k] || t.source !== 'Bank') name[k] = t.payee;
+  });
+  return Object.keys(count).filter(k => k && !/^(check|deposit|transfer)$/.test(k)).sort((a, b) => count[b] - count[a]).slice(0, 8).map(k => name[k]);
+}
+function favRow() {
+  const f = favorites();
+  if (!f.length) return '';
+  return '<div class="favs"><span class="favl">⚡ Quick add</span>' + f.map(p => '<button type="button" class="chipbtn" data-fav="' + esc(p) + '">' + esc(p) + '</button>').join('') + '</div>';
+}
+
+// ---------- Tags ----------
+const DEFAULT_TAGS = ['Band', 'Booth', 'Kids', 'Christmas', 'Trip', 'Business', 'Birthday', 'Reimburse'];
+const tagList = () => data.settings.tags && data.settings.tags.length ? data.settings.tags : DEFAULT_TAGS;
+const tagsOf = t => String(t.tags || '').split(',').map(x => x.trim()).filter(Boolean);
+function tagChips(selected) {
+  const all = tagList().concat(selected.filter(x => !tagList().includes(x)));
+  return '<div class="catchips" id="tTags">' + all.map(x => '<button type="button" class="chipbtn tag' + (selected.includes(x) ? ' on' : '') + '" data-tag="' + esc(x) + '">#' + esc(x) + '</button>').join('') +
+    '<button type="button" class="chipbtn" id="tTagNew">+ tag</button></div>';
+}
+function wireTagChips() {
+  const box = $('tTags'); if (!box) return;
+  box.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => b.classList.toggle('on'));
+  $('tTagNew').onclick = () => {
+    const n = (prompt('New tag (for example "Disney trip"):') || '').trim().replace(/[#,]/g, ''); if (!n) return;
+    if (!tagList().includes(n)) data.settings.tags = tagList().concat([n]);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chipbtn tag on'; b.dataset.tag = n; b.textContent = '#' + n; b.onclick = () => b.classList.toggle('on');
+    box.insertBefore(b, $('tTagNew'));
+  };
+}
+const pickedTags = () => [...document.querySelectorAll('#tTags [data-tag].on')].map(b => b.dataset.tag).join(', ');
+
+// ---------- Receipt scanning ----------
+// Reads the photo on the phone itself (Tesseract), then fills in the store, total and date.
+const OCR_CDN = 'https://cdn.jsdelivr.net/npm/';
+function loadOcr() {
+  return new Promise((ok, no) => {
+    if (window.Tesseract) return ok();
+    const s = document.createElement('script'); s.src = OCR_CDN + 'tesseract.js@5/dist/tesseract.min.js';
+    s.onload = ok; s.onerror = () => no(new Error('Could not load the receipt reader (need signal the first time).'));
+    document.head.appendChild(s);
+  });
+}
+async function readReceipt(file, onProgress) {
+  await loadOcr();
+  const img = await shrinkImage(file);
+  const worker = await Tesseract.createWorker('eng', 1, {
+    workerPath: OCR_CDN + 'tesseract.js@5/dist/worker.min.js', corePath: OCR_CDN + 'tesseract.js-core@5', langPath: OCR_CDN + '@tesseract.js-data/eng/4.0.0_best_int',
+    logger: m => { if (m.status === 'recognizing text' && onProgress) onProgress(Math.round(m.progress * 100)); }
+  });
+  try { const { data: d } = await worker.recognize(img); return parseReceipt(d.text); }
+  finally { worker.terminate(); }
+}
+function parseReceipt(text) {
+  const lines = String(text || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const amountsIn = l => (l.replace(/[Oo](?=\d)|(?<=\d)[Oo]/g, '0').match(/-?\$?\s?\d{1,5}[.,]\d{2}(?!\d)/g) || []).map(a => toNum(a.replace(',', '.')));
+  let total = 0;
+  // The total line: "TOTAL", "Amount due", "Balance" (but not subtotal or tax).
+  for (const l of lines.slice().reverse()) {
+    if (/total|amount due|balance due|grand|amt due|^due\b|charged|debit tend|visa|mastercard/i.test(l) && !/sub\s?-?total|tax|savings|you saved|items?\b.*sold/i.test(l)) {
+      const a = amountsIn(l).filter(x => x > 0); if (a.length) { total = a[a.length - 1]; break; }
+    }
+  }
+  if (!total) total = Math.max(0, ...lines.flatMap(amountsIn));
+  let date = '';
+  for (const l of lines) { const m = l.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; if (+m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) { date = y + '-' + pad(m[1]) + '-' + pad(m[2]); break; } } }
+  const whole = lines.join(' ');
+  const known = MERCHANTS.find(([re]) => re.test(whole));
+  let store = known ? known[1] : '';
+  if (!store) { const l = lines.find(x => (x.match(/[A-Za-z]/g) || []).length >= 4 && !/receipt|welcome|thank|store #|survey|www|http|\d{3}[-.]\d{3}/i.test(x)); if (l) store = l.replace(/[^A-Za-z0-9&' .-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).split(' ').slice(0, 4).join(' '); }
+  return { total: Math.round(total * 100) / 100, date, store, text };
+}
+
+// ---------- Category inbox ----------
+let inboxSkip = new Set();
+function viewInbox() {
+  const acc = activeAccount();
+  const list = data.tx.filter(t => (!acc || t.accountId === acc.id) && !t.category && t.category !== 'Transfer' && !inboxSkip.has(t.id)).sort(byTime).reverse();
+  if (!list.length) {
+    $('view').innerHTML = '<a class="back" href="#register">‹ Register</a><div class="empty"><h2>🎉 All sorted!</h2><p>Every entry has a category.' + (inboxSkip.size ? ' (' + inboxSkip.size + ' skipped for now.)' : '') + '</p><a class="button" href="#register">Back to register</a></div>';
+    return;
+  }
+  const t = list[0], same = list.filter(x => looseName(x.payee) === looseName(t.payee));
+  $('view').innerHTML = '<a class="back" href="#register">‹ Register</a><h1>🗂 Needs a category <small>' + list.length + ' left</small></h1>' +
+    '<div class="card pad inbox-card"><div class="mini-row"><span><b class="big">' + esc(t.payee || '(no payee)') + '</b><span class="sub">' + esc(fmtDate(t.date, true)) + '</span></span><b class="' + t.type + ' big">' + signedAmt(t.type, t.amount) + '</b></div>' +
+    (t.note ? '<p class="sub">' + esc(t.note) + '</p>' : '') +
+    '<div class="catchips big">' + topCategories(20).map(c => '<button type="button" class="chipbtn" data-ic="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>' +
+    '<label>Or another<input id="icOther" list="icCats" placeholder="Type a category"></label><datalist id="icCats">' + data.settings.categories.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
+    (same.length > 1 ? '<label class="check"><input type="checkbox" id="icAll" checked> Use for all ' + same.length + ' “' + esc(t.payee) + '” entries, and remember it</label>' : '<label class="check"><input type="checkbox" id="icAll" checked> Remember it for “' + esc(t.payee) + '” next time</label>') +
+    '<div class="row-actions"><button type="button" class="ghost" id="icSkip">Skip</button><button type="button" class="ghost" id="icEdit">Open entry</button></div></div>';
+  const apply = c => {
+    c = c.trim(); if (!c) return;
+    if (!data.settings.categories.includes(c)) data.settings.categories.push(c);
+    if ($('icAll').checked) { same.forEach(x => { x.category = c; }); if (t.payee) data.settings.catRules = Object.assign({}, data.settings.catRules, { [looseName(t.payee)]: c }); }
+    else t.category = c;
+    window.save(); viewInbox();
+  };
+  $('view').querySelectorAll('[data-ic]').forEach(b => b.onclick = () => apply(b.dataset.ic));
+  $('icOther').onchange = e => apply(e.target.value);
+  $('icSkip').onclick = () => { inboxSkip.add(t.id); viewInbox(); };
+  $('icEdit').onclick = () => editTx(t.id);
+}
+
+// ---------- Category rules ----------
+function viewRules() {
+  const rules = data.settings.catRules || {}, cont = data.settings.containsRules || [];
+  const names = {}; data.tx.forEach(t => { if (t.payee) names[looseName(t.payee)] = t.payee; });
+  const catSel = (v, attr) => '<select ' + attr + '>' + data.settings.categories.map(c => '<option' + (c === v ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>';
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🧭 Category rules</h1>' +
+    '<p class="helper">How new entries get their category, in this order: your “name contains” rules, then names you\'ve sorted, then what you used last time, then the built-in rules.</p>' +
+    '<div class="card pad"><h2>If the name contains…</h2>' + (cont.map((r, i) => '<div class="rule"><input value="' + esc(r.text) + '" data-ct="' + i + '">' + catSel(r.category, 'data-cc="' + i + '"') + '<button type="button" class="linkish" data-cdel="' + i + '">✕</button></div>').join('') || '<p class="helper">None yet.</p>') +
+    '<div class="rule"><input id="ncText" placeholder="e.g. russellvi">' + catSel('', 'id="ncCat"') + '<button type="button" class="small" id="ncAdd">Add</button></div>' +
+    '<label class="check"><input type="checkbox" id="ncApply" checked> Also apply to entries already in the register</label></div>' +
+    '<div class="card pad"><h2>Names you\'ve sorted (' + Object.keys(rules).length + ')</h2>' + (Object.keys(rules).sort().map(k => '<div class="rule"><span>' + esc(names[k] || k) + '</span>' + catSel(rules[k], 'data-rk="' + esc(k) + '"') + '<button type="button" class="linkish" data-rdel="' + esc(k) + '">✕</button></div>').join('') || '<p class="helper">When you change an entry\'s category (or sort in the inbox), it shows up here.</p>') + '</div>' +
+    '<details class="card pad"><summary>Built-in rules</summary>' + CATEGORY_RULES.map(([re, c]) => '<p class="sub"><b>' + esc(c) + '</b>: ' + esc(re.source.replace(/\\b|\\/g, '').split('|').slice(0, 12).join(', ')) + '…</p>').join('') + '</details>';
+  const saveCont = () => { data.settings.containsRules = cont.slice(); window.save(); };
+  $('view').querySelectorAll('[data-ct]').forEach(i => i.onchange = () => { cont[+i.dataset.ct].text = i.value.trim(); saveCont(); });
+  $('view').querySelectorAll('[data-cc]').forEach(i => i.onchange = () => { cont[+i.dataset.cc].category = i.value; saveCont(); });
+  $('view').querySelectorAll('[data-cdel]').forEach(b => b.onclick = () => { cont.splice(+b.dataset.cdel, 1); saveCont(); viewRules(); });
+  $('view').querySelectorAll('[data-rk]').forEach(i => i.onchange = () => { data.settings.catRules = Object.assign({}, rules, { [i.dataset.rk]: i.value }); data.tx.forEach(t => { if (looseName(t.payee) === i.dataset.rk) t.category = i.value; }); window.save(); toast('Updated.'); });
+  $('view').querySelectorAll('[data-rdel]').forEach(b => b.onclick = () => { const r = Object.assign({}, rules); delete r[b.dataset.rdel]; data.settings.catRules = r; window.save(); viewRules(); });
+  $('ncAdd').onclick = () => {
+    const text = $('ncText').value.trim(), category = $('ncCat').value; if (!text) { toast('Type part of the name.'); return; }
+    cont.push({ text, category }); data.settings.containsRules = cont.slice();
+    let n = 0;
+    if ($('ncApply').checked) data.tx.forEach(t => { if ((t.payee + ' ' + t.note).toLowerCase().includes(text.toLowerCase()) && t.category !== category) { t.category = category; n++; } });
+    window.save(); toast('Rule added' + (n ? ', ' + n + ' entries updated' : '') + '.'); viewRules();
+  };
+}
+
+// ---------- Budgets ----------
+const budgets = () => data.settings.budgets || {};
+function monthSpend(acc, ym) {
+  const m = {};
+  data.tx.filter(t => t.accountId === acc.id && t.type === 'expense' && t.date.startsWith(ym)).forEach(t => { const c = t.category || 'Uncategorized'; m[c] = (m[c] || 0) + Number(t.amount); });
+  return m;
+}
+function budgetCard(acc) {
+  const bud = budgets(), cats = Object.keys(bud).filter(c => bud[c] > 0);
+  if (!cats.length) return '';
+  const ym = today().slice(0, 7), spent = monthSpend(acc, ym);
+  const dayFrac = new Date().getDate() / lastDay(+ym.slice(0, 4), +ym.slice(5, 7));
+  const rows = cats.map(c => ({ c, b: bud[c], s: spent[c] || 0 })).sort((a, b) => b.s / b.b - a.s / a.b);
+  const over = rows.filter(r => r.s > r.b).length, near = rows.filter(r => r.s <= r.b && r.s >= r.b * 0.8).length;
+  return '<details class="card pad budgets"' + (over || near ? ' open' : '') + '><summary>🎯 Budgets this month' + (over ? ' · <b class="expense">' + over + ' over</b>' : near ? ' · <b class="warnc">' + near + ' close</b>' : ' · on track') + '</summary>' +
+    rows.slice(0, 5).map(r => { const pct = r.s / r.b, cls = pct >= 1 ? 'red' : pct >= 0.8 ? 'yellow' : 'green';
+      return '<div class="bud" data-budcat="' + esc(r.c) + '"><div class="mini-row"><span>' + esc(r.c) + '</span><span class="sub">' + money(r.s) + ' of ' + money(r.b) + (pct < 1 ? ' · ' + money(r.b - r.s) + ' left' : ' · ' + money(r.s - r.b) + ' over') + '</span></div><div class="progress ' + cls + '"><span style="width:' + Math.min(100, Math.round(pct * 100)) + '%"></span><i style="left:' + Math.round(dayFrac * 100) + '%"></i></div></div>'; }).join('') +
+    (rows.length > 5 ? '<p class="helper">+ ' + (rows.length - 5) + ' more on track.</p>' : '') +
+    '<p class="helper">The little line is where you are in the month. <a href="#budgets">Change budgets</a></p></details>';
+}
+function viewBudgets() {
+  const acc = activeAccount(); if (!acc) { location.hash = 'register'; return; }
+  const bud = budgets();
+  // Average of the last 3 full months, as a starting point.
+  const avg = {};
+  [1, 2, 3].forEach(k => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k); const s = monthSpend(acc, isoDay(d).slice(0, 7)); Object.entries(s).forEach(([c, v]) => { avg[c] = (avg[c] || 0) + v / 3; }); });
+  const cats = data.settings.categories.filter(c => !['Paycheck', 'Side income', 'Transfer'].includes(c));
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🎯 Monthly budgets</h1><p class="helper">Set a limit for the categories you want to watch. Leave the rest blank. Your average for the last 3 months is shown to help.</p>' +
+    '<div class="row-actions"><button type="button" class="ghost small" id="budAvg">Fill blanks with my averages</button></div>' +
+    '<div class="card pad">' + cats.map(c => '<div class="rule"><span>' + esc(c) + '<span class="sub">avg ' + money(Math.round(avg[c] || 0)) + '</span></span><input inputmode="decimal" data-bud="' + esc(c) + '" value="' + (bud[c] ? bud[c] : '') + '" placeholder="—"></div>').join('') + '</div>' +
+    '<div class="row-actions"><button type="button" id="budSave">Save budgets</button></div>';
+  $('budAvg').onclick = () => document.querySelectorAll('[data-bud]').forEach(i => { if (!i.value && avg[i.dataset.bud] >= 1) i.value = Math.ceil(avg[i.dataset.bud] / 5) * 5; });
+  $('budSave').onclick = () => {
+    const b = {}; document.querySelectorAll('[data-bud]').forEach(i => { const v = toNum(i.value); if (v > 0) b[i.dataset.bud] = v; });
+    data.settings.budgets = b; window.save(); toast('Budgets saved.'); location.hash = 'register';
+  };
+}
+
+// ---------- Safe to spend ----------
+// Register balance minus the bills due before the next paycheck (bills due the same day as it are covered by it).
+function safeToSpend(acc, balance) {
+  const now = today(), horizon = isoDay(new Date(Date.now() + 45 * 864e5));
+  const up = upcoming(acc, 45);
+  const pay = up.find(x => x.r.type === 'income');
+  const until = pay ? pay.date : isoDay(new Date(Date.now() + 30 * 864e5));
+  const bills = up.filter(x => x.r.type === 'expense' && x.date < until);
+  const safe = balance - bills.reduce((s, x) => s + Number(x.r.amount), 0);
+  const days = Math.max(1, Math.round((new Date(until) - new Date(now)) / 864e5));
+  return '<div class="card pad safe"><div class="mini-row"><span>💵 <b>Safe to spend</b><span class="sub">until ' + (pay ? 'your next deposit, ' : '') + esc(fmtDate(until)) + (bills.length ? ' · after ' + bills.length + ' bill' + (bills.length > 1 ? 's' : '') + ' (' + money(bills.reduce((s, x) => s + Number(x.r.amount), 0)) + ')' : '') + '</span></span>' +
+    '<span class="safe-amt"><b class="' + (safe < 0 ? 'expense' : 'income') + '">' + money(safe) + '</b><span class="sub">' + (safe > 0 ? '≈ ' + money(safe / days) + '/day' : 'short before payday') + '</span></span></div>' +
+    (pay ? '' : '<p class="helper"><a href="#recurring">Add your paycheck as a recurring deposit</a> for a better number.</p>') + '</div>';
+}
+
+// ---------- Bills calendar ----------
+let calMonth = '';
+function viewCalendar() {
+  const acc = activeAccount(); if (!acc) { location.hash = 'register'; return; }
+  if (!calMonth) calMonth = today().slice(0, 7);
+  const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = lastDay(y, m);
+  const from = calMonth + '-01', to = calMonth + '-' + pad(n), before = isoDay(new Date(y, m - 1, 0));
+  const items = {};
+  const add = (d, x) => { (items[d] = items[d] || []).push(x); };
+  // Bills and deposits: what the recurring list will add, plus the ones already in the register.
+  recList().filter(r => !r.paused && r.accountId === acc.id).forEach(r => recDates(r, before, to).forEach(d => {
+    const t = data.tx.find(x => x.id === recId(r, d));
+    add(d, { name: r.payee, amt: Number(t ? t.amount : r.amount), type: r.type, done: t && t.cleared, rec: r.id });
+  }));
+  if (viewCalendar.all) data.tx.filter(t => t.accountId === acc.id && t.date >= from && t.date <= to && !String(t.id).startsWith('rec_')).forEach(t => add(t.date, { name: t.payee, amt: Number(t.amount), type: t.type, done: t.cleared, tx: t.id }));
+  const totOut = Object.values(items).flat().filter(x => x.type === 'expense').reduce((s, x) => s + x.amt, 0), totIn = Object.values(items).flat().filter(x => x.type === 'income').reduce((s, x) => s + x.amt, 0);
+  let cells = '';
+  for (let i = 0; i < first.getDay(); i++) cells += '<div class="cal-d empty"></div>';
+  for (let d = 1; d <= n; d++) {
+    const iso = calMonth + '-' + pad(d), xs = items[iso] || [];
+    const out = xs.filter(x => x.type === 'expense').reduce((s, x) => s + x.amt, 0), inc = xs.filter(x => x.type === 'income').reduce((s, x) => s + x.amt, 0);
+    cells += '<button type="button" class="cal-d' + (iso === today() ? ' today' : '') + (xs.length ? ' has' : '') + '" data-day="' + iso + '"><span class="n">' + d + '</span>' +
+      (inc ? '<span class="calamt income">+' + Math.round(inc).toLocaleString() + '</span>' : '') + (out ? '<span class="calamt expense">−' + Math.round(out).toLocaleString() + '</span>' : '') + '</button>';
+  }
+  const list = Object.keys(items).sort().map(d => '<div class="day" id="d' + d + '">' + esc(fmtDate(d, true)) + '</div>' + items[d].map(x => '<div class="mini-row" ' + (x.rec ? 'data-crec="' + x.rec + '"' : 'data-ctx="' + x.tx + '"') + ' style="cursor:pointer"><span>' + (x.rec ? '🔁 ' : '') + esc(x.name) + (x.done ? ' <span class="chip">✓ cleared</span>' : '') + '</span><b class="' + x.type + '">' + signedAmt(x.type, x.amt) + '</b></div>').join('')).join('');
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar" class="on">📅 Calendar</a></div>' +
+    '<div class="cal-head"><button type="button" class="ghost small" id="calPrev">‹</button><h2>' + esc(monthName(calMonth)) + '</h2><button type="button" class="ghost small" id="calNext">›</button></div>' +
+    '<p class="helper">Bills <b class="expense">' + money(totOut) + '</b> · Deposits <b class="income">' + money(totIn) + '</b></p>' +
+    '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-w">' + x + '</div>').join('') + cells + '</div>' +
+    '<label class="check"><input type="checkbox" id="calAll"' + (viewCalendar.all ? ' checked' : '') + '> Show everyday spending too</label>' +
+    '<div class="card pad">' + (list || '<p class="helper">No bills this month. <a href="#recurring">Set up recurring bills</a></p>') + '</div>';
+  $('calPrev').onclick = () => { const d = new Date(y, m - 2, 1); calMonth = isoDay(d).slice(0, 7); viewCalendar(); };
+  $('calNext').onclick = () => { const d = new Date(y, m, 1); calMonth = isoDay(d).slice(0, 7); viewCalendar(); };
+  $('calAll').onchange = e => { viewCalendar.all = e.target.checked; viewCalendar(); };
+  $('view').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { const el = $('d' + b.dataset.day); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); else editTx(null, 'expense', { date: b.dataset.day }); });
+  $('view').querySelectorAll('[data-crec]').forEach(b => b.onclick = () => editRecurring(b.dataset.crec));
+  $('view').querySelectorAll('[data-ctx]').forEach(b => b.onclick = () => editTx(b.dataset.ctx));
+}
+
+// ---------- This month vs last month ----------
+function compareCard(acc) {
+  const now = new Date(), day = now.getDate();
+  const ym = today().slice(0, 7), prev = new Date(now.getFullYear(), now.getMonth() - 1, 1), pym = isoDay(prev).slice(0, 7);
+  const cut = pym + '-' + pad(Math.min(day, lastDay(prev.getFullYear(), prev.getMonth() + 1)));
+  const sums = (from, to) => { const m = {}; data.tx.filter(t => t.accountId === acc.id && t.type === 'expense' && t.category !== 'Transfer' && t.date >= from && t.date <= to).forEach(t => { const c = t.category || 'Uncategorized'; m[c] = (m[c] || 0) + Number(t.amount); }); return m; };
+  const a = sums(ym + '-01', today()), b = sums(pym + '-01', cut), full = sums(pym + '-01', pym + '-31');
+  const cats = [...new Set(Object.keys(a).concat(Object.keys(b)))].map(c => ({ c, a: a[c] || 0, b: b[c] || 0, f: full[c] || 0 })).sort((x, y) => Math.abs(y.a - y.b) - Math.abs(x.a - x.b));
+  if (!cats.length) return '';
+  const ta = cats.reduce((s, x) => s + x.a, 0), tb = cats.reduce((s, x) => s + x.b, 0);
+  const m0 = n => '$' + Math.round(n).toLocaleString();
+  const arrow = d => d > 0.5 ? '<b class="expense">▲ ' + m0(d) + '</b>' : d < -0.5 ? '<b class="income">▼ ' + m0(-d) + '</b>' : '<span class="sub">same</span>';
+  return '<div class="card pad"><h2>This month vs last month</h2><p class="helper">' + esc(monthName(ym)) + ' so far (1st–' + ordinal(day) + ') compared with the same days of ' + esc(monthName(pym)) + '.</p>' +
+    '<table class="mini cmp"><thead><tr><th>Category</th><th>Now</th><th>Then</th><th>Change</th></tr></thead><tbody>' +
+    cats.map(x => '<tr><td>' + esc(x.c) + '</td><td>' + m0(x.a) + '</td><td>' + m0(x.b) + '</td><td>' + arrow(x.a - x.b) + '</td></tr>').join('') +
+    '<tr class="tot"><td>Total</td><td>' + m0(ta) + '</td><td>' + m0(tb) + '</td><td>' + arrow(ta - tb) + '</td></tr></tbody></table></div>';
+}
+
 // ---------- Siri (iPhone Shortcuts) ----------
 // A Shortcut opens …/money/#add?type=expense&amt=12.50&payee=Sonic and the entry is saved right away.
 let pendingAdd = null;
@@ -652,9 +924,10 @@ function reportData() {
   const of = k => list.filter(t => t.type === k);
   const sum = l => l.reduce((s, t) => s + Number(t.amount), 0);
   const groups = {};
-  of(rep.kind).forEach(t => {
-    const k = rep.group === 'payee' ? (t.payee || '(no payee)') : rep.group === 'month' ? t.date.slice(0, 7) : (t.category || 'Uncategorized');
-    (groups[k] = groups[k] || { v: 0, n: 0 }); groups[k].v += Number(t.amount); groups[k].n++;
+  of(rep.kind).filter(t => !rep.tag || tagsOf(t).includes(rep.tag)).forEach(t => {
+    // An entry with two tags counts under each of them.
+    const keys = rep.group === 'tag' ? (tagsOf(t).length ? tagsOf(t) : ['(no tag)']) : [rep.group === 'payee' ? (t.payee || '(no payee)') : rep.group === 'month' ? t.date.slice(0, 7) : (t.category || 'Uncategorized')];
+    keys.forEach(k => { (groups[k] = groups[k] || { v: 0, n: 0 }); groups[k].v += Number(t.amount); groups[k].n++; });
   });
   const items = Object.entries(groups).map(([k, x]) => [k, Math.round(x.v * 100) / 100, x.n]).sort((a, b) => rep.group === 'month' ? a[0].localeCompare(b[0]) : b[1] - a[1]);
   const months = [...new Set(list.map(t => t.date.slice(0, 7)))].sort();
@@ -669,11 +942,13 @@ function viewReports() {
   const total = r.items.reduce((s, x) => s + x[1], 0);
   const top = r.items.slice(0, 11), rest = r.items.slice(11).reduce((s, x) => s + x[1], 0);
   const chartItems = rep.group === 'month' ? [] : top.concat(rest ? [['Everything else', rest, 0]] : []);
-  const glabel = rep.group === 'payee' ? 'payee' : rep.group === 'month' ? 'month' : 'category';
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Spending &amp; reports</a></div>' +
+  const glabel = rep.group === 'payee' ? 'payee' : rep.group === 'month' ? 'month' : rep.group === 'tag' ? 'tag' : 'category';
+  const usedTags = [...new Set(data.tx.flatMap(tagsOf))].sort();
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
     '<div class="rep-opts"><label>Time<select id="rpPeriod">' + [['month', 'This month'], ['last', 'Last month'], ['3m', 'Last 3 months'], ['ytd', 'This year'], ['lastyear', 'Last year'], ['custom', 'Pick dates…']].map(([k, l]) => '<option value="' + k + '"' + (rep.period === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
     '<label>Show<select id="rpKind"><option value="expense"' + (rep.kind === 'expense' ? ' selected' : '') + '>Spending</option><option value="income"' + (rep.kind === 'income' ? ' selected' : '') + '>Income</option></select></label>' +
-    '<label>Group by<select id="rpGroup">' + [['category', 'Category'], ['payee', 'Payee'], ['month', 'Month']].map(([k, l]) => '<option value="' + k + '"' + (rep.group === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label></div>' +
+    '<label>Group by<select id="rpGroup">' + [['category', 'Category'], ['payee', 'Payee'], ['month', 'Month'], ['tag', 'Tag']].map(([k, l]) => '<option value="' + k + '"' + (rep.group === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label></div>' +
+    (usedTags.length ? '<label>Only entries tagged<select id="rpTag"><option value="">— any —</option>' + usedTags.map(x => '<option' + (rep.tag === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label>' : '') +
     (rep.period === 'custom' ? '<div class="grid2"><label>From<input type="date" id="rpFrom" value="' + esc(r.from) + '"></label><label>To<input type="date" id="rpTo" value="' + esc(r.to) + '"></label></div>' : '') +
     '<p class="helper">' + esc(fmtDate(r.from)) + ' – ' + esc(fmtDate(r.to)) + ' · transfers between your accounts are left out</p>' +
     '<div class="stat-row"><div class="stat"><span>Money in</span><b class="income">' + money(r.totIn) + '</b></div><div class="stat"><span>Money out</span><b class="expense">' + money(r.totOut) + '</b></div><div class="stat"><span>Left over</span><b class="' + (r.totIn - r.totOut < 0 ? 'expense' : 'income') + '">' + money(r.totIn - r.totOut) + '</b></div></div>' +
@@ -682,6 +957,7 @@ function viewReports() {
       r.items.map(([k, v, n]) => '<div class="barrow" data-rk="' + esc(k) + '"><span class="lbl">' + esc(rep.group === 'month' ? monthName(k) : k) + ' <span class="sub">' + n + '</span></span><span class="track"><span style="width:' + Math.max(2, Math.round(v / r.items.reduce((m, x) => Math.max(m, x[1]), 1) * 100)) + '%"></span></span><b>' + money(v) + '</b></div>').join('')
       : '<p class="helper">Nothing for this time.</p>') +
     (r.items.some(x => x[0] === 'Uncategorized') ? '<p class="helper">Tip: give entries a category (tap one in the Register) and this gets more useful. Tap a row to see its entries.</p>' : '<p class="helper">Tap a row to see its entries.</p>') + '</div>' +
+    (activeAccount() ? compareCard(activeAccount()) : '') +
     (r.byMonth.length > 1 ? '<div class="card pad"><h2>Month by month</h2>' + monthBars(r.byMonth) + '<table class="mini"><thead><tr><th>Month</th><th>In</th><th>Out</th><th>Left</th></tr></thead><tbody>' +
       r.byMonth.map(x => '<tr><td>' + esc(new Date(x.m + '-02').toLocaleDateString([], { month: 'short', year: '2-digit' })) + '</td><td>' + money(x.inc) + '</td><td>' + money(x.out) + '</td><td class="' + (x.inc - x.out < 0 ? 'expense' : 'income') + '">' + money(x.inc - x.out) + '</td></tr>').join('') + '</tbody></table></div>' : '') +
     '<div class="row-actions"><button type="button" class="ghost" id="rpCsv">⬇ Download report (CSV)</button><button type="button" class="ghost" id="rpList">⬇ Every entry (CSV)</button><button type="button" class="ghost" id="rpPrint">🖨 Print report</button></div>' +
@@ -689,6 +965,7 @@ function viewReports() {
   $('rpPeriod').onchange = e => { rep.period = e.target.value; viewReports(); };
   $('rpKind').onchange = e => { rep.kind = e.target.value; viewReports(); };
   $('rpGroup').onchange = e => { rep.group = e.target.value; viewReports(); };
+  if ($('rpTag')) $('rpTag').onchange = e => { rep.tag = e.target.value; viewReports(); };
   if ($('rpFrom')) { $('rpFrom').onchange = e => { rep.from = e.target.value; viewReports(); }; $('rpTo').onchange = e => { rep.to = e.target.value; viewReports(); }; }
   $('view').querySelectorAll('[data-rk]').forEach(x => x.onclick = () => {
     const k = x.dataset.rk;
@@ -940,6 +1217,8 @@ function autoCategory(payee, desc, type) {
   const k = looseName(payee);
   if (!k && !desc) return '';
   const rules = data.settings.catRules || {};
+  const cont = (data.settings.containsRules || []).find(r => r.text && ((payee || '') + ' ' + (desc || '')).toLowerCase().includes(r.text.toLowerCase()));
+  if (cont) return cont.category;
   if (rules[k]) return rules[k];
   const mem = autoCategory.mem || payeeMemory();
   const hit = mem[String(payee || '').trim().toLowerCase()];
@@ -1136,6 +1415,9 @@ function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<div class="card pad"><h2>🏦 Accounts</h2>' + (data.accounts.slice().sort((a, b) => a.sort - b.sort).map(a => { const b = balances(a); return '<div class="mini-row"><a href="#" data-acc="' + a.id + '">' + esc(a.name) + ' <span class="sub">(' + esc(a.kind) + ')</span></a><b>' + money(b.balance) + '</b></div>'; }).join('') || '<p class="helper">No accounts yet.</p>') +
     '<div class="row-actions"><button type="button" class="ghost small" id="accNew">+ New account</button></div></div>' +
+    '<div class="card pad"><h2>🎯 Budgets &amp; 🧭 Category rules</h2><div class="row-actions"><a class="button ghost" href="#budgets">Budgets</a><a class="button ghost" href="#rules">Category rules</a><a class="button ghost" href="#inbox">🗂 Category inbox</a></div></div>' +
+    '<div class="card pad"><h2>⚡ Quick add &amp; #tags</h2><label>Quick-add buttons (one per line; leave empty to use your most-entered places)<textarea id="mFav" rows="4" placeholder="' + esc(favorites().join('\n')) + '">' + esc((data.settings.favorites || []).join('\n')) + '</textarea></label>' +
+    '<label>Tags (one per line)<textarea id="mTags" rows="4">' + esc(tagList().join('\n')) + '</textarea></label></div>' +
     '<div class="card pad"><h2>🔁 Recurring bills &amp; income</h2><p class="helper">' + (recList().length ? recList().length + ' set up, added on their day each month.' : 'Set up bills that repeat (added on the 1st).') + '</p><a class="button ghost" href="#recurring">Recurring</a></div>' +
     '<div class="card pad"><h2>🎙 Siri</h2><p class="helper">Say “Hey Siri, add expense” and tell it the amount and where.</p><a class="button ghost" href="#siri">Set up Siri</a></div>' +
     '<div class="card pad"><h2>🪙 Rounding</h2><label>When the bank fills in an amount<select id="mRound"><option value="up5"' + ((data.settings.rounding || 'up5') === 'up5' ? ' selected' : '') + '>Round bills up to the dollar if over 5¢; deposits down</option><option value="none"' + (data.settings.rounding === 'none' ? ' selected' : '') + '>Use the exact amount</option></select></label></div>' +
@@ -1147,6 +1429,8 @@ function viewMore() {
   $('view').querySelectorAll('[data-acc]').forEach(a => a.onclick = e => { e.preventDefault(); editAccount(a.dataset.acc); });
   $('accNew').onclick = () => editAccount();
   $('mSort').onclick = () => { const n = autoSortAll(); window.save(); toast(n ? 'Sorted ' + n + ' entries into categories.' : 'Nothing new to sort.'); viewMore(); };
+  $('mFav').onchange = e => { data.settings.favorites = lines(e.target.value); window.save(); toast('Saved.'); };
+  $('mTags').onchange = e => { data.settings.tags = lines(e.target.value); window.save(); toast('Saved.'); };
   $('mRound').onchange = e => { data.settings.rounding = e.target.value; window.save(); toast('Saved.'); };
   const lines = v => v.split('\n').map(x => x.trim()).filter(Boolean);
   $('mCats').onchange = e => { data.settings.categories = lines(e.target.value); window.save(); };
