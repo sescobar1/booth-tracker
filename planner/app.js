@@ -270,7 +270,7 @@ function agenda(from, to) {
   const out = [];
   data.items.filter(i => i.kind === 'event' || (i.kind === 'task' && i.date)).forEach(i => itemDates(i, from, to).forEach(d => {
     const span = i.endDate && i.endDate > i.date ? Math.round((new Date(i.endDate) - new Date(i.date)) / 864e5) : 0;
-    out.push({ src: 'planner', id: i.id, kind: i.kind, listName: i.list, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.kind === 'task' ? (i.list ? pastel(i.list)[0] : '#c9b8ff') : (i.color || COLORS[0]), list: i.list, priority: i.priority });
+    out.push({ src: 'planner', id: i.id, kind: i.kind, listName: i.list, driver: i.driver, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.kind === 'task' ? (i.list ? pastel(i.list)[0] : '#c9b8ff') : (i.color || COLORS[0]), list: i.list, priority: i.priority });
   }));
   S().calendars.filter(c => c.on !== false).forEach(c => {
     const got = cache.get('cal_' + c.id); if (!got) return;
@@ -285,10 +285,11 @@ const onDay = (list, d) => list.filter(e => e.date <= d && (e.endDate || e.date)
 
 function entryRow(e) {
   const when = e.kind === 'task' ? '' : e.allDay ? (e.endDate && e.endDate > e.date ? 'until ' + fmtDate(e.endDate) : 'All day') : fmtTime(e.start) + (e.end ? '–' + fmtTime(e.end) : '');
+  const drv = e.driver ? '🚗 ' + e.driver : '';
   const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.kind === 'task' ? (e.list || 'Task') : '';
   const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '"' + (e.listName ? ' style="--lc:' + pastel(e.listName)[0] + '"' : '') + '>' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
   const open = e.src === 'planner' ? ' data-item="' + e.id + '"' : e.link ? ' data-link="' + esc(e.link) + '"' : ' data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
-  return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, src].filter(Boolean).join(' · ')) + '</span></div></div>';
+  return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, drv, src].filter(Boolean).join(' · ')) + '</span></div></div>';
 }
 function wireRows(root) {
   root.querySelectorAll('[data-done]').forEach(b => b.onclick = ev => {
@@ -335,8 +336,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
-  const views = { today: viewToday, calendar: viewCalendar, tasks: viewTasks, meals: viewMeals, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' ? 'today' : tab)));
+  const views = { today: viewToday, brief: viewBrief, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -347,9 +348,11 @@ $('topTask').onclick = () => editItem(null, { kind: 'task', date: location.hash.
 $('fab').onclick = () => {
   openModal('<h2>Add</h2><div class="addgrid"><button type="button" data-addk="event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Event<span>on the calendar</span></button><button type="button" data-addk="task"><svg viewBox="0 0 24 24"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12v6.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H15"/></svg>Task<span>to-do</span></button>' +
     '<button type="button" data-addk="note"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Note<span>for today</span></button><button type="button" data-addk="file"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Document<span>upload a file</span></button></div>' +
+    '<button type="button" class="ghost tplmenu" id="addTpl">⚡ Use a template — set up a whole day</button>' +
     '<label>Or just type it<input id="qAdd" placeholder="Dentist friday 3pm · Call Mrs. Abbott tomorrow"></label><p class="helper">Dates and times are picked up from what you type.</p>' +
     '<div class="row-actions"><button type="button" id="qGo">Add</button><button type="button" class="ghost" id="addX">Cancel</button></div>');
   $('addX').onclick = closeModal;
+  $('addTpl').onclick = () => { closeModal(); useTemplate(calDay || today()); };
   document.querySelectorAll('[data-addk]').forEach(b => b.onclick = () => {
     const k = b.dataset.addk; closeModal();
     if (k === 'note') { location.hash = 'today'; setTimeout(() => $('dayNote') && $('dayNote').focus(), 100); }
@@ -431,6 +434,8 @@ function viewToday() {
     const d = addDays(ws, k), n = onDay(week, d).length + mealsOn(d).length, dt = new Date(d + 'T12:00');
     return '<button type="button" class="sday' + (d === sel ? ' on' : '') + (d === t ? ' now' : '') + '" data-sday="' + d + '"><span>' + dt.toLocaleDateString([], { weekday: 'narrow' }) + '</span><b>' + dt.getDate() + '</b><i>' + '•'.repeat(Math.min(3, n)) + '</i></button>';
   }).join('');
+  const pinned = dayPage(t).pinned || [];
+  const todayRoutines = routines().filter(r => routineFor(r, hr) || pinned.includes(r.id));
   const nextSlot = hr < 10 ? 'Breakfast' : hr < 14 ? 'Lunch' : hr < 20 ? 'Dinner' : 'Snack';
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
     '<div class="hello">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
@@ -441,6 +446,8 @@ function viewToday() {
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
     '<button type="button" class="tile t-meal" data-tile="meal">' + TILE_ICONS.meal + '<b>Meal</b></button>' +
     '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Write</b></button></div>' +
+    '<div class="row-actions tight"><a class="button ghost small" href="#brief">☀ Morning briefing</a><button type="button" class="ghost small" id="tdTpl">⚡ Use a template</button></div>' +
+    (todayRoutines.length ? '<div class="rchips">' + todayRoutines.map(routineChip).join('') + '</div>' : '') +
     (upNext ? '<div class="card upnext" ' + rowOpen(upNext) + ' style="--pc:' + esc(upNext.color || '#b0905a') + '"><span class="eyebrow">Up next · <b id="untilTxt" data-d="' + upNext.date + '" data-t="' + upNext.start + '">' + esc(untilText(upNext.date, upNext.start)) + '</b></span><h2>' + esc(upNext.title) + '</h2><span class="sub">' + esc(fmtDate(upNext.date, 'rel') + ' · ' + fmtTime(upNext.start) + (upNext.end ? '–' + fmtTime(upNext.end) : '') + (upNext.location ? ' · ' + upNext.location : '')) + '</span></div>' : '') +
     '<div class="quickbar"><input id="quick" placeholder="Type it: “Dentist friday 3pm”, “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
     (overdue.length ? '<div class="card pad warnbox"><h2 class="section-title">Past due <small>' + overdue.length + '</small></h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
@@ -460,6 +467,8 @@ function viewToday() {
     else if (k === 'meal') editMeal(sel, nextSlot);
     else openInkPage(sel);
   });
+  $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
+  $('tdTpl').onclick = () => useTemplate(sel);
   if ($('addHere')) $('addHere').onclick = () => editItem(null, { kind: 'event', date: sel });
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
   $('quickGo').onclick = go; $('quick').onkeydown = e => { if (e.key === 'Enter') go(); };
@@ -733,7 +742,7 @@ function viewTasks() {
   const fixed = { open: ['#9b7bff', '#ece5ff'], today: ['#f5b82e', '#fff4c7'], upcoming: ['#4aa8ff', '#dcefff'], someday: ['#4cc4c4', '#d8f5f5'] };
   const chip = (k, l) => '<button type="button" class="chipbtn' + (taskFilter === k ? ' on' : '') + '" data-tf="' + esc(k) + '"' + (fixed[k] ? '' : chipStyle(k)) + '>' + (fixed[k] ? '' : chipDot(k)) + esc(l) + (k !== 'open' && count(k) ? ' <b>' + count(k) + '</b>' : '') + '</button>';
   const row = i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, endDate: i.date, allDay: true, done: i.done, title: i.title, list: [i.list, i.date ? (i.date < t && !i.done ? '⚠ ' : '') + fmtDate(i.date, 'rel') : '', REPEATS[i.repeat] && i.repeat ? '🔁' : ''].filter(Boolean).join(' · '), priority: i.priority });
-  $('view').innerHTML = '<h1>Tasks</h1>' +
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks" class="on">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates">Templates</a></div>' +
     '<div class="quickbar"><input id="quick" placeholder="Add a task… “Turn in band forms friday”"><button type="button" id="quickGo">Add</button></div>' +
     '<div class="chips scrollx">' + chip('open', 'All') + chip('today', 'Today') + chip('upcoming', 'Upcoming') + chip('someday', 'Someday') + lists.map(l => chip(l, l)).join('') + '</div>' +
     '<div class="card pad">' + (open.map(row).join('') || '<p class="helper">All clear.</p>') + '</div>' +
@@ -767,6 +776,8 @@ function editItem(id, preset) {
     '<div class="grid2"><label>Repeats<select id="iRepeat">' + Object.entries(REPEATS).map(([k, l]) => '<option value="' + k + '"' + (it.repeat === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
     '<label>List<select id="iList"><option value="">—</option>' + S().lists.map(l => '<option' + (l === it.list ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label></div>' +
     '<label class="ev-only">Where<input id="iLoc" value="' + esc(it.location) + '" placeholder="Address or place"></label>' +
+    '<div class="grid2"><label class="ev-only">Who’s driving<input id="iDriver" list="drivers" value="' + esc(it.driver || '') + '" placeholder="Me, Salvador, carpool…"></label>' +
+    '<label>Remind me<select id="iRemind"></select></label></div><datalist id="drivers">' + [...new Set(data.items.map(i => i.driver).filter(Boolean).concat(['Me']))].map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
     '<label class="task-only check"><input type="checkbox" id="iPri"' + (it.priority >= 2 ? ' checked' : '') + '> ❗ Important</label>' +
     '<p class="lbl ev-only">Color</p><div class="colors ev-only">' + COLORS.map(c => '<button type="button" class="cdot' + ((it.color || COLORS[0]) === c ? ' on' : '') + '" data-color="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
     '<label>Notes<textarea id="iNotes" rows="3">' + esc(it.notes) + '</textarea></label>' +
@@ -781,8 +792,15 @@ function editItem(id, preset) {
     document.querySelectorAll('#modalBody .times').forEach(x => { x.hidden = kind !== 'event' || $('iAllDay').checked; });
     $('iDateL').textContent = kind === 'task' ? 'Due (optional)' : 'Date';
   };
-  $('iKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('iKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); sync(); });
-  $('iAllDay').onchange = sync; sync();
+  $('iKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('iKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); sync(); remindOpts(); });
+  // Remind options depend on whether there's a time: minutes before, or a time of day for all-day items and tasks.
+  const remindOpts = () => {
+    const timed = kind === 'event' && !$('iAllDay').checked && $('iStart').value, cur = $('iRemind').value || (it.remind == null ? '' : String(it.remind));
+    const opts = timed ? [['', '30 min before (default)'], ['0', 'At start time'], ['10', '10 min before'], ['60', '1 hour before'], ['120', '2 hours before'], ['1440', '1 day before'], ['-1', 'No alert']]
+      : [['', '9 AM that day (default)'], ['-420', '7 AM that day'], ['-720', 'Noon that day'], ['-1080', '6 PM that day'], ['360', '6 PM the day before'], ['-1', 'No alert']];
+    $('iRemind').innerHTML = opts.map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + l + '</option>').join('');
+  };
+  $('iAllDay').onchange = () => { sync(); remindOpts(); }; $('iStart').addEventListener('change', remindOpts); sync(); remindOpts();
   $('iStart').onchange = () => { if ($('iStart').value && (!$('iEnd').value || $('iEnd').value <= $('iStart').value)) $('iEnd').value = pad(Math.min(23, +$('iStart').value.slice(0, 2) + 1)) + $('iStart').value.slice(2); };
   document.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { color = b.dataset.color; document.querySelectorAll('[data-color]').forEach(x => x.classList.toggle('on', x === b)); });
   $('iFile').onchange = e => { pending = e.target.files[0] || null; $('iFileNote').textContent = pending ? '📎 ' + pending.name + ' will be saved with this.' : ''; };
@@ -795,7 +813,7 @@ function editItem(id, preset) {
     if (kind === 'event' && !$('iDate').value) { toast('Pick the date.'); return; }
     if (pending && !signedIn()) { toast('Sign in (More) to attach files.'); return; }
     const allDay = kind === 'task' || $('iAllDay').checked || !$('iStart').value;
-    Object.assign(it, { kind, title, date: $('iDate').value || null, endDate: kind === 'event' && $('iEndDate').value > $('iDate').value ? $('iEndDate').value : null, allDay, start: allDay ? '' : $('iStart').value, end: allDay ? '' : $('iEnd').value, repeat: $('iRepeat').value, list: $('iList').value, location: $('iLoc').value.trim(), priority: $('iPri').checked ? 2 : 0, notes: $('iNotes').value, color: kind === 'event' ? color : '' });
+    Object.assign(it, { kind, title, date: $('iDate').value || null, endDate: kind === 'event' && $('iEndDate').value > $('iDate').value ? $('iEndDate').value : null, allDay, start: allDay ? '' : $('iStart').value, end: allDay ? '' : $('iEnd').value, repeat: $('iRepeat').value, list: $('iList').value, location: $('iLoc').value.trim(), priority: $('iPri').checked ? 2 : 0, notes: $('iNotes').value, color: kind === 'event' ? color : '', driver: kind === 'event' ? $('iDriver').value.trim() : '', remind: $('iRemind').value === '' ? null : Number($('iRemind').value) });
     if (!id) { it.id = uid(); it.done = false; it.sort = 0; data.items.push(it); }
     if (pending) {
       $('iSave').disabled = true; $('iSave').textContent = 'Uploading…';
@@ -1111,6 +1129,229 @@ function editRecipe(id) {
   if (id) $('rcDel').onclick = () => { if (!confirm('Delete ' + r.title + '?')) return; data.items = data.items.filter(i => i !== r); window.save(); closeModal(); route(); };
 }
 
+// ---------- Morning briefing ----------
+// Weather comes from Open-Meteo (free, no key). Default spot is Russellville, AR; "Use my location" changes it.
+const WMO = { 0: ['☀️', 'Clear'], 1: ['🌤', 'Mostly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Cloudy'], 45: ['🌫', 'Fog'], 48: ['🌫', 'Fog'], 51: ['🌦', 'Light drizzle'], 53: ['🌦', 'Drizzle'], 55: ['🌧', 'Drizzle'], 61: ['🌦', 'Light rain'], 63: ['🌧', 'Rain'], 65: ['🌧', 'Heavy rain'], 71: ['🌨', 'Light snow'], 73: ['🌨', 'Snow'], 75: ['❄️', 'Heavy snow'], 80: ['🌦', 'Showers'], 81: ['🌧', 'Showers'], 82: ['⛈', 'Heavy showers'], 95: ['⛈', 'Thunderstorms'], 96: ['⛈', 'Storms & hail'], 99: ['⛈', 'Storms & hail'] };
+async function loadWeather(force) {
+  const w = cache.get('weather'), loc = S().weatherLoc || { lat: 35.28, lon: -93.13, name: 'Russellville' };
+  if (!force && w && Date.now() - w.at < 45 * 60000 && w.name === loc.name) return w;
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon + '&current=temperature_2m,weather_code&hourly=precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&timezone=auto&forecast_days=3');
+    if (!r.ok) throw new Error();
+    const j = await r.json();
+    const v = { at: Date.now(), name: loc.name, now: Math.round(j.current.temperature_2m), code: j.current.weather_code, hi: Math.round(j.daily.temperature_2m_max[0]), lo: Math.round(j.daily.temperature_2m_min[0]), rain: j.daily.precipitation_probability_max[0], tmr: { code: j.daily.weather_code[1], hi: Math.round(j.daily.temperature_2m_max[1]), rain: j.daily.precipitation_probability_max[1] },
+      rainHours: (j.hourly.time || []).map((t, k) => [t, j.hourly.precipitation_probability[k]]).filter(([t, p]) => t.startsWith(today()) && p >= 50).map(([t]) => +t.slice(11, 13)) };
+    cache.set('weather', v); return v;
+  } catch (e) { return w; }
+}
+function weatherAdvice(w) {
+  if (!w) return '';
+  if (w.rain >= 60) return 'Grab an umbrella' + (w.rainHours.length ? ' — rain likely around ' + fmtTime(pad(w.rainHours[0]) + ':00') : '') + '.';
+  if (w.hi >= 92) return 'Hot one — send extra water to the game.';
+  if (w.lo <= 45) return 'Chilly start — jackets for the kids.';
+  return '';
+}
+function viewBrief() {
+  const t = today(), hr = new Date().getHours(), list = agenda(t, addDays(t, 3)), todays = onDay(list, t);
+  const events = todays.filter(e => e.kind !== 'task' && e.src !== 'bill'), tasks = data.items.filter(i => i.kind === 'task' && !i.done && i.date && i.date <= t);
+  const drives = events.filter(e => e.driver || /pick ?up|drop ?off|carpool|drive|practice|game|rehearsal|appointment/i.test(e.title));
+  const bills = list.filter(e => e.src === 'bill' && e.date <= addDays(t, 3));
+  const meals = mealsOn(t), dinner = meals.find(m => m.list === 'Dinner');
+  const page = dayPage(t), pri = (page.pri || []).filter(p => p.t);
+  const routs = routines().filter(r => routineFor(r, hr));
+  const w = cache.get('weather');
+  const sec = (title, body) => body ? '<div class="card pad bsec"><h3>' + title + '</h3>' + body + '</div>' : '';
+  $('view').innerHTML = '<div class="brief-hero">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
+    '<div id="wx" class="wx">' + (w ? wxHtml(w) : '<span class="helper">Checking the weather…</span>') + '</div></div>' +
+    '<div class="bgrid">' +
+    sec('Today’s schedule', events.length ? events.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? 'All day' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <small>· ' + esc(e.location) + '</small>' : '') + '</span></div>').join('') : '<p class="helper">A clear day — nothing on the calendar.</p>') +
+    sec('Who’s driving', drives.length ? drives.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? '' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + ' — <em>' + esc(e.driver || 'not set') + '</em></span></div>').join('') + (drives.some(e => !e.driver && e.src === 'planner') ? '<p class="helper">Tap one to set who’s driving.</p>' : '') : '') +
+    sec('Dinner tonight', dinner ? '<div class="bline2 dinner" data-meal="Dinner" data-mealdate="' + t + '"><b>🍽</b><span>' + esc(dinner.title) + (dinner.notes ? ' <small>· ' + esc(dinner.notes) + '</small>' : '') + '</span></div>' : '<button type="button" class="ghost small" data-meal="Dinner" data-mealdate="' + t + '">Pick dinner</button>') +
+    sec('Bills due', bills.length ? bills.map(e => '<div class="bline2"><b>' + esc(fmtDate(e.date, 'rel')) + '</b><span>' + esc(e.title) + '</span></div>').join('') : '') +
+    sec('Top priorities', (pri.length ? pri.map(p => '<div class="bline2"><b>' + (p.done ? '✓' : '○') + '</b><span>' + esc(p.t) + '</span></div>').join('') : '') + (tasks.length ? tasks.slice(0, 6).map(i => '<div class="bline2" data-item="' + i.id + '"><b>' + (i.date < t ? '⚠' : '•') + '</b><span>' + esc(i.title) + '</span></div>').join('') : '') || '<p class="helper">No tasks due. 🌿</p>') +
+    sec('Routines', routs.length ? routs.map(r => routineChip(r)).join('') : '') +
+    '</div><div class="row-actions center"><a class="button" href="#today">Start my day</a><a class="button ghost" href="#calendar">Open calendar</a></div>' +
+    '<p class="helper center">This briefing opens the first time you open the planner each morning. <button type="button" class="linkish" id="bOff">' + (S().autoBrief === false ? 'Turn it on' : 'Turn that off') + '</button></p>';
+  wireRows($('view'));
+  $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
+  $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
+  $('bOff').onclick = () => { S().autoBrief = S().autoBrief === false; window.save(); viewBrief(); };
+  loadWeather().then(v => { const el = $('wx'); if (el && v) el.innerHTML = wxHtml(v); wireWx(); });
+  wireWx();
+}
+function wxHtml(w) {
+  const [ic, label] = WMO[w.code] || ['🌡', ''];
+  const [tic] = WMO[w.tmr.code] || ['🌡'];
+  const adv = weatherAdvice(w);
+  return '<div class="wxnow"><span class="wxi">' + ic + '</span><b>' + w.now + '°</b><span>' + esc(label) + '<br><small>H ' + w.hi + '° · L ' + w.lo + '° · ' + w.rain + '% rain</small></span></div>' +
+    (adv ? '<p class="wxadv">' + esc(adv) + '</p>' : '') + '<p class="wxtmr">Tomorrow ' + tic + ' ' + w.tmr.hi + '°, ' + w.tmr.rain + '% rain · <button type="button" class="linkish" id="wxLoc">' + esc(w.name) + '</button></p>';
+}
+function wireWx() {
+  const b = $('wxLoc'); if (!b) return;
+  b.onclick = () => {
+    if (!navigator.geolocation) { toast('Location isn’t available here.'); return; }
+    navigator.geolocation.getCurrentPosition(p => { S().weatherLoc = { lat: +p.coords.latitude.toFixed(2), lon: +p.coords.longitude.toFixed(2), name: 'My location' }; window.save(); loadWeather(true).then(() => viewBrief()); }, () => toast('Location was not allowed. Using Russellville.'));
+  };
+}
+// The first time the planner opens each morning (before noon), show the briefing.
+function maybeBrief() {
+  if (S().autoBrief === false || new Date().getHours() >= 12) return false;
+  let last = ''; try { last = localStorage.getItem(KEY + 'Briefed'); } catch (e) {}
+  if (last === today() || (location.hash && location.hash !== '#today')) return false;
+  try { localStorage.setItem(KEY + 'Briefed', today()); } catch (e) {}
+  location.hash = 'brief'; return true;
+}
+
+// ---------- Routines and checklists ----------
+// A routine is a reusable checklist (steps one per line). What's checked is kept per day, so it starts fresh each day.
+const STARTER_ROUTINES = [
+  ['Morning', 'Morning', 'Make bed\nTake vitamins\nCheck the briefing\nKids’ lunches & water bottles\nBackpacks & band instruments by the door\nStart the dishwasher'],
+  ['After school', 'Afternoon', 'Unpack lunch boxes\nSnack\nHomework check\nSign forms / read folder\nPractice instrument 20 min\nPack tomorrow’s bags'],
+  ['Game night', 'Evening', 'Band uniform & shoes\nInstrument & music\nWater bottles & snacks\nConcession apron & money pouch\nPhone charged\nGas in the car'],
+  ['Booth setup', 'Any time', 'Price new inventory\nCash box & change ($100)\nCard reader charged\nBags & tissue paper\nTable cover & signs\nUpdate Booth Tracker'],
+  ['Bedtime', 'Evening', 'Lock doors\nSet out clothes\nCharge phones\nCheck tomorrow’s calendar\nLights out by 10']
+];
+const routines = () => data.items.filter(i => i.kind === 'routine').sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.title.localeCompare(b.title));
+const routineFor = (r, hr) => r.list === 'Any time' || (r.list === 'Morning' && hr < 12) || (r.list === 'Afternoon' && hr >= 11 && hr < 18) || (r.list === 'Evening' && hr >= 16);
+const routineSteps = r => r.notes.split('\n').map(x => x.trim()).filter(Boolean);
+function routineDone(r, d) { const v = dayPage(d || today()); return (v.routines || {})[r.id] || []; }
+function routineChip(r) {
+  const steps = routineSteps(r), done = routineDone(r).filter(k => k < steps.length).length;
+  return '<button type="button" class="rchip' + (done === steps.length && steps.length ? ' full' : '') + '" data-routine="' + r.id + '"><span>' + esc(r.title) + '</span><i style="--p:' + Math.round(done / Math.max(1, steps.length) * 100) + '%"></i><small>' + done + '/' + steps.length + '</small></button>';
+}
+function openRoutine(id, d) {
+  d = d || today();
+  const r = data.items.find(i => i.id === id); if (!r) return;
+  const steps = routineSteps(r);
+  const draw = () => {
+    const done = routineDone(r, d);
+    $('modalBody').innerHTML = '<div class="mini-head"><h2>' + esc(r.title) + '</h2><span class="helper">' + done.filter(k => k < steps.length).length + ' of ' + steps.length + '</span></div>' +
+      steps.map((s, k) => '<button type="button" class="rstep' + (done.includes(k) ? ' on' : '') + '" data-step="' + k + '"><i>' + (done.includes(k) ? '✓' : '') + '</i><span>' + esc(s) + '</span></button>').join('') +
+      '<div class="row-actions"><button type="button" id="rtClose">Done</button><button type="button" class="ghost" id="rtReset">Start over</button><button type="button" class="ghost" id="rtEdit">Edit steps</button></div>';
+    document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
+      const k = +b.dataset.step, v = dayPage(d); v.routines = v.routines || {}; const list = v.routines[r.id] = v.routines[r.id] || [];
+      const i = list.indexOf(k); if (i >= 0) list.splice(i, 1); else list.push(k);
+      saveDayPage(d, v);
+      if (list.filter(x => x < steps.length).length === steps.length) { celebrate(b); }
+      draw();
+    });
+    $('rtClose').onclick = () => { closeModal(); route(); };
+    $('rtReset').onclick = () => { const v = dayPage(d); if (v.routines) delete v.routines[r.id]; saveDayPage(d, v); draw(); };
+    $('rtEdit').onclick = () => editRoutine(r.id);
+  };
+  openModal(''); draw();
+}
+function editRoutine(id) {
+  const r = id ? data.items.find(i => i.id === id) : newItem({ kind: 'routine', list: 'Morning' });
+  openModal('<h2>' + (id ? 'Edit routine' : 'New routine') + '</h2><label>Name<input id="roTitle" value="' + esc(r.title) + '" placeholder="Saturday chores"></label>' +
+    '<label>Shows up<select id="roWhen">' + ['Morning', 'Afternoon', 'Evening', 'Any time'].map(x => '<option' + (x === r.list ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
+    '<label>Steps (one per line)<textarea id="roSteps" rows="8">' + esc(r.notes) + '</textarea></label>' +
+    '<div class="row-actions"><button type="button" id="roSave">Save</button><button type="button" class="ghost" id="roCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="roDel">Delete</button>' : '') + '</div>');
+  $('roCancel').onclick = closeModal;
+  $('roSave').onclick = () => { const t = $('roTitle').value.trim(); if (!t) { toast('Name it.'); return; } Object.assign(r, { title: t, list: $('roWhen').value, notes: $('roSteps').value.trim() }); if (!id) data.items.push(r); window.save(); closeModal(); route(); };
+  if (id) $('roDel').onclick = () => { if (!confirm('Delete ' + r.title + '?')) return; data.items = data.items.filter(i => i !== r); window.save(); closeModal(); route(); };
+}
+function viewRoutines() {
+  const rs = routines(), hr = new Date().getHours();
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines" class="on">Routines</a><a href="#tasks/templates">Templates</a></div>' +
+    '<div class="row-actions"><button type="button" id="roNew">＋ New routine</button>' + (rs.length ? '' : '<button type="button" class="ghost" id="roStart">Add 5 starter routines</button>') + '</div>' +
+    (rs.length ? '<div class="card pad">' + rs.map(r => '<div class="rrow"><div class="who" data-routine="' + r.id + '"><b>' + esc(r.title) + (routineFor(r, hr) ? ' <span class="chip">now</span>' : '') + '</b><span class="sub">' + esc(r.list) + ' · ' + routineSteps(r).length + ' steps</span></div>' + routineChip(r) + '</div>').join('') + '</div>' :
+      '<div class="card pad"><p class="helper">Checklists you use over and over — they reset every day. Start with the five below and change them to fit your family.</p></div>');
+  $('roNew').onclick = () => editRoutine();
+  if ($('roStart')) $('roStart').onclick = () => { STARTER_ROUTINES.forEach(([t, l, n], k) => data.items.push(newItem({ kind: 'routine', title: t, list: l, notes: n, sort: k }))); window.save(); toast('✓ Added 5 routines'); viewRoutines(); };
+  $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
+}
+
+// ---------- Smart templates ----------
+// A template is a list of steps applied to a chosen day. Each step: { type: event|task|meal|routine, title, start, end, where, off (days from the day), slot, driver }.
+const STARTER_TEMPLATES = [
+  ['Football Friday', [
+    { type: 'event', title: 'Concession stand volunteer', start: '17:45', end: '21:30', where: 'Cyclone Stadium' },
+    { type: 'event', title: 'Football game', start: '19:00', end: '21:30', where: 'Cyclone Stadium' },
+    { type: 'task', title: 'Pack snack bags', off: -1 },
+    { type: 'task', title: 'Start the crockpot', start: '08:00' },
+    { type: 'task', title: 'Gas up the car' },
+    { type: 'meal', slot: 'Dinner', title: 'Crockpot chili' },
+    { type: 'routine', title: 'Game night' }]],
+  ['Booth day', [
+    { type: 'event', title: 'Booth at Y’allternative', start: '09:00', end: '16:00' },
+    { type: 'task', title: 'Price new items', off: -1 },
+    { type: 'task', title: 'Load the car', off: -1 },
+    { type: 'meal', slot: 'Lunch', title: 'Sandwiches' },
+    { type: 'routine', title: 'Booth setup' }]],
+  ['Band trip', [
+    { type: 'event', title: 'Band trip', start: '07:00', end: '18:00' },
+    { type: 'task', title: 'Turn in permission slip', off: -3 },
+    { type: 'task', title: 'Pack uniform, instrument & snacks', off: -1 },
+    { type: 'task', title: 'Send lunch money', off: -1 },
+    { type: 'meal', slot: 'Dinner', title: 'Takeout' }]]
+];
+const templates = () => data.items.filter(i => i.kind === 'template').sort((a, b) => a.title.localeCompare(b.title));
+const tplSteps = t => { try { return JSON.parse(t.notes || '[]'); } catch (e) { return []; } };
+function stepText(s) {
+  const when = (s.off ? (s.off < 0 ? Math.abs(s.off) + (s.off === -1 ? ' day' : ' days') + ' before' : s.off + ' after') + ' · ' : '') + (s.start ? fmtTime(s.start) : '');
+  return ({ event: '🗓', task: '✓', meal: '🍽', routine: '☰' }[s.type] || '•') + ' ' + (s.type === 'meal' ? s.slot + ': ' : s.type === 'routine' ? 'Routine: ' : '') + s.title + (when ? ' — ' + when.replace(/ · $/, '') : '');
+}
+function applyTemplate(t, d) {
+  let n = 0;
+  tplSteps(t).forEach(s => {
+    const day = addDays(d, s.off || 0);
+    if (s.type === 'event') { data.items.push(newItem({ kind: 'event', title: s.title, date: day, start: s.start || '', end: s.end || '', allDay: !s.start, location: s.where || '', driver: s.driver || '', color: COLORS[0] })); n++; }
+    else if (s.type === 'task') { data.items.push(newItem({ kind: 'task', title: s.title, date: day, remind: s.start ? -(+s.start.slice(0, 2) * 60 + +s.start.slice(3, 5)) : null, notes: 'From “' + t.title + '”' })); n++; }
+    else if (s.type === 'meal') { const cur = data.items.find(i => i.kind === 'meal' && i.date === day && i.list === s.slot); const r = recipes().find(x => x.title.toLowerCase() === s.title.toLowerCase()); if (cur) Object.assign(cur, { title: s.title, location: r ? r.id : '' }); else data.items.push(newItem({ kind: 'meal', date: day, list: s.slot || 'Dinner', title: s.title, location: r ? r.id : '' })); n++; }
+    else if (s.type === 'routine') { const r = routines().find(x => x.title.toLowerCase() === s.title.toLowerCase()); if (r) { const v = dayPage(day); v.pinned = Array.from(new Set((v.pinned || []).concat([r.id]))); saveDayPage(day, v); n++; } }
+  });
+  window.save();
+  return n;
+}
+function useTemplate(preDate) {
+  const ts = templates();
+  if (!ts.length) { location.hash = 'tasks/templates'; toast('Add a template first (starters are one tap).'); return; }
+  openModal('<h2>Use a template</h2><label>For which day?<input id="utDate" type="date" value="' + esc(preDate || today()) + '"></label>' +
+    ts.map(t => '<button type="button" class="tplbtn" data-ut="' + t.id + '"><b>' + esc(t.title) + '</b><span>' + tplSteps(t).map(s => esc(s.title)).join(' · ') + '</span></button>').join('') +
+    '<div class="row-actions"><button type="button" class="ghost" id="utCancel">Cancel</button><a class="button ghost" href="#tasks/templates" id="utManage">Edit templates</a></div>');
+  $('utCancel').onclick = closeModal; $('utManage').onclick = closeModal;
+  document.querySelectorAll('[data-ut]').forEach(b => b.onclick = () => {
+    const t = data.items.find(i => i.id === b.dataset.ut), d = $('utDate').value || today();
+    const n = applyTemplate(t, d); closeModal(); calDay = d; route();
+    toast('✓ ' + t.title + ' added ' + n + ' things for ' + fmtDate(d, 'rel'));
+  });
+}
+function viewTemplates() {
+  const ts = templates();
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates" class="on">Templates</a></div>' +
+    '<p class="helper">One tap sets up a whole day: events, tasks, dinner and checklists.</p>' +
+    '<div class="row-actions"><button type="button" id="tpUse">⚡ Use a template</button><button type="button" class="ghost" id="tpNew">＋ New template</button>' + (ts.length ? '' : '<button type="button" class="ghost" id="tpStart">Add Football Friday, Booth day & Band trip</button>') + '</div>' +
+    ts.map(t => '<div class="card pad tplcard"><div class="mini-head"><h2>' + esc(t.title) + '</h2><button type="button" class="ghost small" data-tpe="' + t.id + '">Edit</button></div>' + tplSteps(t).map(s => '<div class="sub">' + esc(stepText(s)) + '</div>').join('') + '</div>').join('');
+  $('tpUse').onclick = () => useTemplate();
+  $('tpNew').onclick = () => editTemplate();
+  if ($('tpStart')) $('tpStart').onclick = () => { STARTER_TEMPLATES.forEach(([t, steps]) => data.items.push(newItem({ kind: 'template', title: t, notes: JSON.stringify(steps) }))); if (!routines().length) STARTER_ROUTINES.forEach(([t, l, n], k) => data.items.push(newItem({ kind: 'routine', title: t, list: l, notes: n, sort: k }))); window.save(); toast('✓ Added 3 templates'); viewTemplates(); };
+  $('view').querySelectorAll('[data-tpe]').forEach(b => b.onclick = () => editTemplate(b.dataset.tpe));
+}
+function editTemplate(id) {
+  const t = id ? data.items.find(i => i.id === id) : newItem({ kind: 'template' });
+  let steps = tplSteps(t);
+  const row = (s, k) => '<div class="tstep" data-k="' + k + '"><select data-f="type">' + [['event', 'Event'], ['task', 'Task'], ['meal', 'Meal'], ['routine', 'Routine']].map(([v, l]) => '<option value="' + v + '"' + (s.type === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
+    '<input data-f="title" value="' + esc(s.title || '') + '" placeholder="What">' +
+    '<select data-f="off">' + [[-3, '3 days before'], [-2, '2 days before'], [-1, 'Day before'], [0, 'That day'], [1, 'Day after']].map(([v, l]) => '<option value="' + v + '"' + ((s.off || 0) === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
+    (s.type === 'meal' ? '<select data-f="slot">' + SLOTS.map(x => '<option' + (x === (s.slot || 'Dinner') ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>' : s.type === 'routine' ? '' : '<input data-f="start" type="time" value="' + esc(s.start || '') + '" title="' + (s.type === 'task' ? 'Remind at' : 'Starts') + '">') +
+    (s.type === 'event' ? '<input data-f="end" type="time" value="' + esc(s.end || '') + '" title="Ends"><input data-f="where" value="' + esc(s.where || '') + '" placeholder="Where">' : '') +
+    '<button type="button" class="linkish" data-rm="' + k + '">✕</button></div>';
+  const draw = () => {
+    $('modalBody').innerHTML = '<h2>' + (id ? 'Edit template' : 'New template') + '</h2><label>Name<input id="tpTitle" value="' + esc(t.title) + '" placeholder="Football Friday"></label>' +
+      '<p class="lbl">Steps</p><div id="tpSteps">' + steps.map(row).join('') + '</div><div class="row-actions"><button type="button" class="ghost small" id="tpAdd">＋ Add a step</button></div>' +
+      '<div class="row-actions"><button type="button" id="tpSave">Save</button><button type="button" class="ghost" id="tpCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="tpDel">Delete</button>' : '') + '</div>';
+    const read = () => { const title = $('tpTitle').value; steps = [...document.querySelectorAll('.tstep')].map(r => { const o = {}; r.querySelectorAll('[data-f]').forEach(f => { o[f.dataset.f] = f.dataset.f === 'off' ? +f.value : f.value.trim(); }); return o; }); t.title = title; };
+    document.querySelectorAll('.tstep [data-f="type"]').forEach(s => s.onchange = () => { read(); draw(); });
+    document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { read(); steps.splice(+b.dataset.rm, 1); draw(); });
+    $('tpAdd').onclick = () => { read(); steps.push({ type: 'task', title: '', off: 0 }); draw(); };
+    $('tpCancel').onclick = closeModal;
+    $('tpSave').onclick = () => { read(); if (!t.title.trim()) { toast('Name the template.'); return; } t.title = t.title.trim(); t.notes = JSON.stringify(steps.filter(s => s.title)); if (!id) data.items.push(t); window.save(); closeModal(); route(); };
+    if (id) $('tpDel').onclick = () => { if (!confirm('Delete ' + t.title + '?')) return; data.items = data.items.filter(i => i !== t); window.save(); closeModal(); route(); };
+  };
+  openModal(''); draw();
+}
+
 // ---------- More: calendars, feed, lists ----------
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
@@ -1189,7 +1430,7 @@ function viewFeed() {
   $('feedNew').onclick = () => { if (!confirm('Make a new link? Calendars subscribed to the old one will stop updating.')) return; S().feedToken = ''; window.save(); viewFeed(); };
 }
 
-route();
+if (!maybeBrief()) route();
 // Keep connected calendars fresh while the planner is open.
 setInterval(() => { if (document.visibilityState === 'visible') refreshAll(); }, 10 * 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshAll(); });

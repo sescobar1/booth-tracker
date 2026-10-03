@@ -199,3 +199,53 @@ canvas.ink { display: block; width: 100%; height: 260px; cursor: crosshair; }
 @media (min-width: 820px) { .spread { grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); } }
 .ddots { min-width: 0; }
 .pg { min-width: 0; }
+
+/* ---- Morning briefing ---- */
+.brief-hero { background: linear-gradient(160deg, #fff 30%, var(--blush)); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 18px 18px; margin: 10px 0 12px; }
+.brief-hero .eyebrow { display: block; font-size: 1.15rem; color: var(--sage); }
+.brief-hero h1 { margin: 2px 0 10px; font-size: 2.7rem; }
+.wxnow { display: flex; align-items: center; gap: 12px; }
+.wxi { font-size: 2.4rem; }
+.wxnow b { font-family: 'Amatic SC', sans-serif; font-weight: 700; font-size: 3rem; line-height: 1; }
+.wxnow small { color: var(--ink-2); }
+.wxadv { margin: 8px 0 0; padding: 6px 12px; background: rgba(255, 255, 255, .7); border-radius: 12px; font-family: 'Patrick Hand', cursive; font-size: 1.1rem; }
+.wxtmr { margin: 8px 0 0; font-size: .85rem; color: var(--ink-2); }
+.bgrid { display: grid; grid-template-columns: 1fr; gap: 0; }
+@media (min-width: 700px) { .bgrid { grid-template-columns: 1fr 1fr; gap: 0 12px; } }
+.bsec h3 { font-family: 'Amatic SC', sans-serif; font-weight: 700; font-size: 1.7rem; letter-spacing: 1px; color: var(--ink); margin: 0 0 6px; text-transform: none; }
+.bsec:nth-child(4n+1) { background: #fff; } .bsec:nth-child(4n+2) { background: var(--cream); } .bsec:nth-child(4n+3) { background: #fffdfb; } .bsec:nth-child(4n) { background: #f6efe9; }
+.bline2 { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #e2d8ce; cursor: pointer; align-items: baseline; }
+.bline2:last-child { border-bottom: 0; }
+.bline2 b { flex: 0 0 62px; font-size: .78rem; color: var(--muted); font-weight: 600; }
+.bline2 span { flex: 1; min-width: 0; }
+.bline2 em { color: var(--sage); font-style: normal; font-weight: 600; }
+.bline2 small { color: var(--muted); }
+.row-actions.tight { margin: 4px 0 8px; gap: 6px; }
+
+/* ---- Routines ---- */
+.rchips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; }
+.rchips::-webkit-scrollbar { display: none; }
+.rchip { flex: 0 0 auto; display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 10px; min-height: 0; padding: 8px 14px; border-radius: 16px; background: var(--cream); color: var(--ink); border: 0; box-shadow: none; font-weight: 500; text-align: left; }
+.rchip span { font-family: 'Patrick Hand', cursive; font-size: 1.05rem; }
+.rchip small { color: var(--muted); font-size: .72rem; justify-self: end; }
+.rchip i { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--sage) var(--p), #ddd3c8 var(--p)); }
+.rchip.full { background: var(--sage-soft); }
+.rrow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line-2); }
+.rrow:last-child { border-bottom: 0; }
+.rrow .who { flex: 1; cursor: pointer; }
+.rstep { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 12px; margin: 6px 0; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); color: var(--ink); box-shadow: none; font-weight: 500; text-align: left; justify-content: flex-start; }
+.rstep i { flex: 0 0 26px; height: 26px; border-radius: 50%; border: 2px solid #c9bcae; display: flex; align-items: center; justify-content: center; font-style: normal; color: #fff; font-size: .85rem; }
+.rstep.on { background: var(--sage-soft); border-color: #cddcc8; }
+.rstep.on i { background: var(--sage); border-color: var(--sage); }
+.rstep.on span { text-decoration: line-through; color: var(--muted); }
+
+/* ---- Templates ---- */
+.tplbtn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; margin: 8px 0; padding: 12px 14px; border-radius: 16px; background: var(--cream); color: var(--ink); border: 0; box-shadow: none; text-align: left; font-weight: 400; }
+.tplbtn b { font-family: 'Amatic SC', sans-serif; font-size: 1.6rem; letter-spacing: 1px; }
+.tplbtn span { font-size: .78rem; color: var(--ink-2); }
+.tplcard .sub { display: block; padding: 3px 0; }
+.tplmenu { width: 100%; margin: 4px 0 6px; }
+.tstep { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; margin: 6px 0; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+.tstep input, .tstep select { margin: 0; flex: 1 1 110px; min-width: 0; padding: 8px; font-size: .9rem; }
+.tstep [data-f="title"] { flex: 2 1 160px; }
+.tstep [data-f="type"] { flex: 0 1 96px; }
