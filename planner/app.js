@@ -222,7 +222,7 @@ async function refreshAll(force) {
     for (const c of cals) await refreshCalendar(c, true);
     if (S().showBand !== false) await loadBand();
     if (S().showBills !== false) await loadBills();
-    giftCheck(); lunchCheck();
+    giftCheck(); lunchCheck(); carCheck();
   } finally { refreshing = false; }
   route();
 }
@@ -269,7 +269,7 @@ function itemDates(it, from, to) {
 // Every entry between two days from every source, each shaped the same way.
 function agenda(from, to) {
   const out = [];
-  data.items.filter(i => i.kind === 'event' || (i.kind === 'task' && i.date)).forEach(i => itemDates(i, from, to).forEach(d => {
+  data.items.filter(i => (i.kind === 'event' && !i.id.startsWith('medrem-')) || (i.kind === 'task' && i.date)).forEach(i => itemDates(i, from, to).forEach(d => {
     const span = i.endDate && i.endDate > i.date ? Math.round((new Date(i.endDate) - new Date(i.date)) / 864e5) : 0;
     out.push({ src: 'planner', id: i.id, kind: i.kind, listName: i.list, driver: i.driver, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.kind === 'task' ? (i.list ? pastel(i.list)[0] : '#c9b8ff') : (i.color || COLORS[0]), list: i.list, priority: i.priority });
   }));
@@ -337,8 +337,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' ? 'more' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : a === 'atu' ? viewAtu() : a === 'sna' ? viewSna() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' || tab === 'meds' || tab === 'car' ? 'more' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : a === 'atu' ? viewAtu() : a === 'sna' ? viewSna() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, meds: viewMeds, car: viewCar, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -458,7 +458,7 @@ function viewToday() {
     '<div class="strip">' + strip + '</div>' +
     '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
     (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
-    mealsCard(sel) + giftCard() + cleanCard() +
+    medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
@@ -1849,6 +1849,237 @@ function snaForm(past) {
     snaSave({ items: sn.items, orders, pickup: null }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
   };
 }
+// ---------- 💊 Medicines & vitamins ----------
+// The list lives in settings.meds; each dose taken is an item (kind 'medlog'). Daily phone alerts are hidden repeating
+// events (id 'medrem-…') that only go to the calendar feed, so they don't crowd the planner.
+const PEOPLE = ['Shaana', 'Salvador', 'Cecilia', 'Elisha'];
+const meds = () => S().meds || [];
+const setMeds = l => { S().meds = l; syncMedReminders(); window.save(); };
+const medLog = (m, d, t) => data.items.find(i => i.kind === 'medlog' && i.list === m.id && i.date === d && i.location === t);
+const dailyDoses = m => (m.times || []).length || 1;
+const medLow = m => m.pillsLeft != null && m.pillsLeft !== '' && +m.pillsLeft <= (+m.perDose || 1) * dailyDoses(m) * 7;
+function syncMedReminders() {
+  const want = new Set();
+  meds().filter(m => m.active !== false && m.remind !== false).forEach(m => (m.times || []).forEach((t, k) => {
+    const id = 'medrem-' + m.id + '-' + k; want.add(id);
+    let it = data.items.find(i => i.id === id);
+    if (!it) { it = newItem({ id, kind: 'event', date: m.start || today(), repeat: 'daily', list: 'Medicine', remind: 0, allDay: false }); data.items.push(it); }
+    Object.assign(it, { title: '💊 ' + m.name + (m.dose ? ' (' + m.dose + ')' : '') + ' – ' + m.who, start: t, end: t, allDay: false, notes: [m.withFood ? 'Take with food' : '', m.notes].filter(Boolean).join(' · ') });
+  }));
+  data.items = data.items.filter(i => !(i.id.startsWith('medrem-') && !want.has(i.id)));
+}
+function takeDose(m, d, t) {
+  const have = medLog(m, d, t), list = meds(), med = list.find(x => x.id === m.id);
+  if (have) { data.items = data.items.filter(i => i !== have); if (med.pillsLeft != null && med.pillsLeft !== '') med.pillsLeft = +med.pillsLeft + (+med.perDose || 1); }
+  else {
+    data.items.push(newItem({ kind: 'medlog', list: m.id, date: d, location: t, title: m.name, done: true }));
+    if (med.pillsLeft != null && med.pillsLeft !== '') {
+      med.pillsLeft = Math.max(0, +med.pillsLeft - (+med.perDose || 1));
+      const rid = 'medrefill-' + m.id;
+      if (medLow(med) && !data.items.some(i => i.id === rid && !i.done)) { data.items = data.items.filter(i => i.id !== rid); data.items.push(newItem({ id: rid, kind: 'task', title: '💊 Refill ' + med.name + ' for ' + med.who, date: today(), list: 'Home', priority: 2, notes: [med.pharmacy, med.rx ? 'Rx ' + med.rx : ''].filter(Boolean).join(' · ') })); toast('💊 ' + med.name + ' is running low · refill task added'); }
+    }
+  }
+  S().meds = list; window.save();
+}
+// Today's doses as checkboxes, for Today and the Medicines page.
+function medsToday(d) {
+  const list = meds().filter(m => m.active !== false && (!m.start || m.start <= d) && (!m.end || m.end >= d));
+  const doses = []; list.forEach(m => (m.times && m.times.length ? m.times : ['']).forEach(t => doses.push({ m, t })));
+  doses.sort((a, b) => (a.t || '99').localeCompare(b.t || '99') || a.m.who.localeCompare(b.m.who));
+  return doses;
+}
+function medCard(d) {
+  const doses = medsToday(d); if (!doses.length) return '';
+  const done = doses.filter(x => medLog(x.m, d, x.t)).length;
+  return '<div class="card pad medcard"><div class="mini-head"><h2>💊 Medicine' + (d === today() ? ' today' : '') + ' <small>' + done + '/' + doses.length + '</small></h2><a class="linkish" href="#meds">All medicines</a></div>' +
+    doses.map(x => { const on = !!medLog(x.m, d, x.t); return '<div class="medrow' + (on ? ' on' : '') + '"><button type="button" class="tick' + (on ? ' on' : '') + '" data-dose="' + x.m.id + '|' + x.t + '|' + d + '">' + (on ? '✓' : '') + '</button><span><b>' + esc(x.m.name) + '</b>' + (x.m.dose ? ' · ' + esc(x.m.dose) : '') + ' <small class="sub">' + esc(x.m.who) + (x.t ? ' · ' + fmtTime(x.t) : '') + (x.m.withFood ? ' · with food' : '') + '</small></span>' + (medLow(x.m) ? '<em class="cwho">refill soon</em>' : '') + '</div>'; }).join('') + '</div>';
+}
+function wireMeds(root, redraw) {
+  root.querySelectorAll('[data-dose]').forEach(b => b.onclick = () => { const [id, t, d] = b.dataset.dose.split('|'), m = meds().find(x => x.id === id); if (!m) return; const was = !!medLog(m, d, t); takeDose(m, d, t); if (!was) celebrate(b); (redraw || route)(); });
+}
+let medWho = 'all';
+function viewMeds() {
+  const t = today(), list = meds(), shown = list.filter(m => medWho === 'all' || m.who === medWho);
+  const days = [6, 5, 4, 3, 2, 1, 0].map(k => addDays(t, -k));
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>💊 Medicines</h1>' +
+    '<div class="segs">' + ['all'].concat(PEOPLE).map(p => '<button type="button" class="seg' + (medWho === p ? ' on' : '') + '" data-mwho="' + p + '">' + (p === 'all' ? 'Everyone' : p === 'Cecilia' ? 'Cece' : p === 'Elisha' ? 'Eli' : p) + '</button>').join('') + '</div>' +
+    medCard(t) +
+    '<div class="row-actions"><button type="button" id="medNew">＋ Add a medicine or vitamin</button></div>' +
+    (shown.length ? shown.map(m => { const doses = dailyDoses(m), taken = days.map(d => (m.times && m.times.length ? m.times : ['']).filter(x => medLog(m, d, x)).length);
+      return '<div class="card pad medinfo' + (m.active === false ? ' off' : '') + '"><div class="mini-head"><h2>' + esc(m.name) + (m.dose ? ' <small>' + esc(m.dose) + '</small>' : '') + '</h2><button type="button" class="ghost small" data-medit="' + m.id + '">Edit</button></div>' +
+        '<p class="sub">' + esc(m.who) + ' · ' + ((m.times || []).length ? m.times.map(fmtTime).join(', ') : 'as needed') + (m.withFood ? ' · with food' : '') + (m.remind === false ? ' · no phone alert' : ' · 🔔 phone alert') + (m.active === false ? ' · stopped' : '') + '</p>' +
+        (m.pillsLeft != null && m.pillsLeft !== '' ? '<p class="' + (medLow(m) ? 'warnc' : 'sub') + '">' + m.pillsLeft + ' left · about ' + Math.floor(m.pillsLeft / ((+m.perDose || 1) * doses)) + ' days' + (medLow(m) ? ' · refill soon' : '') + '</p>' : '') +
+        (m.pharmacy || m.rx ? '<p class="sub">' + (m.pharmacy ? '🏥 ' + esc(m.pharmacy) : '') + (m.pharmPhone ? ' · <a href="tel:' + esc(m.pharmPhone.replace(/[^\d+]/g, '')) + '">' + esc(m.pharmPhone) + '</a>' : '') + (m.rx ? ' · Rx ' + esc(m.rx) : '') + '</p>' : '') +
+        '<div class="medweek">' + days.map((d, k) => '<span class="' + (taken[k] >= doses ? 'all' : taken[k] ? 'some' : '') + '" title="' + esc(fmtDate(d)) + '">' + new Date(d + 'T12:00').toLocaleDateString([], { weekday: 'narrow' }) + '</span>').join('') + '</div></div>'; }).join('')
+      : '<div class="card pad"><p class="helper">No medicines or vitamins yet. Tap ＋ to add one, with the times to take it. Your phone reminds you at those times (through the planner calendar you subscribed to).</p></div>');
+  $('view').querySelectorAll('[data-mwho]').forEach(b => b.onclick = () => { medWho = b.dataset.mwho; viewMeds(); });
+  $('medNew').onclick = () => editMed(null);
+  $('view').querySelectorAll('[data-medit]').forEach(b => b.onclick = () => editMed(b.dataset.medit));
+  wireMeds($('view'), viewMeds);
+}
+function editMed(id) {
+  const list = meds().slice(), m = id ? list.find(x => x.id === id) : { who: medWho === 'all' ? 'Shaana' : medWho, name: '', dose: '', times: ['08:00'], withFood: false, pillsLeft: '', perDose: 1, pharmacy: '', pharmPhone: '', rx: '', notes: '', remind: true, active: true };
+  openModal('<h2>' + (id ? 'Edit' : 'New') + ' medicine or vitamin</h2>' +
+    '<div class="grid2"><label>For<select id="mdWho">' + PEOPLE.map(p => '<option' + (p === m.who ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></label><label>Name<input id="mdName" value="' + esc(m.name) + '" placeholder="Vitamin D"></label></div>' +
+    '<label>Dose<input id="mdDose" value="' + esc(m.dose || '') + '" placeholder="1 pill, 5 ml, 1000 IU…"></label>' +
+    '<label>Times to take it</label><div id="mdTimes">' + (m.times || []).map(t => '<input type="time" class="mdt" value="' + esc(t) + '">').join('') + '</div><div class="row-actions tight"><button type="button" class="ghost small" id="mdAddT">＋ another time</button><button type="button" class="ghost small" id="mdNoT">As needed (no set time)</button></div>' +
+    '<label class="check"><input type="checkbox" id="mdFood"' + (m.withFood ? ' checked' : '') + '> Take with food</label>' +
+    '<label class="check"><input type="checkbox" id="mdRem"' + (m.remind !== false ? ' checked' : '') + '> 🔔 Remind me on my phone at these times</label>' +
+    '<div class="grid2"><label>Pills / doses left<input id="mdLeft" type="number" min="0" inputmode="numeric" value="' + (m.pillsLeft != null ? m.pillsLeft : '') + '" placeholder="optional"></label><label>Per dose<input id="mdPer" type="number" min="1" inputmode="numeric" value="' + (m.perDose || 1) + '"></label></div>' +
+    '<div class="grid2"><label>Pharmacy<input id="mdPh" value="' + esc(m.pharmacy || '') + '" placeholder="Walgreens"></label><label>Pharmacy phone<input id="mdPhN" type="tel" value="' + esc(m.pharmPhone || '') + '"></label></div>' +
+    '<label>Rx number<input id="mdRx" value="' + esc(m.rx || '') + '"></label><label>Notes<input id="mdNotes" value="' + esc(m.notes || '') + '" placeholder="Prescribed by Dr. Lee, for allergies…"></label>' +
+    (id ? '<label class="check"><input type="checkbox" id="mdStop"' + (m.active === false ? ' checked' : '') + '> Stopped taking it</label>' : '') +
+    '<div class="row-actions"><button type="button" id="mdSave">Save</button><button type="button" class="ghost" id="mdX">Cancel</button>' + (id ? '<button type="button" class="danger" id="mdDel">Delete</button>' : '') + '</div>');
+  $('mdAddT').onclick = () => $('mdTimes').insertAdjacentHTML('beforeend', '<input type="time" class="mdt" value="20:00">');
+  $('mdNoT').onclick = () => { $('mdTimes').innerHTML = ''; };
+  $('mdX').onclick = closeModal;
+  $('mdSave').onclick = () => {
+    const name = $('mdName').value.trim(); if (!name) { toast('Type the name.'); return; }
+    Object.assign(m, { who: $('mdWho').value, name, dose: $('mdDose').value.trim(), times: [...document.querySelectorAll('#mdTimes .mdt')].map(i => i.value).filter(Boolean).sort(), withFood: $('mdFood').checked, remind: $('mdRem').checked,
+      pillsLeft: $('mdLeft').value === '' ? '' : Math.max(0, +$('mdLeft').value), perDose: Math.max(1, +$('mdPer').value || 1), pharmacy: $('mdPh').value.trim(), pharmPhone: $('mdPhN').value.trim(), rx: $('mdRx').value.trim(), notes: $('mdNotes').value.trim(), active: !($('mdStop') && $('mdStop').checked) });
+    if (!id) { m.id = 'med' + uid().slice(-6); m.start = today(); list.push(m); }
+    setMeds(list); closeModal(); route(); toast('💊 Saved' + (m.remind !== false && m.times.length ? ' · phone alerts at ' + m.times.map(fmtTime).join(', ') : ''));
+  };
+  if (id) $('mdDel').onclick = () => { if (!confirm('Delete ' + m.name + '?')) return; setMeds(list.filter(x => x !== m)); closeModal(); route(); };
+}
+
+// ---------- 🚗 Car care ----------
+// Cars, their service schedule and history live in settings.cars. Due items become tasks two weeks ahead.
+const CAR_SERVICES = [['Oil change', 6, 5000], ['Tire rotation', 6, 7500], ['Air filter', 12, 15000], ['Cabin air filter', 12, 15000], ['Brake check', 12, 12000], ['Wiper blades', 12, 0], ['Battery check', 12, 0], ['Tags / registration', 12, 0], ['Insurance renewal', 6, 0]];
+const cars = () => S().cars || [];
+const setCars = l => { S().cars = l; window.save(); };
+const addMonths = (d, n) => { const x = new Date(d + 'T12:00'); x.setMonth(x.getMonth() + n); return isoDay(x); };
+function svcDue(car, s) {
+  const nextDate = s.lastDate && s.everyMonths ? addMonths(s.lastDate, s.everyMonths) : s.nextDate || '';
+  const nextMiles = s.lastMiles != null && s.lastMiles !== '' && s.everyMiles ? +s.lastMiles + +s.everyMiles : null;
+  const t = today(), miles = +car.mileage || 0;
+  const overdue = (nextDate && nextDate < t) || (nextMiles && miles >= nextMiles);
+  const soon = !overdue && ((nextDate && nextDate <= addDays(t, 30)) || (nextMiles && miles >= nextMiles - 500));
+  return { nextDate, nextMiles, overdue, soon, unknown: !nextDate && !nextMiles };
+}
+function carCheck() {
+  const t = today(); let changed = false;
+  cars().forEach(car => (car.services || []).forEach(s => {
+    const d = svcDue(car, s); if (!(d.overdue || (d.nextDate && d.nextDate <= addDays(t, 14)) || (d.soon && d.nextMiles))) return;
+    const id = 'car-' + car.id + '-' + s.id + '-' + (s.lastDate || s.nextDate || 'x');
+    if (data.items.some(i => i.id === id)) return;
+    data.items.push(newItem({ id, kind: 'task', title: '🚗 ' + s.type + ' due – ' + car.name, date: d.nextDate && d.nextDate > t ? d.nextDate : t, list: 'Home', notes: [d.nextDate ? 'Due ' + fmtDate(d.nextDate) : '', d.nextMiles ? 'at ' + d.nextMiles.toLocaleString() + ' miles' : ''].filter(Boolean).join(' · ') + '\nMore → Car care' }));
+    changed = true;
+  }));
+  if (changed) window.save();
+}
+function carDueCard() {
+  const due = []; cars().forEach(c => (c.services || []).forEach(s => { const d = svcDue(c, s); if (d.overdue || d.soon) due.push([c, s, d]); }));
+  if (!due.length) return '';
+  return '<a class="card pad tip" href="#car"><b>🚗 Car care</b><span class="sub">' + due.slice(0, 3).map(([c, s, d]) => s.type + ' (' + c.name + ')' + (d.overdue ? ' overdue' : ' soon')).join(' · ') + ' →</span></a>';
+}
+function viewCar() {
+  const list = cars();
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🚗 Car care</h1>' +
+    '<div class="row-actions"><button type="button" id="carNew">＋ Add a car</button></div>' +
+    (list.length ? list.map(car => {
+      const svcs = (car.services || []).map(s => [s, svcDue(car, s)]).sort((a, b) => (b[1].overdue - a[1].overdue) || (b[1].soon - a[1].soon) || (a[1].nextDate || '9').localeCompare(b[1].nextDate || '9'));
+      const spent = (car.history || []).filter(h => h.date >= today().slice(0, 4)).reduce((s, h) => s + (+h.cost || 0), 0);
+      return '<div class="card pad carcard"><div class="mini-head"><h2>' + esc(car.name) + '</h2><button type="button" class="ghost small" data-cedit="' + car.id + '">Edit</button></div>' +
+        '<p class="sub">' + [car.year, car.plate ? 'Plate ' + car.plate : ''].filter(Boolean).map(esc).join(' · ') + '</p>' +
+        '<div class="carmiles"><label>Mileage<input type="number" inputmode="numeric" data-cmiles="' + car.id + '" value="' + (car.mileage || '') + '" placeholder="e.g. 84500"></label><small class="sub">' + (car.mileageDate ? 'updated ' + esc(fmtDate(car.mileageDate, 'rel')) : 'update it now and then') + '</small></div>' +
+        svcs.map(([s, d]) => '<div class="svcrow' + (d.overdue ? ' over' : d.soon ? ' soon' : '') + '"><div><b>' + esc(s.type) + '</b><small>' + (d.unknown ? 'Tap ✓ Done to start tracking' : [d.nextDate ? 'next ' + fmtDate(d.nextDate) : '', d.nextMiles ? 'or ' + d.nextMiles.toLocaleString() + ' mi' : ''].filter(Boolean).join(' ') + (d.overdue ? ' · overdue' : d.soon ? ' · soon' : '')) + (s.lastDate ? ' · last ' + esc(fmtDate(s.lastDate)) : '') + '</small></div><button type="button" class="small" data-sdone="' + car.id + '|' + s.id + '">✓ Done</button></div>').join('') +
+        '<p class="sub">' + ((car.history || []).length ? (car.history || []).length + ' service' + ((car.history || []).length === 1 ? '' : 's') + ' logged' + (spent ? ' · ' + money(spent) + ' this year' : '') : 'No services logged yet') + ' · <button type="button" class="linkish" data-chist="' + car.id + '">History</button></p></div>';
+    }).join('') : '<div class="card pad"><p class="helper">Add your car (and Salvador’s). Then tap ✓ Done when you get the oil changed, tires rotated, tags renewed and so on. The planner reminds you two weeks before the next one is due, by date or by miles.</p></div>');
+  $('carNew').onclick = () => editCar(null);
+  $('view').querySelectorAll('[data-cedit]').forEach(b => b.onclick = () => editCar(b.dataset.cedit));
+  $('view').querySelectorAll('[data-cmiles]').forEach(i => i.onchange = () => { const l = cars(), c = l.find(x => x.id === i.dataset.cmiles); c.mileage = Math.max(0, +i.value || 0); c.mileageDate = today(); setCars(l); carCheck(); viewCar(); toast('Mileage saved'); });
+  $('view').querySelectorAll('[data-sdone]').forEach(b => b.onclick = () => { const [cid, sid] = b.dataset.sdone.split('|'); logService(cid, sid); });
+  $('view').querySelectorAll('[data-chist]').forEach(b => b.onclick = () => carHistory(b.dataset.chist));
+}
+function editCar(id) {
+  const list = cars().slice(), car = id ? list.find(c => c.id === id) : { name: '', year: '', plate: '', mileage: '', services: [] };
+  openModal('<h2>' + (id ? 'Edit car' : 'New car') + '</h2><label>Name<input id="crN" value="' + esc(car.name) + '" placeholder="Honda Pilot, Salvador’s truck…"></label>' +
+    '<div class="grid2"><label>Year<input id="crY" value="' + esc(car.year || '') + '"></label><label>Plate<input id="crP" value="' + esc(car.plate || '') + '"></label></div>' +
+    '<label>Mileage now<input id="crM" type="number" inputmode="numeric" value="' + (car.mileage || '') + '"></label>' +
+    '<p class="lbl">What to track · every how many months / miles</p>' + CAR_SERVICES.map(([t, mo, mi], k) => { const s = (car.services || []).find(x => x.type === t); return '<div class="svcset"><label class="check"><input type="checkbox" data-sv="' + k + '"' + (s || !id ? ' checked' : '') + '> ' + t + '</label><input type="number" data-svm="' + k + '" value="' + (s ? s.everyMonths : mo) + '" title="months"><small>mo</small><input type="number" data-svmi="' + k + '" value="' + (s ? s.everyMiles || '' : mi || '') + '" placeholder="–" title="miles"><small>mi</small></div>'; }).join('') +
+    '<div class="row-actions"><button type="button" id="crSave">Save</button><button type="button" class="ghost" id="crX">Cancel</button>' + (id ? '<button type="button" class="danger" id="crDel">Delete</button>' : '') + '</div>');
+  $('crX').onclick = closeModal;
+  $('crSave').onclick = () => {
+    const name = $('crN').value.trim(); if (!name) { toast('Name the car.'); return; }
+    const old = car.services || [];
+    car.services = CAR_SERVICES.map(([t], k) => { if (!$('modalBody').querySelector('[data-sv="' + k + '"]').checked) return null; const s = old.find(x => x.type === t) || { id: 's' + k + uid().slice(-4), type: t }; s.everyMonths = +$('modalBody').querySelector('[data-svm="' + k + '"]').value || 0; s.everyMiles = +$('modalBody').querySelector('[data-svmi="' + k + '"]').value || 0; return s; }).filter(Boolean);
+    Object.assign(car, { name, year: $('crY').value.trim(), plate: $('crP').value.trim() });
+    if ($('crM').value && +$('crM').value !== +car.mileage) { car.mileage = +$('crM').value; car.mileageDate = today(); }
+    if (!id) { car.id = 'car' + uid().slice(-5); car.history = []; list.push(car); }
+    setCars(list); closeModal(); viewCar();
+  };
+  if (id) $('crDel').onclick = () => { if (!confirm('Delete ' + car.name + ' and its history?')) return; setCars(list.filter(c => c !== car)); closeModal(); viewCar(); };
+}
+function logService(cid, sid) {
+  const list = cars(), car = list.find(c => c.id === cid), s = car.services.find(x => x.id === sid);
+  openModal('<h2>✓ ' + esc(s.type) + ' – ' + esc(car.name) + '</h2><div class="grid2"><label>Date<input id="lsD" type="date" value="' + today() + '"></label><label>Mileage<input id="lsM" type="number" inputmode="numeric" value="' + (car.mileage || '') + '"></label></div>' +
+    '<div class="grid2"><label>Cost $<input id="lsC" type="number" step="0.01" inputmode="decimal" placeholder="optional"></label><label>Where<input id="lsW" placeholder="Walmart Auto, dealer…"></label></div><label>Notes<input id="lsN"></label>' +
+    '<label class="check"><input type="checkbox" id="lsMoney"> Also add the cost to my Money app (category Car)</label>' +
+    '<div class="row-actions"><button type="button" id="lsGo">Save</button><button type="button" class="ghost" id="lsX">Cancel</button></div>');
+  $('lsX').onclick = closeModal;
+  $('lsGo').onclick = async () => {
+    const date = $('lsD').value || today(), miles = $('lsM').value === '' ? '' : +$('lsM').value, cost = +$('lsC').value || 0, where = $('lsW').value.trim(), toMoney = $('lsMoney').checked;
+    s.lastDate = date; s.lastMiles = miles;
+    if (miles !== '' && miles >= (+car.mileage || 0)) { car.mileage = miles; car.mileageDate = date; }
+    (car.history = car.history || []).unshift({ date, type: s.type, miles, cost, where, notes: $('lsN').value.trim() });
+    data.items.forEach(i => { if (i.kind === 'task' && i.id.startsWith('car-' + car.id + '-' + s.id + '-') && !i.done) i.done = true; });
+    setCars(list); closeModal(); viewCar();
+    let m = '';
+    if (cost && toMoney) m = (await addToMoney({ payee: where || s.type, amount: cost, category: 'Car', date, note: s.type + ' – ' + car.name + ' (from Planner)' })) ? ' · added to Money' : ' · couldn’t reach Money';
+    toast('✓ ' + s.type + ' logged' + m);
+  };
+}
+function carHistory(cid) {
+  const car = cars().find(c => c.id === cid), h = car.history || [];
+  openModal('<h2>' + esc(car.name) + ' history</h2>' + (h.length ? '<table class="mini htable"><thead><tr><th>Date</th><th>Service</th><th>Miles</th><th>Cost</th></tr></thead><tbody>' + h.map(x => '<tr><td>' + esc(fmtDate(x.date)) + '</td><td>' + esc(x.type) + (x.where ? ' <small>' + esc(x.where) + '</small>' : '') + '</td><td>' + (x.miles !== '' && x.miles != null ? (+x.miles).toLocaleString() : '') + '</td><td>' + (x.cost ? money(+x.cost) : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="helper">Nothing logged yet.</p>') + '<div class="row-actions"><button type="button" class="ghost" id="chX">Close</button></div>');
+  $('chX').onclick = closeModal;
+}
+
+// ---------- 🧾 Money link: grocery trips and costs go into the Money app ----------
+// Writes a transaction to the Money app's register (same account, same rounding: expenses round up past 5¢).
+async function addToMoney({ payee, amount, category, date, note }) {
+  const c = client(); if (!c || !signedIn()) { toast('Sign in (More) to send this to Money.'); return false; }
+  try {
+    const [{ data: accs }, { data: st }] = await Promise.all([c.from('money_accounts').select('id,sort').order('sort'), c.from('money_settings').select('data').maybeSingle()]);
+    if (!accs || !accs.length) { toast('Open the Money app once first.'); return false; }
+    const rounding = ((st && st.data && st.data.settings) || {}).rounding || 'up5';
+    const a = Math.round(+amount * 100) / 100, whole = Math.floor(a + 1e-9), cents = Math.round((a - whole) * 100);
+    const amt = rounding === 'none' ? a : cents > 5 ? whole + 1 : whole;
+    const { data: me } = await c.auth.getUser();
+    const { error } = await c.from('money_tx').insert({ id: uid(), owner: me.user.id, account_id: accs[0].id, date: date || today(), time: new Date().toTimeString().slice(0, 5), payee, amount: amt, type: 'expense', category, note: note || '', check_num: '', cleared: false, tax_cat: '', receipt: '', source: 'Planner', bank_amount: a, tags: '', updated_at: new Date().toISOString() });
+    if (error) throw error;
+    return true;
+  } catch (e) { toast('Money: ' + (e.message || e)); return false; }
+}
+// This month's grocery spending (from Money) against the Groceries budget, shown on the shopping list.
+async function loadGroceryMonth() {
+  const box = $('grocBox'), c = client(); if (!box || !c || !signedIn()) return;
+  try {
+    const m0 = today().slice(0, 8) + '01';
+    const [{ data: tx }, { data: st }] = await Promise.all([c.from('money_tx').select('amount,type,category,date,payee').gte('date', m0).eq('category', 'Groceries'), c.from('money_settings').select('data').maybeSingle()]);
+    const spent = (tx || []).filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0), bud = +((((st || {}).data || {}).settings || {}).budgets || {}).Groceries || 0;
+    if (!$('grocBox')) return;
+    box.innerHTML = '<b>🧾 Groceries in ' + new Date().toLocaleDateString([], { month: 'long' }) + ':</b> ' + money(spent) + (bud ? ' of ' + money(bud) + ' budget' + (spent > bud ? ' · <span class="over">' + money(spent - bud) + ' over</span>' : ' · ' + money(bud - spent) + ' left') + ' · ' + (tx || []).length + ' trip' + ((tx || []).length === 1 ? '' : 's') + '<div class="cprog"><i style="width:' + Math.min(100, Math.round(spent / bud * 100)) + '%' + (spent > bud ? ';background:#c0675c' : '') + '"></i></div>' : ' · ' + (tx || []).length + ' trip' + ((tx || []).length === 1 ? '' : 's') + ' <small class="sub">(set a Groceries budget in Money → Budgets)</small>');
+  } catch (e) { box.textContent = ''; }
+}
+function logTrip(gotCount) {
+  openModal('<h2>🧾 Log this shopping trip</h2><p class="helper">Puts the total in your Money app (rounded your way), so groceries count toward your budget.</p>' +
+    '<div class="grid2"><label>Store<select id="ltS">' + ['Walmart', 'Sam’s Club', 'Kroger', 'Aldi', 'Harps', 'Other'].map(x => '<option>' + x + '</option>').join('') + '</select></label><label>Total $<input id="ltA" type="number" step="0.01" inputmode="decimal" placeholder="86.42"></label></div>' +
+    '<div class="grid2"><label>Date<input id="ltD" type="date" value="' + today() + '"></label><label>Category<select id="ltC">' + ['Groceries', 'Shopping', 'Eating out', 'Kids & school', 'Other'].map(x => '<option>' + x + '</option>').join('') + '</select></label></div>' +
+    (gotCount ? '<label class="check"><input type="checkbox" id="ltClr" checked> Clear the ' + gotCount + ' checked-off items from the list</label>' : '') +
+    '<div class="row-actions"><button type="button" id="ltGo">Save to Money</button><button type="button" class="ghost" id="ltX">Cancel</button></div>');
+  $('ltX').onclick = closeModal;
+  $('ltGo').onclick = async () => {
+    const amt = +$('ltA').value; if (!(amt > 0)) { toast('Type the total from the receipt.'); return; }
+    $('ltGo').disabled = true; $('ltGo').textContent = 'Saving…';
+    const store = $('ltS').value, clear = $('ltClr') && $('ltClr').checked;
+    const ok = await addToMoney({ payee: store, amount: amt, category: $('ltC').value, date: $('ltD').value, note: 'Shopping trip (from Planner)' + (gotCount ? ' · ' + gotCount + ' items' : '') });
+    if (!ok) { $('ltGo').disabled = false; $('ltGo').textContent = 'Save to Money'; return; }
+    if (clear) { data.items = data.items.filter(i => !(i.kind === 'shop' && i.done)); window.save(); }
+    closeModal(); viewShop(); toast('✓ ' + money(amt) + ' at ' + store + ' added to Money');
+  };
+}
 // ---------- Cleaning: weekly and monthly chores, room by room ----------
 // The rooms and chores live in settings.cleaning; each check-off is an item (kind 'clean', list = chore id, date = the day it was done).
 const W = 'week', MO = 'month';
@@ -2553,6 +2784,7 @@ function viewShop() {
     '<a class="wm" href="' + esc(walmartUrl(i)) + '" target="_blank" rel="noopener" title="Open on ' + esc(storeOf(i.location)) + '">' + esc(storeOf(i.location)) + (i.location ? ' ✓' : '') + '</a></div>';
   $('view').innerHTML = mealTabs('shop') +
     '<div class="quickbar"><input id="shopAdd" placeholder="Add an item… “paper towels”, “2 gallons milk”"><button type="button" id="shopGo">Add</button></div>' +
+    '<div class="card pad grocbox"><div id="grocBox">' + (signedIn() ? '🧾 Loading this month’s grocery spending…' : '🧾 Sign in to see grocery spending.') + '</div><div class="row-actions tight"><button type="button" class="small" id="shopLog">🧾 Log this trip' + (got.length ? ' (' + got.length + ' in the cart)' : '') + '</button></div></div>' +
     usualsHtml(need) +
     '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><a class="button ghost" href="https://www.samsclub.com/" target="_blank" rel="noopener">Open Sam’s Club</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
     '<p class="helper">📤 <b>Send to Salvador</b> texts him the list. For a live list he can check off at the store, sign in to this Planner on his phone with your account (More → Account and sync): changes show up on both phones.</p>' +
@@ -2565,6 +2797,8 @@ function viewShop() {
     data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(v), notes: amt, location: (S().walmart || {})[name.toLowerCase()] || '' }));
     window.save(); viewShop(); setTimeout(() => $('shopAdd').focus(), 50);
   };
+  $('shopLog').onclick = () => logTrip(got.length);
+  loadGroceryMonth();
   $('shopGo').onclick = add; $('shopAdd').onkeydown = e => { if (e.key === 'Enter') add(); };
   $('view').querySelectorAll('[data-usual]').forEach(b => b.onclick = () => {
     const k = b.dataset.usual, name = k.charAt(0).toUpperCase() + k.slice(1);
@@ -3011,6 +3245,7 @@ function healthPanel(who) {
     '<div class="card pad hcard"><div class="mini-head"><h2>Height &amp; weight</h2><button type="button" class="small" data-hgrow="' + esc(who) + '">＋ Add</button></div>' +
       (g.length ? '<div class="grow"><div><span>Weight</span><b>' + esc(g.find(x => x.weight) ? g.find(x => x.weight).weight + ' lb' : '—') + '</b>' + sparkline(wPts, '#c99a8e') + '</div><div><span>Height</span><b>' + esc(feetIn(hPts.length ? hPts[hPts.length - 1][1] : null) || '—') + '</b>' + sparkline(hPts, '#7d9b76') + '</div></div>' +
         '<table class="mini htable"><thead><tr><th>Date</th><th>Weight</th><th>Height</th></tr></thead><tbody>' + g.map(x => '<tr data-hedit="' + x.id + '"><td>' + esc(fmtDate(x.date)) + '</td><td>' + esc(x.weight ? x.weight + ' lb' : '') + '</td><td>' + esc(inches(x.height) != null ? feetIn(inches(x.height)) : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="helper">Add her height and weight at each check-up to see how she’s growing.</p>') + '</div>' +
+    (() => { const ms = meds().filter(m => m.who === who && m.active !== false); return '<div class="card pad hcard"><div class="mini-head"><h2>💊 Medicines</h2><a class="button small" href="#meds">' + (ms.length ? 'Manage' : '＋ Add') + '</a></div>' + (ms.length ? ms.map(m => '<div class="mini-row"><span><b>' + esc(m.name) + '</b>' + (m.dose ? ' · ' + esc(m.dose) : '') + '</span><span class="sub">' + ((m.times || []).length ? m.times.map(fmtTime).join(', ') : 'as needed') + '</span></div>').join('') : '<p class="helper">No medicines or vitamins yet.</p>') + '</div>'; })() +
     '<div class="card pad hcard"><div class="mini-head"><h2>Doctor visits</h2><button type="button" class="small" data-hvisit="' + esc(who) + '">＋ Add visit</button></div>' +
       (visits.length ? visits.map(v => { const o = hj(v); return '<div class="hvisit" data-hedit="' + v.id + '"><b>' + esc(fmtDate(v.date)) + ' · ' + esc(o.reason || 'Visit') + '</b><span class="sub">' + esc([o.doctor, o.followup ? 'Next: ' + fmtDate(o.followup) : ''].filter(Boolean).join(' · ')) + '</span>' + (o.notes ? '<p class="notes">' + esc(o.notes) + '</p>' : '') + (o.meds ? '<p class="sub">💊 ' + esc(o.meds) + '</p>' : '') + '</div>'; }).join('') : '<p class="helper">Write down what the doctor said, medicines and the next appointment.</p>') + '</div>' +
     '</div>';
@@ -3069,6 +3304,8 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#meds"><b>Medicines</b><span class="sub">💊 Medicine & vitamin reminders for everyone →</span></a>' +
+    '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
     '<a class="card pad tip" href="#tasks/atu"><b>ATU</b><span class="sub">🎓 ATU tasks and the 🍿 SNA Snack Closet order →</span></a>' +
     '<a class="card pad tip" href="#quick"><b>Quick adds</b><span class="sub">⭐ Add, change or delete your one-tap events →</span></a>' +
     '<a class="card pad tip" href="#gifts"><b>Gifts</b><span class="sub">🎁 Birthdays, anniversaries and gift ideas →</span></a>' +
