@@ -1669,7 +1669,7 @@ function viewAtu() {
     '<div class="quickbar"><input id="atuAdd" placeholder="Add an ATU task… “Order SNA snacks friday”"><button type="button" id="atuGo">Add</button></div>' +
     '<div class="card pad"><h2 class="section-title">To do <small>' + open.length + '</small></h2>' + (open.length ? open.map(i => entryRow(Object.assign({ src: 'planner', id: i.id, kind: 'task', listName: 'ATU', allDay: true }, i))).join('') : '<p class="helper">Nothing to do. Add ATU tasks above.</p>') +
       (done.length ? '<p class="lbl">Recently done</p>' + done.map(i => entryRow(Object.assign({ src: 'planner', kind: 'task', listName: 'ATU', allDay: true }, i))).join('') : '') + '</div>' +
-    '<a class="card pad tip" href="#tasks/sna"><b>🍿 SNA Snack Closet</b><span class="sub">' + sn.items.length + ' items · ' + (last ? 'last order ' + fmtDate(last.date, 'rel') + ' ($' + last.total.toFixed(2) + ')' : 'make an order') + ' →</span></a>' +
+    '<a class="card pad tip" href="#tasks/sna"><b>🍿 SNA Snack Closet <span id="atuReqN"></span></b><span class="sub">' + sn.items.length + ' items · ' + (last ? 'last order ' + fmtDate(last.date, 'rel') + ' ($' + last.total.toFixed(2) + ')' : 'make an order') + ' →</span></a>' +
     '<div class="card pad"><h2>Next 2 weeks at ATU</h2>' + (events.length ? events.slice(0, 12).map(entryRow).join('') : '<p class="helper">Nothing on your ATU calendar in the next 2 weeks.</p>') + '</div>' +
     '<a class="card pad tip" href="#files" id="atuFiles"><b>📁 ATU files</b><span class="sub">Documents and notes in your ATU folder →</span></a>';
   const go = () => { const v = $('atuAdd').value.trim(); if (!v) return; const p = parseQuick(v); data.items.push(newItem({ kind: 'task', title: p.title || v, date: p.date || null, list: 'ATU' })); window.save(); viewAtu(); toast('✓ ATU task added'); setTimeout(() => $('atuAdd').focus(), 50); };
@@ -1694,7 +1694,8 @@ function viewSna() {
   $('view').innerHTML = '<h1>ATU</h1>' + atuTabs('sna') +
     '<div class="card pad snasum"><div><h2>🍿 Snack closet order</h2><p class="sub">' + count + ' packs · <b>' + money(total) + '</b>' + (sn.budget ? ' of ' + money(sn.budget) + ' budget' + (total > sn.budget ? ' <span class="over">· ' + money(total - sn.budget) + ' over</span>' : ' · ' + money(sn.budget - total) + ' left') : '') + '</p>' +
       (sn.budget ? '<div class="cprog"><i style="width:' + Math.min(100, Math.round(total / sn.budget * 100)) + '%' + (total > sn.budget ? ';background:#c0675c' : '') + '"></i></div>' : '') + '</div>' +
-      '<div class="row-actions tight"><button type="button" id="snaForm"' + (count ? '' : ' disabled') + '>📄 Order form</button><button type="button" class="ghost small" id="snaFill">✨ Fill from counts</button><button type="button" class="ghost small" id="snaLast"' + (sn.orders.length ? '' : ' disabled') + '>↺ Same as last order</button><button type="button" class="ghost small" id="snaClear"' + (count ? '' : ' disabled') + '>Clear</button></div></div>' +
+      '<div class="row-actions tight"><button type="button" id="snaForm"' + (count ? '' : ' disabled') + '>📄 Order form</button><button type="button" class="ghost small" id="snaSheet">🖨 Count sheet</button><button type="button" class="ghost small" id="snaFill">✨ Fill from counts</button><button type="button" class="ghost small" id="snaLast"' + (sn.orders.length ? '' : ' disabled') + '>↺ Same as last order</button><button type="button" class="ghost small" id="snaClear"' + (count ? '' : ' disabled') + '>Clear</button></div></div>' +
+    '<div class="card pad snareq"><div class="mini-head"><h2>📨 Student requests</h2><span><button type="button" class="small" id="snaShare">📤 Share link</button></span></div><div id="snaReqs"><p class="helper">' + (signedIn() ? 'Loading…' : 'Sign in to see requests.') + '</p></div></div>' +
     '<p class="helper">Count what’s in the closet (<b>Have</b>), set how many you like to keep on the shelf (<b>Keep</b>), then tap <b>✨ Fill from counts</b> and the order fills itself. Or tap ＋ to order. Tap a name to open it at Sam’s Club.</p>' +
     '<div class="row-actions tight"><input id="snaFind" type="search" placeholder="Search snacks" value="' + esc(snaFind) + '"><button type="button" class="ghost small" id="snaEditT">' + (snaEdit ? '✓ Done editing' : '✎ Edit items') + '</button>' + (snaEdit ? '<button type="button" class="small" id="snaNew">＋ New item</button>' : '') + '</div>' +
     SNA_CATS.map(c => { const l = shown.filter(i => (i.cat || 'Other') === c); return l.length ? '<div class="card pad"><h3>' + esc(c) + ' <small>' + l.length + '</small></h3>' + l.map(row).join('') + '</div>' : ''; }).join('') +
@@ -1718,6 +1719,9 @@ function viewSna() {
   $('snaLast').onclick = () => { const o = sn.orders[0]; if (!o) return; items.forEach(i => { const l = o.lines.find(x => x.id === i.id); i.order = l ? l.qty : 0; }); put(); viewSna(); toast('↺ Same as ' + fmtDate(o.date)); };
   $('snaClear').onclick = () => { if (!confirm('Clear the whole order?')) return; items.forEach(i => { i.order = 0; }); put(); viewSna(); };
   $('snaForm').onclick = () => snaForm(null);
+  $('snaShare').onclick = snaShare;
+  $('snaSheet').onclick = snaCountSheet;
+  loadSnaRequests();
   $('snaBudget').onchange = e => { snaSave({ budget: Math.max(0, +e.target.value || 0) }); viewSna(); };
   v.querySelectorAll('[data-oview]').forEach(b => b.onclick = () => snaForm(sn.orders[+b.dataset.oview]));
   v.querySelectorAll('[data-orec]').forEach(b => b.onclick = () => {
@@ -1733,6 +1737,53 @@ function viewSna() {
     data.items.push(newItem({ id: 'sna-weekly', kind: 'task', title: '🍿 Count the SNA snack closet & send the order', date: d, repeat: 'weekly', list: 'ATU', notes: 'Tasks → ATU → 🍿 SNA Snack Closet' }));
     window.save(); viewSna(); toast('⏰ Weekly reminder set for ' + fmtDate(d, 'rel'));
   };
+}
+// The student link: anyone with it can pick snacks and send a request (they can't see prices or anything else).
+function snaLink() {
+  if (!S().snaToken) { S().snaToken = Array.from(crypto.getRandomValues(new Uint8Array(18)), b => b.toString(16).padStart(2, '0')).join(''); window.save(); }
+  return new URL('sna.html?t=' + S().snaToken, location.href).href;
+}
+// A printable sheet for counting the closet by hand: every item by kind, with boxes for Have and Order.
+function snaCountSheet() {
+  const sn = snaData(), items = sn.items.filter(i => !/out of stock/i.test(i.note || ''));
+  const head = '<h2>SNA Snack Closet count sheet</h2><p class="sub">Counted by: ______________________ &nbsp; Date: ____________ &nbsp; · Count packs/boxes on the shelf, then enter them in the planner (Tasks → ATU → 🍿 SNA Snack Closet → Have).</p>';
+  const table = '<table class="snaform countsheet"><thead><tr><th>Item</th><th>Aisle</th><th>Keep</th><th>Have</th><th>Order</th></tr></thead><tbody>' +
+    SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c).sort((a, b) => a.name.localeCompare(b.name)); return l.length ? '<tr class="cat"><td colspan="5">' + esc(c) + '</td></tr>' + l.map(i => '<tr><td>' + esc(i.name) + (i.size ? ' <small>' + esc(i.size) + '</small>' : '') + '</td><td>' + esc(i.aisle || '') + '</td><td>' + (i.par || '') + '</td><td class="box"></td><td class="box"></td></tr>').join('') : ''; }).join('') +
+    '</tbody></table><p class="sub">Notes / new snack ideas: _____________________________________________________________</p>';
+  $('modalBody').classList.add('wide');
+  openModal(head + table + '<div class="row-actions"><button type="button" id="csPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="csX">Close</button></div><p class="helper">After counting, type each number in the <b>Have</b> box on the SNA page and tap <b>✨ Fill from counts</b> to build the order.</p>');
+  $('csX').onclick = closeModal;
+  $('csPrint').onclick = () => { const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = head + table; $('view').appendChild(d); window.print(); setTimeout(() => d.remove(), 1000); };
+}
+function snaShare() {
+  const url = snaLink();
+  openModal('<h2>📤 Student link</h2><p class="helper">Send this to students. They tap ＋ on what the snack closet needs, add their name and tap <b>Send list</b>. Their lists show up here under 📨 Student requests. They can’t see prices or anything else in your planner.</p>' +
+    '<input id="slUrl" readonly value="' + esc(url) + '"><div class="row-actions"><button type="button" id="slShare">📤 Share</button><button type="button" class="ghost" id="slCopy">Copy link</button><a class="button ghost" href="' + esc(url) + '" target="_blank" rel="noopener">Open it</a></div>' +
+    '<div class="row-actions tight"><button type="button" class="ghost small" id="slNew">Make a new link (the old one stops working)</button><button type="button" class="ghost small" id="slX">Close</button></div>');
+  $('slX').onclick = closeModal;
+  $('slCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(url).then(() => toast('Link copied'), () => { $('slUrl').select(); toast('Press and hold to copy'); });
+  $('slShare').onclick = async () => { if (navigator.share) { try { await navigator.share({ title: 'SNA Snack Closet', text: 'What does the SNA snack closet need? Pick snacks here:', url }); } catch (e) {} } else $('slCopy').click(); };
+  $('slNew').onclick = () => { if (!confirm('Make a new link? Students with the old link won’t be able to send lists.')) return; S().snaToken = ''; window.save(); snaShare(); };
+}
+let snaShowDone = false;
+async function loadSnaRequests() {
+  const box = $('snaReqs'), c = client(); if (!box || !c || !signedIn()) return;
+  let rows, error;
+  try { ({ data: rows, error } = await c.from('sna_requests').select('*').order('created_at', { ascending: false }).limit(60)); } catch (e) { error = e; }
+  if (!$('snaReqs')) return;
+  if (error) { box.innerHTML = '<p class="helper">Couldn’t load requests: ' + esc(error.message) + '</p>'; return; }
+  const open = rows.filter(r => !r.handled), done = rows.filter(r => r.handled);
+  const sn = snaData(), card = r => '<div class="sreq' + (r.handled ? ' done' : '') + '"><div class="mini-row"><span><b>' + esc(r.name || 'Someone') + '</b> <small class="sub">' + esc(fmtDate(r.created_at.slice(0, 10), 'rel')) + ' ' + new Date(r.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '</small></span>' +
+    (r.handled ? '<small class="sub">✓ added</small>' : '<span><button type="button" class="small" data-radd="' + r.id + '">＋ Add to order</button><button type="button" class="ghost small" data-rdone="' + r.id + '">Done</button></span>') + '</div>' +
+    '<p class="sreql">' + r.lines.map(l => esc(l.name) + (l.qty > 1 ? ' <b>×' + l.qty + '</b>' : '') + (sn.items.some(i => i.id === l.id) ? '' : ' <small>(not on the list anymore)</small>')).join(' · ') + '</p>' + (r.note ? '<p class="sub">💬 ' + esc(r.note) + '</p>' : '') + '</div>';
+  box.innerHTML = (open.length ? (open.length > 1 ? '<div class="row-actions tight"><button type="button" class="ghost small" id="raAll">＋ Add all ' + open.length + ' to the order</button></div>' : '') + open.map(card).join('') : '<p class="helper">No new requests. Tap 📤 Share link to send students the form.</p>') +
+    (done.length ? '<button type="button" class="linkish" id="raShow">' + (snaShowDone ? 'Hide' : 'Show') + ' earlier requests (' + done.length + ')</button>' + (snaShowDone ? done.slice(0, 20).map(card).join('') : '') : '');
+  const mark = async ids => { const r = await c.from('sna_requests').update({ handled: true }).in('id', ids); if (r.error) toast('Couldn’t update: ' + r.error.message); };
+  const addLines = reqs => { const d = snaData(); let n = 0; reqs.forEach(r => r.lines.forEach(l => { const it = d.items.find(i => i.id === l.id); if (it) { it.order = (it.order || 0) + (l.qty || 1); n += l.qty || 1; } })); snaSave({ items: d.items }); return n; };
+  box.querySelectorAll('[data-radd]').forEach(b => b.onclick = async () => { const r = rows.find(x => x.id === b.dataset.radd); const n = addLines([r]); await mark([r.id]); viewSna(); toast('✓ Added ' + n + ' packs from ' + (r.name || 'the request')); });
+  box.querySelectorAll('[data-rdone]').forEach(b => b.onclick = async () => { await mark([b.dataset.rdone]); loadSnaRequests(); });
+  if ($('raAll')) $('raAll').onclick = async () => { const n = addLines(open); await mark(open.map(r => r.id)); viewSna(); toast('✓ Added ' + n + ' packs from ' + open.length + ' requests'); };
+  if ($('raShow')) $('raShow').onclick = () => { snaShowDone = !snaShowDone; loadSnaRequests(); };
 }
 function editSna(id) {
   const sn = snaData(), it = id ? sn.items.find(i => i.id === id) : { name: '', size: '', price: '', aisle: '', url: '', cat: 'Chips & salty', note: '' };

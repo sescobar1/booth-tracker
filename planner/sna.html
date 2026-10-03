@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SNA Snack Closet</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icon.svg">
+  <style>
+    :root { --bg: #f7f4ef; --card: #fff; --ink: #2b2522; --muted: #8e837b; --line: #e6dfd7; --sage: #7d9b76; --sage-soft: #e7efe4; --accent: #2b2522; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1a18; --card: #2a2623; --ink: #f2ede8; --muted: #a99f97; --line: #3b3531; --sage: #93b28b; --sage-soft: #2f3a2c; --accent: #f2ede8; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 18px 16px 120px; }
+    h1 { font-size: 1.7rem; margin: 6px 0 2px; }
+    .sub { color: var(--muted); margin: 0 0 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px; margin: 12px 0; }
+    h2 { font-size: 1rem; margin: 2px 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+    .row:first-of-type { border-top: 0; }
+    .row.on { background: linear-gradient(90deg, var(--sage-soft), transparent 80%); border-radius: 10px; }
+    .name { flex: 1; min-width: 0; }
+    .name small { display: block; color: var(--muted); font-size: 12px; }
+    .q { display: flex; align-items: center; gap: 6px; flex: none; }
+    .q button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 1.2rem; }
+    .q b { min-width: 20px; text-align: center; }
+    label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+    input, textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+    .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+    .bar div { max-width: 640px; margin: 0 auto; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+    .send { background: var(--accent); color: var(--bg); border: 0; border-radius: 999px; padding: 12px 22px; font: inherit; font-weight: 600; }
+    .send:disabled { opacity: .4; }
+    .msg { text-align: center; padding: 40px 10px; }
+    .msg h1 { font-size: 2rem; }
+    #search { margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <main id="app"><p class="sub">Loading the snack list…</p></main>
+  <div class="bar" id="bar" hidden><div><span id="count">Nothing picked yet</span><button type="button" class="send" id="send" disabled>Send list</button></div></div>
+  <script src="config.js"></script>
+  <script>
+  // The SNA Snack Closet request page: students pick what the closet needs and send it. It only knows the secret key in the link.
+  (function () {
+    const CFG = window.PLANNER_CONFIG.sync, token = new URLSearchParams(location.search).get('t') || '';
+    const app = document.getElementById('app'), bar = document.getElementById('bar'), $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const rpc = (fn, body) => fetch(CFG.url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => { if (!r.ok) throw new Error('Something went wrong (' + r.status + ')'); return r.json(); });
+    const CATS = ['Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Bars & breakfast', 'Candy', 'Quick meals', 'Drinks', 'Other'];
+    let items = [], pick = {}, find = '';
+    try { pick = JSON.parse(localStorage.getItem('snaPick-' + token) || '{}'); } catch (e) { pick = {}; }
+    const keep = () => { try { localStorage.setItem('snaPick-' + token, JSON.stringify(pick)); } catch (e) {} };
+    function draw() {
+      const q = find.toLowerCase(), shown = items.filter(i => !q || i.name.toLowerCase().includes(q));
+      app.innerHTML = '<h1>🍿 SNA Snack Closet</h1><p class="sub">Arkansas Tech · Tap ＋ on what the closet is running low on, add your name, then tap <b>Send list</b>.</p>' +
+        '<input id="search" type="search" placeholder="Search snacks" value="' + esc(find) + '">' +
+        CATS.map(c => { const l = shown.filter(i => (i.cat || 'Other') === c); return l.length ? '<div class="card"><h2>' + esc(c) + '</h2>' + l.map(i => '<div class="row' + (pick[i.id] ? ' on' : '') + '"><div class="name">' + esc(i.name) + '<small>' + esc(i.size || '') + '</small></div><div class="q">' + (pick[i.id] ? '<button type="button" data-m="' + esc(i.id) + '" aria-label="Less">−</button><b>' + pick[i.id] + '</b>' : '') + '<button type="button" data-p="' + esc(i.id) + '" aria-label="Need this">＋</button></div></div>').join('') + '</div>' : ''; }).join('') +
+        '<div class="card"><label for="who">Your name</label><input id="who" autocomplete="name" placeholder="First and last name" value="' + esc(localStorage.getItem('snaWho') || '') + '"><label for="note">Anything else? (optional)</label><textarea id="note" rows="2" placeholder="We’re out of forks, a new snack idea…"></textarea></div>';
+      bar.hidden = false;
+      const n = Object.values(pick).reduce((s, x) => s + x, 0), kinds = Object.keys(pick).length;
+      $('count').textContent = n ? kinds + (kinds === 1 ? ' snack' : ' snacks') + ' picked' : 'Nothing picked yet';
+      $('send').disabled = !n;
+      app.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { pick[b.dataset.p] = Math.min(10, (pick[b.dataset.p] || 0) + 1); keep(); redraw(); });
+      app.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { const k = b.dataset.m; pick[k] = (pick[k] || 0) - 1; if (pick[k] <= 0) delete pick[k]; keep(); redraw(); });
+      $('search').oninput = e => { find = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { redraw(); const s = $('search'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }, 250); };
+    }
+    const redraw = () => { const y = window.scrollY, who = $('who') ? $('who').value : '', note = $('note') ? $('note').value : ''; draw(); $('who').value = who || $('who').value; $('note').value = note; window.scrollTo(0, y); };
+    $('send').onclick = async () => {
+      const who = $('who').value.trim();
+      if (!who) { $('who').focus(); $('who').scrollIntoView({ block: 'center' }); alert('Please add your name.'); return; }
+      const lines = Object.keys(pick).map(id => { const it = items.find(i => i.id === id); return it ? { id, name: it.name, qty: pick[id] } : null; }).filter(Boolean);
+      $('send').disabled = true; $('send').textContent = 'Sending…';
+      try {
+        const ok = await rpc('sna_submit', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines });
+        if (!ok) throw new Error('This link isn’t working anymore. Ask for a new one.');
+        try { localStorage.setItem('snaWho', who); localStorage.removeItem('snaPick-' + token); } catch (e) {}
+        pick = {}; bar.hidden = true;
+        app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p><button type="button" class="send" onclick="location.reload()">Send another</button></div>';
+      } catch (e) { alert(e.message); $('send').disabled = false; $('send').textContent = 'Send list'; }
+    };
+    if (token.length < 20) { app.innerHTML = '<div class="msg"><h1>Link not complete</h1><p class="sub">Ask for the full SNA Snack Closet link.</p></div>'; return; }
+    rpc('sna_catalog', { p_token: token }).then(list => {
+      items = list || [];
+      if (!items.length) { app.innerHTML = '<div class="msg"><h1>Link not working</h1><p class="sub">This link may be old. Ask for a new SNA Snack Closet link.</p></div>'; return; }
+      Object.keys(pick).forEach(k => { if (!items.some(i => i.id === k)) delete pick[k]; });
+      draw();
+    }).catch(e => { app.innerHTML = '<div class="msg"><h1>Can’t load the list</h1><p class="sub">' + esc(e.message) + '. Check your internet and try again.</p></div>'; });
+  })();
+  </script>
+</body>
+</html>
