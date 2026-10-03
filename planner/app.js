@@ -688,7 +688,7 @@ function drawDay() {
       trackButtons(d) +
       (allDay.length ? '<div class="alld">' + allDay.map(e => '<span class="hev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#8c7a6b') + '">' + (e.kind === 'task' ? (e.done ? '✓ ' : '○ ') : '') + esc(e.title) + '</span>').join('') + '</div>' : '') +
       '<div class="hours">' + hours + '</div>' +
-      '<div class="pbox2"><span>Evening</span><textarea data-dp="evening" rows="2">' + esc(v.evening || '') + '</textarea></div>' +
+      '<div class="pbox2"><span>Evening</span><textarea data-dp="evening" rows="2">' + esc(v.evening || '') + '</textarea></div>' + dayStickies(d, 'left') +
     '</div>' +
     '<div class="rings" aria-hidden="true"></div>' +
     '<div class="pg right">' +
@@ -699,10 +699,13 @@ function drawDay() {
       '<div class="trackers"><div><span>Hydration</span><div class="drops">' + Array.from({ length: 8 }, (_, k) => '<button type="button" class="drop' + (k < (v.water || 0) ? ' on' : '') + '" data-water="' + (k + 1) + '" aria-label="' + (k + 1) + ' glasses"></button>').join('') + '</div></div>' +
       '<div><span>Mood</span><div class="moods">' + MOODS.map((e, k) => '<button type="button" class="mood' + (v.mood === k + 1 ? ' on' : '') + '" data-mood="' + (k + 1) + '">' + e + '</button>').join('') + '</div></div></div>' +
       '<div class="pbox2"><span>Tomorrow</span><textarea data-dp="tomorrow" rows="3">' + esc(v.tomorrow || '') + '</textarea></div>' +
+      dayStickies(d, 'right') +
       '<div class="pbox2 writebox"><span>Write it down</span><button type="button" class="ghost small bigwrite" id="inkOpen">Full page ⤢</button><div id="inkHere" class="inkhost"></div></div>' +
     '</div></div>';
   const body = $('calBody'), put = fn => { const nv = dayPage(d); fn(nv); saveDayPage(d, nv); };
   body.querySelectorAll('[data-dday]').forEach(b => b.onclick = () => { calDay = b.dataset.dday; viewCalendar(); });
+  wireStickies(body, drawDay);
+  body.querySelectorAll('[data-dsadd]').forEach(b => b.onclick = () => editSticky(null, '', drawDay, { date: d, location: b.dataset.dsadd, color: b.dataset.dscolor || 'yellow' }));
   body.querySelectorAll('[data-hour]').forEach(i => i.onchange = () => put(nv => { nv.hours[i.dataset.hour] = i.value; }));
   body.querySelectorAll('[data-dp]').forEach(i => i.onchange = () => put(nv => { nv[i.dataset.dp] = i.value; }));
   body.querySelectorAll('[data-prit]').forEach(i => i.onchange = () => put(nv => { nv.pri[+i.dataset.prit] = Object.assign({}, nv.pri[+i.dataset.prit], { t: i.value }); }));
@@ -962,8 +965,8 @@ function viewFiles() {
     '<input id="fFind" type="search" placeholder="Search all documents" value="' + esc(fileFind) + '">' +
     (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
     '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
-    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fSticky">📝 Sticky note</button><button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
-    (!searching && fileFolder && stickiesIn(fileFolder).length ? '<div class="stickies">' + stickiesIn(fileFolder).map(i => stickyCard(i)).join('') + '</div>' : '') +
+    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + '<button type="button" class="ghost small" id="fSticky">📝 Sticky note</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    (!searching && stickiesIn(fileFolder).length ? '<div class="stickies">' + stickiesIn(fileFolder).map(i => stickyCard(i)).join('') + '</div>' : '') +
     (!searching && /\/Medical$/i.test(fileFolder) ? healthPanel(topOf(fileFolder)) + '<h3 class="filesh">' + esc(topOf(fileFolder)) + '’s medical files</h3>' : '') +
     (subs.length ? '<div class="fgrid">' + subs.map(f => {
       const n = data.docs.filter(d => inTree(d, f)).length, kids = childFolders(f).length, c = pastel(topOf(f));
@@ -1042,8 +1045,8 @@ async function pasteButton() {
 }
 // ---------- Sticky notes ----------
 // A sticky is a planner item (kind 'sticky'): notes = the text, list = its folder ('' = general), color = paper color.
-const STICKY_COLORS = { yellow: '#fbefb4', pink: '#f8dcd8', green: '#e0ecd6', blue: '#d8e7ee', lilac: '#e7def0', peach: '#fbe2cb' };
-const stickiesIn = p => data.items.filter(i => i.kind === 'sticky' && (i.list || '') === p).sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.id.localeCompare(b.id));
+const STICKY_COLORS = { yellow: '#fbefb4', lemon: '#fff6cf', peach: '#fbe2cb', coral: '#f6cbbf', pink: '#f8dcd8', rose: '#f2c9d6', lilac: '#e7def0', sky: '#cfe3f6', blue: '#d8e7ee', mint: '#d3efe4', green: '#e0ecd6', sage: '#cfdcc7' };
+const stickiesIn = p => data.items.filter(i => i.kind === 'sticky' && !i.date && (i.list || '') === p).sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.id.localeCompare(b.id));
 function stickyCard(it, showFolder) {
   const lines = (it.notes || '').split('\n'), many = lines.filter(l => l.trim()).length > 1;
   return '<div class="sticky" data-sticky="' + esc(it.id) + '" role="button" title="Tap to edit" style="--sn:' + (STICKY_COLORS[it.color] || STICKY_COLORS.yellow) + '">' +
@@ -1063,14 +1066,14 @@ function wireStickies(root, redraw) {
   root.querySelectorAll('.sticky a').forEach(a => a.onclick = e => e.stopPropagation());
   root.querySelectorAll('[data-copy]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); } catch (err) { toast('Couldn’t copy. Press and hold to select it.'); } });
 }
-function editSticky(id, folder, redraw) {
-  const it = id ? data.items.find(i => i.id === id) : { notes: '', list: folder || '', color: 'yellow' };
+function editSticky(id, folder, redraw, preset) {
+  const it = id ? data.items.find(i => i.id === id) : Object.assign({ notes: '', list: folder || '', color: 'yellow' }, preset || {});
   if (!it) return;
   let color = STICKY_COLORS[it.color] ? it.color : 'yellow';
   openModal('<h2>📝 ' + (id ? 'Sticky note' : 'New sticky note') + '</h2>' +
     '<textarea id="snText" rows="8" placeholder="First line is the title&#10;ID: 123456&#10;email@school.edu">' + esc(it.notes) + '</textarea>' +
     '<p class="lbl">Color</p><div class="colors">' + Object.entries(STICKY_COLORS).map(([k, c]) => '<button type="button" class="cdot' + (k === color ? ' on' : '') + '" data-sc="' + k + '" style="background:' + c + '"></button>').join('') + '</div>' +
-    '<label>Folder<select id="snFolder"><option value="">General (no folder)</option>' + folderOptions(it.list).replace('<option value="">— not in a folder —</option>', '') + '</select></label>' +
+    (it.date ? '<p class="helper">On the daily page for ' + esc(fmtDate(it.date)) + ' (' + (it.location === 'left' ? 'left' : 'right') + ' side).</p><select id="snFolder" hidden><option value="" selected></option></select>' : '<label>Folder<select id="snFolder"><option value="">General (no folder)</option>' + folderOptions(it.list).replace('<option value="">— not in a folder —</option>', '') + '</select></label>') +
     '<div class="row-actions"><button type="button" id="snSave">Save</button><button type="button" class="ghost" id="snCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="snDel">Delete</button>' : '') + '</div>');
   const done = () => { window.save(); closeModal(); (redraw || route)(); };
   document.querySelectorAll('#modalBody [data-sc]').forEach(b => b.onclick = () => { color = b.dataset.sc; document.querySelectorAll('#modalBody [data-sc]').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1084,11 +1087,20 @@ function editSticky(id, folder, redraw) {
   if (id) $('snDel').onclick = () => { if (!confirm('Delete this sticky note?')) return; data.items = data.items.filter(i => i !== it); done(); };
   setTimeout(() => $('snText').focus(), 60);
 }
+// Sticky notes on the daily planner page, on the left or right side. Tap a color to start one in that color.
+function dayStickies(d, side) {
+  const list = data.items.filter(i => i.kind === 'sticky' && i.date === d && (i.location || 'right') === side).sort((a, b) => (a.sort || 0) - (b.sort || 0));
+  const quick = side === 'left' ? ['yellow', 'pink', 'mint', 'sky'] : ['peach', 'lilac', 'green', 'coral'];
+  return '<div class="daysticks">' + (list.length ? '<div class="stickies">' + list.map(i => stickyCard(i)).join('') + '</div>' : '') +
+    '<div class="dsadd"><button type="button" class="ghost small" data-dsadd="' + side + '">📝 Sticky note</button>' +
+    quick.map(c => '<button type="button" class="dsdot" data-dsadd="' + side + '" data-dscolor="' + c + '" style="background:' + STICKY_COLORS[c] + '" aria-label="' + c + ' sticky note"></button>').join('') + '</div></div>';
+}
 // Switch between the folders and the board of notes.
 const notesTabs = on => '<div class="segs ntabs"><a class="seg' + (on === 'files' ? ' on' : '') + '" href="#files">📁 Folders</a><a class="seg' + (on === 'notes' ? ' on' : '') + '" href="#notes">📝 Notes</a></div>';
 let noteFind = '';
 function viewNotes() {
-  const q = noteFind.trim(), all = data.items.filter(i => i.kind === 'sticky' && (!q || matchesName(i.notes + ' ' + i.list, q)));
+  const q = noteFind.trim(), found = data.items.filter(i => i.kind === 'sticky' && (!q || matchesName(i.notes + ' ' + i.list, q)));
+  const all = found.filter(i => !i.date), dayNotes = found.filter(i => i.date).sort((a, b) => b.date.localeCompare(a.date));
   const groups = [''].concat(folderList()).concat([...new Set(all.map(i => i.list || ''))].filter(f => f && !folderList().includes(f)));
   const empty = folderList().filter(f => !f.includes('/') && !stickiesIn(f).length);
   $('view').innerHTML = notesTabs('notes') + '<h1>Notes</h1>' +
@@ -1098,9 +1110,11 @@ function viewNotes() {
     groups.map(g => { const list = all.filter(i => (i.list || '') === g).sort((a, b) => (a.sort || 0) - (b.sort || 0)); if (!list.length && g) return '';
       return '<section class="nsec"><div class="mini-head"><h2>' + (g ? '<a href="#files" data-nf="' + esc(g) + '">📁 ' + esc(g.replace(/\//g, ' › ')) + '</a>' : 'General') + '</h2><button type="button" class="ghost small" data-nadd="' + esc(g) + '">＋</button></div>' +
         (list.length ? '<div class="stickies">' + list.map(i => stickyCard(i)).join('') + '</div>' : '<p class="helper">' + (q ? 'Nothing matches.' : 'No general notes yet.') + '</p>') + '</section>'; }).join('') +
+    (dayNotes.length ? '<section class="nsec"><div class="mini-head"><h2>📅 On the daily planner</h2></div><div class="stickies">' + dayNotes.map(i => '<div><a class="sdate" href="#calendar" data-ndate="' + i.date + '">' + esc(fmtDate(i.date)) + '</a>' + stickyCard(i) + '</div>').join('') + '</div></section>' : '') +
     (!q && empty.length ? '<div class="card pad"><h3>Add a note to a folder</h3><div class="chips">' + empty.map(f => '<button type="button" class="ghost small" data-nadd="' + esc(f) + '">＋ ' + esc(f) + '</button>').join('') + '</div></div>' : '');
   $('nNew').onclick = () => editSticky(null, '', viewNotes);
   $('view').querySelectorAll('[data-nadd]').forEach(b => b.onclick = () => editSticky(null, b.dataset.nadd, viewNotes));
+  $('view').querySelectorAll('[data-ndate]').forEach(a => a.onclick = () => { calDay = a.dataset.ndate; calMode = 'day'; });
   $('view').querySelectorAll('[data-nf]').forEach(a => a.onclick = () => { fileFolder = a.dataset.nf; fileFind = ''; });
   $('nFind').oninput = e => { noteFind = e.target.value; clearTimeout(viewNotes.t); viewNotes.t = setTimeout(() => { viewNotes(); const f = $('nFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   wireStickies($('view'), viewNotes);
