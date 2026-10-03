@@ -79,21 +79,23 @@
     openModal('<h2>Sign up</h2><p><b>' + esc(job.role) + '</b><br>' + esc(ev.name) + '<br>' + esc(fmtDate(ev.date)) + ' · ' + esc(fmtRange(job.start || ev.start, job.end || ev.end)) + '</p>' +
       '<div class="segs" id="fType"><button type="button" class="seg' + (me.type !== 'student' ? ' on' : '') + '" data-t="adult">Parent / adult</button><button type="button" class="seg' + (me.type === 'student' ? ' on' : '') + '" data-t="student">Student</button></div>' +
       '<div class="grid2"><label>First name<input id="fFirst" autocomplete="given-name" value="' + esc(me.first || '') + '"></label><label>Last name<input id="fLast" autocomplete="family-name" value="' + esc(me.last || '') + '"></label></div>' +
-      '<label>Cell phone (for reminder texts)<input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" value="' + esc(me.phone || '') + '" placeholder="(501) 555-0123"></label>' +
+      '<label id="fPhoneLbl"' + (me.type === 'student' ? ' hidden' : '') + '>Cell phone (for reminder texts)<input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" value="' + esc(me.phone || '') + '" placeholder="(501) 555-0123"></label>' +
       '<label>Email (optional)<input id="fEmail" type="email" autocomplete="email" value="' + esc(me.email || '') + '"></label>' +
       '<label id="fParentLbl">' + (me.type === 'student' ? 'Parent\'s name (optional)' : 'Your student\'s name (optional)') + '<input id="fParent" value="' + esc(me.parent || '') + '"></label>' +
       '<div class="row-actions"><button type="button" id="fGo">Sign me up</button><button type="button" class="ghost" id="fCancel">Cancel</button></div>' +
-      '<p class="helper">Your phone number and email are only seen by the volunteer coordinator.</p>');
+      '<p class="helper">Phone numbers and emails are only seen by the volunteer coordinator.</p>');
     let type = me.type === 'student' ? 'student' : 'adult';
     $('fType').querySelectorAll('.seg').forEach(b => b.onclick = () => {
       type = b.dataset.t; $('fType').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b));
       $('fParentLbl').firstChild.textContent = type === 'student' ? 'Parent\'s name (optional)' : 'Your student\'s name (optional)';
+      $('fPhoneLbl').hidden = type === 'student'; // students don't give phone numbers
     });
     $('fCancel').onclick = closeModal;
     $('fGo').onclick = async () => {
       const v = { first: $('fFirst').value.trim(), last: $('fLast').value.trim(), phone: $('fPhone').value.trim(), email: $('fEmail').value.trim(), parent: $('fParent').value.trim(), type };
       if (!v.first || !v.last) { toast('Please enter your first and last name.'); return; }
-      if (v.phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '').length !== 10) { toast('Please enter a 10-digit cell phone number.'); return; }
+      if (type === 'student') v.phone = '';
+      else if (v.phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '').length !== 10) { toast('Please enter a 10-digit cell phone number.'); return; }
       $('fGo').disabled = true; $('fGo').textContent = 'Signing you up…';
       const { data, error } = await sb.rpc('vol_signup', { p_owner: owner, p_job: jobId, p_first: v.first, p_last: v.last, p_phone: v.phone, p_email: v.email, p_type: v.type, p_parent: v.parent });
       if (error || !data || data.error) {

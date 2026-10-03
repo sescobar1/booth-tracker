@@ -130,6 +130,9 @@ function signupUrl(evId) {
   return u.href;
 }
 const typeLabel = t => t === 'student' ? 'Student' : 'Adult';
+// Students don't give phone numbers; only adults are flagged when one is missing.
+const needsPhone = p => p.type !== 'student' && !digits(p.phone);
+const phoneNote = p => digits(p.phone) ? fmtPhone(p.phone) : p.type === 'student' ? '' : 'No phone yet';
 
 // The same person can sign up on both sites; match by phone, then email, then name.
 function findPerson(p) {
@@ -253,7 +256,7 @@ function eventCounts(ev) {
     total: ss.length,
     adults: ppl.filter(p => p.type !== 'student').length,
     students: ppl.filter(p => p.type === 'student').length,
-    noPhone: ppl.filter(p => !digits(p.phone)).length,
+    noPhone: ppl.filter(needsPhone).length,
     inNow: ss.filter(s => s.inAt).length,
     need: jobsFor(ev.id).reduce((t, j) => t + Number(j.need || 0), 0),
     open: jobsFor(ev.id).reduce((t, j) => t + Math.max(0, Number(j.need || 0) - filledOf(j.id)), 0)
@@ -371,13 +374,13 @@ function viewEvent(id) {
   if (!ev) { missingEvent(); return; }
   const c = eventCounts(ev);
   const ss = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
-    .filter(x => evFilter === 'all' || (evFilter === 'student' ? x.p.type === 'student' : evFilter === 'adult' ? x.p.type !== 'student' : !digits(x.p.phone)))
+    .filter(x => evFilter === 'all' || (evFilter === 'student' ? x.p.type === 'student' : evFilter === 'adult' ? x.p.type !== 'student' : needsPhone(x.p)))
     .sort((a, b) => ((a.s.role || 'zzz') + (a.s.start || '') + sortName(a.p)).localeCompare((b.s.role || 'zzz') + (b.s.start || '') + sortName(b.p)));
   const volRow = ({ s, p }) => {
     const d = digits(p.phone);
     return '<div class="vol" data-slot="' + s.id + '">' +
       '<div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
-      '<span class="sub">' + esc([fmtRange(s.start, s.end), d ? fmtPhone(d) : 'No phone yet', s.source].filter(Boolean).join(' · ')) + '</span>' +
+      '<span class="sub">' + esc([fmtRange(s.start, s.end), phoneNote(p), s.source].filter(Boolean).join(' · ')) + '</span>' +
       (s.inAt ? '<span class="sub ok">✓ In ' + clock(s.inAt) + (s.outAt ? ' – out ' + clock(s.outAt) + ' (' + fmtHours(hoursOf(s)) + ' h)' : '') + '</span>' : '') + '</div>' +
       '<div class="acts">' + (d ? '<a class="icon" href="' + esc(smsHref([d], '')) + '" title="Text">💬</a><a class="icon" href="tel:' + e164(d) + '" title="Call">📞</a>' : '<button type="button" class="icon edit" title="Add phone">✏️</button>') + '</div></div>';
   };
@@ -751,7 +754,7 @@ function personStats(p) {
 }
 function viewPeople() {
   const f = (k, label) => '<button type="button" class="seg' + (pplFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + '</button>';
-  const noPhone = data.people.filter(p => !digits(p.phone)).length;
+  const noPhone = data.people.filter(needsPhone).length;
   $('view').innerHTML = '<h1>People</h1><p class="helper">' + data.people.length + ' volunteers. Phone numbers you add here are remembered for every event.</p>' +
     '<input id="pFind" type="search" placeholder="Search names or numbers" value="' + esc(pplSearch) + '">' +
     '<div class="segs">' + f('all', 'All') + f('adult', 'Adults') + f('student', 'Students') + (noPhone ? f('nophone', 'Need phone ' + noPhone) : '') + '</div>' +
@@ -759,13 +762,13 @@ function viewPeople() {
     '<div class="row-actions"><button type="button" id="pNew">+ Add person</button><button type="button" class="ghost" id="pVcf">📇 Save to phone contacts</button><button type="button" class="ghost" id="pHours">⏱ Hours report (CSV)</button></div>';
   function draw() {
     const q = pplSearch.toLowerCase(), qd = pplSearch.replace(/\D/g, '');
-    const list = data.people.filter(p => pplFilter === 'all' || (pplFilter === 'student' ? p.type === 'student' : pplFilter === 'adult' ? p.type !== 'student' : !digits(p.phone)))
+    const list = data.people.filter(p => pplFilter === 'all' || (pplFilter === 'student' ? p.type === 'student' : pplFilter === 'adult' ? p.type !== 'student' : needsPhone(p)))
       .filter(p => !q || fullName(p).toLowerCase().includes(q) || (qd.length >= 3 && digits(p.phone).includes(qd)))
       .sort((a, b) => sortName(a).localeCompare(sortName(b)));
     $('pList').innerHTML = list.map(p => {
       const st = personStats(p);
       return '<div class="vol" data-p="' + p.id + '"><div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
-        '<span class="sub">' + esc(digits(p.phone) ? fmtPhone(p.phone) : 'No phone yet') + (p.parent ? ' · ' + esc(p.parent) : '') + '</span>' +
+        '<span class="sub">' + esc([phoneNote(p), p.parent].filter(Boolean).join(' · ')) + '</span>' +
         '<span class="sub">' + st.yearEvents + ' events this school year' + (st.hours ? ' · ' + fmtHours(st.hours) + ' hours' : '') + '</span></div>' +
         (digits(p.phone) ? '<div class="acts"><a class="icon" href="' + esc(smsHref([p.phone], '')) + '">💬</a><a class="icon" href="tel:' + e164(p.phone) + '">📞</a></div>' : '') + '</div>';
     }).join('') || '<p class="helper">No one yet. Import sign-ups to fill this in.</p>';
