@@ -338,7 +338,7 @@ function toggleDone(id) {
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' ? 'more' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -458,7 +458,7 @@ function viewToday() {
     '<div class="strip">' + strip + '</div>' +
     '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
     (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
-    mealsCard(sel) + giftCard() +
+    mealsCard(sel) + giftCard() + cleanCard() +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
@@ -752,7 +752,7 @@ function viewTasks() {
   const fixed = { open: ['#9b7bff', '#ece5ff'], today: ['#f5b82e', '#fff4c7'], upcoming: ['#4aa8ff', '#dcefff'], someday: ['#4cc4c4', '#d8f5f5'] };
   const chip = (k, l) => '<button type="button" class="chipbtn' + (taskFilter === k ? ' on' : '') + '" data-tf="' + esc(k) + '"' + (fixed[k] ? '' : chipStyle(k)) + '>' + (fixed[k] ? '' : chipDot(k)) + esc(l) + (k !== 'open' && count(k) ? ' <b>' + count(k) + '</b>' : '') + '</button>';
   const row = i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, endDate: i.date, allDay: true, done: i.done, title: i.title, list: [i.list, i.date ? (i.date < t && !i.done ? '⚠ ' : '') + fmtDate(i.date, 'rel') : '', REPEATS[i.repeat] && i.repeat ? '🔁' : ''].filter(Boolean).join(' · '), priority: i.priority });
-  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks" class="on">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates">Templates</a></div>' +
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks" class="on">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates">Templates</a><a href="#tasks/cleaning">🧹 Cleaning</a></div>' +
     '<div class="quickbar"><input id="quick" placeholder="Add a task… “Turn in band forms friday”"><button type="button" id="quickGo">Add</button></div>' +
     '<div class="chips scrollx">' + chip('open', 'All') + chip('today', 'Today') + chip('upcoming', 'Upcoming') + chip('someday', 'Someday') + lists.map(l => chip(l, l)).join('') + '</div>' +
     '<div class="card pad">' + (open.map(row).join('') || '<p class="helper">All clear.</p>') + '</div>' +
@@ -1299,6 +1299,131 @@ async function pasteButton() {
   $('pbClose').onclick = closeModal;
   const box = $('pasteBox'); box.focus();
   box.addEventListener('paste', e => { const files = [...(e.clipboardData ? e.clipboardData.files : [])]; e.preventDefault(); if (!files.length) { toast('That wasn’t a picture or file.'); return; } closeModal(); saveBlobs(files, 'Pasting'); });
+}
+// ---------- Cleaning: weekly and monthly chores, room by room ----------
+// The rooms and chores live in settings.cleaning; each check-off is an item (kind 'clean', list = chore id, date = the day it was done).
+const W = 'week', MO = 'month';
+const BED = (name, extra) => ({ name, icon: '🛏️', chores: [['Change the sheets', W], ['Dust dresser and nightstands', W], ['Vacuum the floor', W], ['Put away clothes and tidy up', W], ['Empty the trash', W],
+  ['Wash pillows and comforter', MO], ['Dust ceiling fan and blinds', MO], ['Clean under the bed', MO], ['Wipe baseboards and doors', MO], ['Clean mirrors and windows', MO]].concat(extra || []) });
+const BATH = name => ({ name, icon: '🛁', chores: [['Clean the toilet', W], ['Clean sink and counter', W], ['Clean the mirror', W], ['Scrub shower and tub', W], ['Fresh towels and bath mat', W], ['Sweep and mop the floor', W], ['Empty the trash', W],
+  ['Scrub the grout', MO], ['Wash shower curtain and liner', MO], ['Dust the exhaust fan', MO], ['Clean out the cabinet and drawers', MO], ['Clean the drains', MO]] });
+const CLEAN_DEFAULT = [
+  { name: 'Kitchen', icon: '🍳', chores: [['Wipe counters and backsplash', W], ['Clean the stovetop', W], ['Clean the microwave', W], ['Scrub the sink', W], ['Wipe appliance fronts and handles', W], ['Toss old food from the fridge', W], ['Sweep and mop the floor', W], ['Take out trash and recycling', W],
+    ['Deep-clean the fridge shelves', MO], ['Clean the oven', MO], ['Wipe cabinet fronts', MO], ['Clean dishwasher filter', MO], ['Wash the trash can', MO], ['Clean out the pantry', MO]] },
+  { name: 'Laundry room', icon: '🧺', chores: [['Wash towels', W], ['Wipe washer and dryer tops', W], ['Sweep the floor', W], ['Empty the lint and trash', W],
+    ['Run a washer cleaning cycle and wipe the seal', MO], ['Clean the dryer vent', MO], ['Organize detergents and supplies', MO]] },
+  { name: 'Living room', icon: '🛋️', chores: [['Dust surfaces and TV stand', W], ['Vacuum floors and rugs', W], ['Fluff pillows and fold blankets', W], ['Wipe remotes and light switches', W],
+    ['Vacuum under couch cushions', MO], ['Dust ceiling fan, vents and blinds', MO], ['Wash throw blankets', MO], ['Clean windows and mirrors', MO], ['Wipe baseboards', MO]] },
+  { name: 'Dining room', icon: '🍽️', chores: [['Wipe table and chairs', W], ['Sweep or vacuum the floor', W], ['Clear the clutter', W],
+    ['Dust the light fixture', MO], ['Wipe baseboards', MO], ['Dust the hutch or buffet', MO]] },
+  { name: 'Entry way', icon: '🚪', chores: [['Sweep or vacuum', W], ['Shake out the door mat', W], ['Put away shoes, coats and bags', W],
+    ['Wipe the front door and handle', MO], ['Clean glass and mirror', MO], ['Dust the light fixture', MO]] },
+  { name: 'Hallway', icon: '🚶', chores: [['Vacuum', W], ['Wipe light switches and door handles', W],
+    ['Dust baseboards and picture frames', MO], ['Wipe scuffs off the walls', MO], ['Change the air filter', MO], ['Test smoke detectors', MO]] },
+  BATH('My bathroom'), BATH('Kids’ bathroom'),
+  BED('Our bedroom (me & Salvador)'), BED('Cece’s room'), BED('Eli’s room'),
+  { name: 'Office', icon: '💻', chores: [['Dust desk and electronics', W], ['Vacuum the floor', W], ['Empty the trash', W], ['Tidy papers', W],
+    ['Wipe keyboard, mouse and screens', MO], ['Dust shelves and blinds', MO], ['File or shred papers', MO], ['Wipe baseboards', MO]] }
+];
+const cslug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function cleanRooms() {
+  if (!S().cleaning) S().cleaning = { rooms: CLEAN_DEFAULT.map(r => ({ id: cslug(r.name), name: r.name, icon: r.icon, chores: r.chores.map(([name, freq]) => ({ id: cslug(r.name) + '--' + cslug(name), name, freq, who: '' })) })) };
+  return S().cleaning.rooms;
+}
+const periodStart = (freq, d) => freq === MO ? d.slice(0, 8) + '01' : weekStart(d);
+const periodEnd = (freq, d) => freq === MO ? addDays(isoDay(new Date(+d.slice(0, 4), +d.slice(5, 7), 1)), -1) : addDays(weekStart(d), 6);
+const cleanLogs = id => data.items.filter(i => i.kind === 'clean' && i.list === id).sort((a, b) => b.date.localeCompare(a.date));
+const doneIn = (c, d) => data.items.find(i => i.kind === 'clean' && i.list === c.id && i.date >= periodStart(c.freq, d) && i.date <= periodEnd(c.freq, d));
+let cleanFreq = W, cleanLeft = false, cleanEdit = false, cleanOpen = null;
+function cleanStats(freq, d) {
+  const all = cleanRooms().flatMap(r => r.chores.filter(c => c.freq === freq));
+  return { total: all.length, done: all.filter(c => doneIn(c, d)).length };
+}
+function cleanCard() {
+  const t = today(), w = cleanStats(W, t);
+  if (!w.total) return '';
+  return '<a class="card pad tip" href="#tasks/cleaning"><b>🧹 Cleaning this week</b><span class="sub">' + w.done + ' of ' + w.total + ' done →</span></a>';
+}
+function viewCleaning() {
+  const t = today(), rooms = cleanRooms(), st = cleanStats(cleanFreq, t), pct = st.total ? Math.round(st.done / st.total * 100) : 0;
+  if (!cleanOpen) cleanOpen = new Set();
+  // The last 8 weeks (or 6 months) for the tracking chart.
+  const hist = [];
+  for (let k = cleanFreq === W ? 7 : 5; k >= 0; k--) {
+    const d = cleanFreq === W ? addDays(weekStart(t), -7 * k) : isoDay(new Date(+t.slice(0, 4), +t.slice(5, 7) - 1 - k, 1));
+    const s2 = cleanStats(cleanFreq, d); hist.push([d, s2.total ? Math.round(s2.done / s2.total * 100) : 0]);
+  }
+  let streak = 0; for (let k = hist.length - 2; k >= 0 && hist[k][1] >= 75; k--) streak++;
+  const label = cleanFreq === W ? 'this week' : 'this month';
+  const range = cleanFreq === W ? fmtDate(weekStart(t)) + ' – ' + fmtDate(addDays(weekStart(t), 6)) : new Date(t + 'T12:00').toLocaleDateString([], { month: 'long', year: 'numeric' });
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates">Templates</a><a href="#tasks/cleaning" class="on">🧹 Cleaning</a></div>' +
+    '<div class="segs"><button type="button" class="seg' + (cleanFreq === W ? ' on' : '') + '" data-cf="week">Weekly</button><button type="button" class="seg' + (cleanFreq === MO ? ' on' : '') + '" data-cf="month">Monthly</button></div>' +
+    '<div class="card pad cleansum"><div class="cring" style="--p:' + pct + '"><b>' + pct + '%</b></div><div><h2>' + st.done + ' of ' + st.total + ' done ' + label + '</h2><p class="sub">' + esc(range) + (streak ? ' · 🔥 ' + streak + (cleanFreq === W ? ' week' : ' month') + (streak === 1 ? '' : 's') + ' in a row at 75%+' : '') + '</p>' +
+      '<div class="chist">' + hist.map(([d, p], k) => '<div class="cbar' + (k === hist.length - 1 ? ' now' : '') + '" title="' + esc(fmtDate(d)) + ': ' + p + '%"><i style="height:' + Math.max(4, p) + '%"></i><small>' + (cleanFreq === W ? (+d.slice(5, 7)) + '/' + (+d.slice(8)) : new Date(d + 'T12:00').toLocaleDateString([], { month: 'short' })) + '</small></div>').join('') + '</div></div></div>' +
+    '<div class="row-actions tight"><label class="check"><input type="checkbox" id="cLeft"' + (cleanLeft ? ' checked' : '') + '> Only show what’s left</label><button type="button" class="ghost small" id="cEdit">' + (cleanEdit ? '✓ Done editing' : '✎ Edit rooms & chores') + '</button></div>' +
+    rooms.map(r => {
+      const list = r.chores.filter(c => c.freq === cleanFreq), done = list.filter(c => doneIn(c, t)).length;
+      const show = list.filter(c => !cleanLeft || !doneIn(c, t));
+      if (!cleanEdit && !list.length) return '';
+      if (!cleanEdit && cleanLeft && !show.length) return '';
+      const open = cleanEdit || cleanOpen.has(r.id) || cleanLeft;
+      return '<div class="card pad croom' + (list.length && done === list.length ? ' all' : '') + '"><button type="button" class="chead" data-croom="' + esc(r.id) + '"><span>' + esc(r.icon || '🧹') + ' <b>' + esc(r.name) + '</b></span><span class="cprog"><i style="width:' + (list.length ? Math.round(done / list.length * 100) : 0) + '%"></i></span><span class="sub">' + (list.length && done === list.length ? '✨ all done' : done + '/' + list.length) + ' ' + (open ? '▾' : '▸') + '</span></button>' +
+        (open ? '<div class="cchores">' + (cleanEdit ? list : show).map(c => {
+          const d = doneIn(c, t), last = cleanLogs(c.id)[0];
+          const over = !d && last && last.date < periodStart(c.freq, addDays(periodStart(c.freq, t), -1)) ? ' over' : '';
+          return '<div class="crow' + (d ? ' on' : '') + over + '">' + (cleanEdit ? '<button type="button" class="ghost small" data-cdel="' + esc(c.id) + '" aria-label="Delete">✕</button>' : '<button type="button" class="tick' + (d ? ' on' : '') + '" data-cdone="' + esc(c.id) + '">' + (d ? '✓' : '') + '</button>') +
+            '<div class="cname"><span>' + esc(c.name) + (c.who ? ' <em class="cwho">' + esc(c.who) + '</em>' : '') + '</span><small>' + (d ? '✓ ' + fmtDate(d.date, 'rel') : last ? 'Last done ' + fmtDate(last.date, 'rel') : 'Not done yet') + (over ? ' · overdue' : '') + '</small></div>' +
+            (cleanEdit ? '<button type="button" class="ghost small" data-cedit="' + esc(c.id) + '">Edit</button>' : '<button type="button" class="ghost small chist-btn" data-chist="' + esc(c.id) + '" aria-label="History">⋯</button>') + '</div>';
+        }).join('') + (cleanEdit ? '<div class="row-actions tight"><button type="button" class="small" data-cadd="' + esc(r.id) + '">＋ Add a chore</button><button type="button" class="ghost small" data-cren="' + esc(r.id) + '">Rename room</button><button type="button" class="danger small" data-crdel="' + esc(r.id) + '">Delete room</button></div>' : '') + '</div>' : '') + '</div>';
+    }).join('') +
+    (cleanEdit ? '<div class="row-actions"><button type="button" id="cRoom">＋ Add a room</button><button type="button" class="ghost" id="cReset">Reset to the starter list</button></div>' : '') +
+    '<p class="helper">Check things off as you go. Weekly chores reset every Sunday, monthly ones on the 1st. Tap ⋯ to see when a chore was done before.</p>';
+  const v = $('view');
+  v.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { cleanFreq = b.dataset.cf; viewCleaning(); });
+  $('cLeft').onchange = e => { cleanLeft = e.target.checked; viewCleaning(); };
+  $('cEdit').onclick = () => { cleanEdit = !cleanEdit; viewCleaning(); };
+  v.querySelectorAll('[data-croom]').forEach(b => b.onclick = () => { const id = b.dataset.croom; cleanOpen.has(id) ? cleanOpen.delete(id) : cleanOpen.add(id); viewCleaning(); });
+  const chore = id => { for (const r of rooms) { const c = r.chores.find(x => x.id === id); if (c) return [r, c]; } return []; };
+  v.querySelectorAll('[data-cdone]').forEach(b => b.onclick = () => {
+    const [r, c] = chore(b.dataset.cdone), d = doneIn(c, t);
+    if (d) data.items = data.items.filter(i => i !== d);
+    else { data.items.push(newItem({ kind: 'clean', list: c.id, date: t, title: c.name, location: r.id, done: true })); celebrate(b); }
+    window.save(); const y = window.scrollY; viewCleaning(); window.scrollTo(0, y);
+    const s3 = cleanStats(cleanFreq, t); if (!d && s3.done === s3.total) toast('🎉 Everything is clean ' + label + '!');
+  });
+  v.querySelectorAll('[data-chist]').forEach(b => b.onclick = () => cleanHistory(...chore(b.dataset.chist)));
+  v.querySelectorAll('[data-cedit]').forEach(b => b.onclick = () => editChore(...chore(b.dataset.cedit)));
+  v.querySelectorAll('[data-cadd]').forEach(b => b.onclick = () => editChore(rooms.find(r => r.id === b.dataset.cadd), null));
+  v.querySelectorAll('[data-cdel]').forEach(b => b.onclick = () => { const [r, c] = chore(b.dataset.cdel); if (!confirm('Delete “' + c.name + '” from ' + r.name + '?')) return; r.chores = r.chores.filter(x => x !== c); window.save(); viewCleaning(); });
+  v.querySelectorAll('[data-cren]').forEach(b => b.onclick = () => { const r = rooms.find(x => x.id === b.dataset.cren), n = (prompt('Room name:', r.name) || '').trim(); if (n) { r.name = n; window.save(); viewCleaning(); } });
+  v.querySelectorAll('[data-crdel]').forEach(b => b.onclick = () => { const r = rooms.find(x => x.id === b.dataset.crdel); if (!confirm('Delete the room “' + r.name + '” and its chores?')) return; S().cleaning.rooms = rooms.filter(x => x !== r); window.save(); viewCleaning(); });
+  if ($('cRoom')) $('cRoom').onclick = () => { const n = (prompt('New room name (like “Garage” or “Back porch”):') || '').trim(); if (!n) return; rooms.push({ id: cslug(n) + '-' + uid().slice(0, 4), name: n, icon: '🏠', chores: [] }); window.save(); viewCleaning(); };
+  if ($('cReset')) $('cReset').onclick = () => { if (!confirm('Go back to the starter rooms and chores? Your check-off history stays.')) return; delete S().cleaning; cleanRooms(); window.save(); viewCleaning(); };
+}
+function editChore(r, c) {
+  const it = c || { name: '', freq: cleanFreq, who: '' };
+  openModal('<h2>' + (c ? 'Edit chore' : 'New chore in ' + esc(r.name)) + '</h2><label>Chore<input id="chN" value="' + esc(it.name) + '" placeholder="Clean the ceiling fan"></label>' +
+    '<label>How often<select id="chF"><option value="week"' + (it.freq === W ? ' selected' : '') + '>Every week</option><option value="month"' + (it.freq === MO ? ' selected' : '') + '>Every month</option></select></label>' +
+    '<label>Whose job (optional)<input id="chW" list="chWho" value="' + esc(it.who || '') + '" placeholder="Me, Cece, Eli, Salvador"></label><datalist id="chWho"><option value="Me"><option value="Cece"><option value="Eli"><option value="Salvador"></datalist>' +
+    '<div class="row-actions"><button type="button" id="chS">Save</button><button type="button" class="ghost" id="chC">Cancel</button></div>');
+  $('chC').onclick = closeModal;
+  $('chS').onclick = () => {
+    const name = $('chN').value.trim(); if (!name) { toast('Type the chore.'); return; }
+    if (c) Object.assign(c, { name, freq: $('chF').value, who: $('chW').value.trim() });
+    else r.chores.push({ id: r.id + '--' + cslug(name) + '-' + uid().slice(0, 4), name, freq: $('chF').value, who: $('chW').value.trim() });
+    window.save(); closeModal(); viewCleaning();
+  };
+  setTimeout(() => $('chN').focus(), 60);
+}
+function cleanHistory(r, c) {
+  const logs = cleanLogs(c.id);
+  openModal('<h2>' + esc(c.name) + '</h2><p class="helper">' + esc(r.name) + ' · ' + (c.freq === W ? 'every week' : 'every month') + '</p>' +
+    (logs.length ? '<div class="clog">' + logs.slice(0, 30).map(l => '<div class="mini-row"><span>✓ ' + esc(fmtDate(l.date)) + '</span><button type="button" class="ghost small" data-clx="' + l.id + '">Remove</button></div>').join('') + '</div>' : '<p class="helper">Not checked off yet.</p>') +
+    '<label>Did it another day?<input type="date" id="clDay" max="' + today() + '"></label>' +
+    '<div class="row-actions"><button type="button" class="ghost" id="clClose">Close</button></div>');
+  $('clClose').onclick = closeModal;
+  $('clDay').onchange = e => { if (!e.target.value) return; data.items.push(newItem({ kind: 'clean', list: c.id, date: e.target.value, title: c.name, location: r.id, done: true })); window.save(); cleanHistory(r, c); viewCleaning(); };
+  $('modalBody').querySelectorAll('[data-clx]').forEach(b => b.onclick = () => { data.items = data.items.filter(i => i.id !== b.dataset.clx); window.save(); cleanHistory(r, c); viewCleaning(); });
 }
 // ---------- Gifts: birthdays and anniversaries ----------
 // Found on every calendar by name ("Mia’s birthday", "Birthday - Dad", "Our anniversary"). Each person gets a folder under Gift ideas,
@@ -1860,7 +1985,7 @@ function editRoutine(id) {
 }
 function viewRoutines() {
   const rs = routines(), hr = new Date().getHours();
-  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines" class="on">Routines</a><a href="#tasks/templates">Templates</a></div>' +
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines" class="on">Routines</a><a href="#tasks/templates">Templates</a><a href="#tasks/cleaning">🧹 Cleaning</a></div>' +
     '<div class="row-actions"><button type="button" id="roNew">＋ New routine</button>' + (rs.length ? '' : '<button type="button" class="ghost" id="roStart">Add 5 starter routines</button>') + '</div>' +
     (rs.length ? '<div class="card pad">' + rs.map(r => '<div class="rrow"><div class="who" data-routine="' + r.id + '"><b>' + esc(r.title) + (routineFor(r, hr) ? ' <span class="chip">now</span>' : '') + '</b><span class="sub">' + esc(r.list) + ' · ' + routineSteps(r).length + ' steps</span></div>' + routineChip(r) + '</div>').join('') + '</div>' :
       '<div class="card pad"><p class="helper">Checklists you use over and over — they reset every day. Start with the five below and change them to fit your family.</p></div>');
@@ -1926,7 +2051,7 @@ function useTemplate(preDate) {
 }
 function viewTemplates() {
   const ts = templates();
-  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates" class="on">Templates</a></div>' +
+  $('view').innerHTML = '<h1>Tasks</h1><div class="toptabs"><a href="#tasks">To-do</a><a href="#tasks/routines">Routines</a><a href="#tasks/templates" class="on">Templates</a><a href="#tasks/cleaning">🧹 Cleaning</a></div>' +
     '<p class="helper">One tap sets up a whole day: events, tasks, dinner and checklists.</p>' +
     '<div class="row-actions"><button type="button" id="tpUse">⚡ Use a template</button><button type="button" class="ghost" id="tpNew">＋ New template</button>' + (ts.length ? '' : '<button type="button" class="ghost" id="tpStart">Add Football Friday, Booth day & Band trip</button>') + '</div>' +
     ts.map(t => '<div class="card pad tplcard"><div class="mini-head"><h2>' + esc(t.title) + '</h2><button type="button" class="ghost small" data-tpe="' + t.id + '">Edit</button></div>' + tplSteps(t).map(s => '<div class="sub">' + esc(stepText(s)) + '</div>').join('') + '</div>').join('');
