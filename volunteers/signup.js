@@ -35,7 +35,8 @@
       .replace(/\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, m => '<a href="tel:+1' + m.replace(/\D/g, '') + '">' + m + '</a>') + '</p>').join('');
   }
 
-  let board = null;
+  // ?tab=food or ?tab=donate opens that tab, so a link can go straight to food requests.
+  let board = null, tab = ['food', 'donate'].includes(params.get('tab')) ? params.get('tab') : 'help';
 
   async function load() {
     if (!owner) { $('view').innerHTML = '<p>This sign-up link is missing a part. Ask the volunteer coordinator for a new link.</p>'; return; }
@@ -67,18 +68,33 @@
     $('view').innerHTML =
       '<h1>' + esc(st.title || 'Volunteer Sign-Up') + '</h1>' +
       (st.intro ? '<div class="intro">' + linkify(st.intro) + '</div>' : '') +
-      (st.cashtag ? '<div class="donate-bar"><span>💵 Can\'t volunteer? You can still help with a money donation.</span><button type="button" data-donate="">Donate with Cash App</button></div>' : '') +
       '<div id="mine"></div>' +
       (only && !one ? '<p class="chip warn">That event is full, past, or no longer listed. Here is everything that\'s open.</p>' : '') +
-      (events.length ? events.map(ev => '<section class="card pad pub-event"><div class="pub-when">' + esc(fmtDate(ev.date)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + '</div>' +
+      pubTabs(st, events) +
+      (tab === 'donate' ? donateTab(st) : (events = events.filter(ev => ev.jobs.some(j => tab === 'food' ? j.kind === 'food' : j.kind !== 'food')), '')) +
+      (tab === 'donate' ? '' : events.length ? events.map(ev => '<section class="card pad pub-event"><div class="pub-when">' + esc(fmtDate(ev.date)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + '</div>' +
         '<h2>' + esc(ev.name) + '</h2>' + (ev.location ? '<p class="sub">📍 ' + esc(ev.location) + '</p>' : '') + (ev.notes ? '<p class="helper">' + esc(ev.notes) + '</p>' : '') +
-        (ev.jobs.some(j => j.kind !== 'food') ? ev.jobs.filter(j => j.kind !== 'food').map(j => jobCard(ev, j)).join('') : ev.jobs.length ? '' : '<p class="helper">Jobs coming soon.</p>') +
-        (ev.jobs.some(j => j.kind === 'food') ? '<h3 class="food-sub">🍪 Food &amp; supplies we need</h3>' + ev.jobs.filter(j => j.kind === 'food').map(j => jobCard(ev, j)).join('') : '') +
+        (tab === 'food' ? '<h3 class="food-sub">🍪 Food &amp; supplies we need</h3>' + ev.jobs.filter(j => j.kind === 'food').map(j => jobCard(ev, j)).join('')
+          : ev.jobs.filter(j => j.kind !== 'food').map(j => jobCard(ev, j)).join('')) +
         (st.cashtag ? '<div class="row-actions"><button type="button" class="ghost small" data-donate="' + esc(ev.id) + '">💵 Donate money for this event</button></div>' : '') + '</section>').join('')
-        : '<div class="empty"><h2>No sign-ups open right now</h2><p>Check back soon. Thank you for supporting the band!</p></div>') +
+        : '<div class="empty"><h2>' + (tab === 'food' ? 'No food requests right now' : 'No sign-ups open right now') + '</h2><p>Check back soon. Thank you for supporting the band!</p></div>') +
       (one && board.events.length > 1 ? '<p><a href="?' + (params.get('o') ? 'o=' + encodeURIComponent(owner) : '') + '">See all upcoming events ›</a></p>' : '');
     $('view').querySelectorAll('[data-job]').forEach(b => b.onclick = () => form(b.dataset.ev, b.dataset.job));
+    $('view').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); drawMine(); });
     $('view').querySelectorAll('[data-donate]').forEach(b => b.onclick = () => donate(b.dataset.donate));
+  }
+
+  // Tabs across the top: volunteer shifts, food requests, and money donations.
+  function pubTabs(st, events) {
+    const n = k => events.filter(ev => ev.jobs.some(j => (k === 'food' ? j.kind === 'food' : j.kind !== 'food') && j.names.length < j.need)).length;
+    const t = (k, label) => '<button type="button" class="ptab' + (tab === k ? ' on' : '') + '" data-tab="' + k + '">' + label + '</button>';
+    return '<div class="ptabs">' + t('help', '🙋 Volunteer') + (events.some(ev => ev.jobs.some(j => j.kind === 'food')) ? t('food', '🍪 Food requests' + (n('food') ? ' (' + n('food') + ')' : '')) : '') + (st.cashtag ? t('donate', '💵 Donate') : '') + '</div>';
+  }
+  function donateTab(st) {
+    return '<section class="card pad"><h2>💵 Donate to the band</h2><p>Send any amount to <b>' + esc(st.cashtag) + '</b> on Cash App.</p>' +
+      '<div class="must"><b>Important:</b> type what your donation is for in the Cash App note (“For”).' + (st.donateInfo ? '<p>' + esc(st.donateInfo) + '</p>' : '') + '</div>' +
+      '<div class="row-actions"><button type="button" data-donate="">Donate with Cash App</button></div>' +
+      '<p class="helper">To give for a specific game or event, use the “Donate money for this event” button on that event.</p></section>';
   }
 
   // "Fri, Oct 9, 4:00 PM – 5:00 PM – concession stand back door"
