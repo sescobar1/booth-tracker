@@ -350,10 +350,12 @@ $('fab').onclick = () => {
   openModal('<h2>Add</h2><div class="addgrid"><button type="button" data-addk="event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Event<span>on the calendar</span></button><button type="button" data-addk="task"><svg viewBox="0 0 24 24"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12v6.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H15"/></svg>Task<span>to-do</span></button>' +
     '<button type="button" data-addk="note"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Note<span>for today</span></button><button type="button" data-addk="file"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Document<span>upload a file</span></button></div>' +
     '<button type="button" class="ghost tplmenu" id="addTpl">⚡ Use a template — set up a whole day</button>' +
+    '<button type="button" class="ghost tplmenu" id="addImp">📷 Add events from a screenshot, photo or document</button>' +
     '<label>Or just type it<input id="qAdd" placeholder="Dentist friday 3pm · Call Mrs. Abbott tomorrow"></label><p class="helper">Dates and times are picked up from what you type.</p>' +
     '<div class="row-actions"><button type="button" id="qGo">Add</button><button type="button" class="ghost" id="addX">Cancel</button></div>');
   $('addX').onclick = closeModal;
   $('addTpl').onclick = () => { closeModal(); useTemplate(calDay || today()); };
+  $('addImp').onclick = () => importEvents();
   document.querySelectorAll('[data-addk]').forEach(b => b.onclick = () => {
     const k = b.dataset.addk; closeModal();
     if (k === 'note') { location.hash = 'today'; setTimeout(() => $('dayNote') && $('dayNote').focus(), 100); }
@@ -775,11 +777,12 @@ function editItem(id, preset) {
   if (!it) return;
   let kind = it.kind;
   const files = id ? data.docs.filter(d => d.itemId === id) : [];
-  const freq = id ? [] : frequentEvents();
+  const freq = id ? [] : quickList();
   openModal('<h2>' + (id ? 'Edit' : 'New') + '</h2>' +
     (id ? '' : '<div class="qadd ev-only"><p class="lbl">Quick add <span class="sub">— one tap, on the date below</span></p>' +
       '<div class="qtrack">' + trackers().map(t => '<button type="button" class="qt" data-qt="' + esc(t.id) + '" title="' + esc(t.name) + '"><span>' + t.icon + '</span><small>' + esc(t.name) + '</small></button>').join('') + '</div>' +
-      (freq.length ? '<div class="qfreq">' + freq.map((f, n) => '<button type="button" class="qf" data-qf="' + n + '"><i class="dot" style="background:' + esc(f.color || COLORS[0]) + '"></i>' + esc(f.title) + '<small>' + (f.start ? fmtTime(f.start) : 'all day') + '</small></button>').join('') + '</div>' : '') +
+      (freq.length ? '<div class="qfreq">' + freq.map((f, n) => '<button type="button" class="qf' + (f.saved ? ' star' : '') + '" data-qf="' + n + '">' + (f.saved ? '⭐' : '<i class="dot" style="background:' + esc(f.color || COLORS[0]) + '"></i>') + esc(f.title) + '<small>' + (f.start ? fmtTime(f.start) : 'all day') + '</small></button>').join('') + '</div>' : '') +
+      '<div class="row-actions tight"><button type="button" class="ghost small" id="qEdit">⭐ My quick adds</button><button type="button" class="ghost small" id="qImport">📷 From a screenshot or document</button></div>' +
       '<p class="lbl or">or fill it in</p></div>') +
     '<div class="segs" id="iKind"><button type="button" class="seg' + (kind === 'event' ? ' on' : '') + '" data-k="event">Event</button><button type="button" class="seg' + (kind === 'task' ? ' on' : '') + '" data-k="task">Task</button></div>' +
     '<label>What<input id="iTitle" value="' + esc(it.title) + '" placeholder="' + (kind === 'task' ? 'Turn in band forms' : 'Dentist') + '" autocapitalize="sentences"></label>' +
@@ -794,6 +797,7 @@ function editItem(id, preset) {
     '<label class="task-only check"><input type="checkbox" id="iPri"' + (it.priority >= 2 ? ' checked' : '') + '> ❗ Important</label>' +
     '<p class="lbl ev-only">Color</p><div class="colors ev-only">' + COLORS.map(c => '<button type="button" class="cdot' + ((it.color || COLORS[0]) === c ? ' on' : '') + '" data-color="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
     '<label>Notes<textarea id="iNotes" rows="3">' + esc(it.notes) + '</textarea></label>' +
+    (id ? '' : '<label class="check ev-only"><input type="checkbox" id="iStar"> ⭐ Save as a quick add (one tap next time)</label>') +
     '<p class="lbl">Documents</p><div id="iFiles">' + files.map(d => '<div class="mini-row"><a href="#" data-open="' + d.id + '">📎 ' + esc(d.title || d.fileName) + '</a></div>').join('') + '</div>' +
     '<label class="button ghost small file">Attach a file<input type="file" id="iFile" hidden></label><p class="helper" id="iFileNote"></p>' +
     (id && kind === 'event' ? '<p class="lbl">Put it on another calendar</p><div class="row-actions"><a class="button ghost small" target="_blank" rel="noopener" href="' + esc(googleLink(it)) + '">Google</a><a class="button ghost small" target="_blank" rel="noopener" href="' + esc(outlookLink(it)) + '">Outlook</a><button type="button" class="ghost small" id="iIcs">iPhone / .ics</button></div>' : '') +
@@ -828,6 +832,7 @@ function editItem(id, preset) {
     const allDay = kind === 'task' || $('iAllDay').checked || !$('iStart').value;
     Object.assign(it, { kind, title, date: $('iDate').value || null, endDate: kind === 'event' && $('iEndDate').value > $('iDate').value ? $('iEndDate').value : null, allDay, start: allDay ? '' : $('iStart').value, end: allDay ? '' : $('iEnd').value, repeat: $('iRepeat').value, list: $('iList').value, location: $('iLoc').value.trim(), priority: $('iPri').checked ? 2 : 0, notes: $('iNotes').value, color: kind === 'event' ? color : '', driver: kind === 'event' ? $('iDriver').value.trim() : '', remind: $('iRemind').value === '' ? null : Number($('iRemind').value) });
     if (!id) { it.id = uid(); it.done = false; it.sort = 0; data.items.push(it); }
+    if (!id && kind === 'event' && $('iStar') && $('iStar').checked) saveQuick({ title, allDay, start: it.start, end: it.end, location: it.location, color: it.color, driver: it.driver, list: it.list, remind: it.remind });
     if (pending) {
       $('iSave').disabled = true; $('iSave').textContent = 'Uploading…';
       try { await addDoc(pending, { itemId: it.id, folder: it.list || '' }); } catch (e) { toast('Saved, but the file didn\'t upload: ' + e.message); }
@@ -848,11 +853,251 @@ function editItem(id, preset) {
   });
   document.querySelectorAll('#modalBody [data-qf]').forEach(b => b.onclick = () => {
     const f = freq[+b.dataset.qf], d = qDate();
-    data.items.push(newItem({ kind: 'event', title: f.title, date: d, allDay: !f.start, start: f.start, end: f.end, location: f.location, color: f.color || COLORS[0], driver: f.driver || '' }));
+    data.items.push(newItem({ kind: 'event', title: f.title, date: d, allDay: !f.start, start: f.start || '', end: f.end || '', location: f.location || '', color: f.color || COLORS[0], driver: f.driver || '', list: f.list || '', remind: f.remind == null || f.remind === '' ? null : Number(f.remind) }));
     window.save(); closeModal(); route();
-    toast('✓ ' + f.title + ' added for ' + fmtDate(d, 'rel') + (f.start ? ' at ' + fmtTime(f.start) : ''));
+    toast('✓ ' + f.title + ' added for ' + fmtDate(d, 'rel') + (f.start ? ' at ' + fmtTime(f.start) : '') + (f.remind != null && f.remind !== '' && +f.remind !== -1 ? ' · reminder set' : ''));
   });
+  if ($('qEdit')) $('qEdit').onclick = () => manageQuick();
+  if ($('qImport')) $('qImport').onclick = () => importEvents();
   if (!id) setTimeout(() => $('iTitle').focus(), 60);
+}
+// ---------- Saved quick adds ("Work in Conway": all day, reminder the evening before) ----------
+const QUICK_DEFAULTS = [{ title: 'Work in Conway', allDay: true, start: '', end: '', location: 'Conway, AR', color: '#7f9fa3', driver: '', list: 'Work', remind: 360 }];
+const quickEvents = () => { if (!S().quickEvents) S().quickEvents = QUICK_DEFAULTS.map(q => Object.assign({}, q)); return S().quickEvents; };
+// Saved ones first (starred), then the ones learned from the calendars that aren't saved yet.
+function quickList() {
+  const saved = quickEvents().map(q => Object.assign({ saved: true }, q)), have = new Set(saved.map(q => q.title.toLowerCase()));
+  return saved.concat(frequentEvents().filter(f => !have.has(f.title.toLowerCase())).slice(0, Math.max(3, 10 - saved.length)));
+}
+function saveQuick(q) {
+  const list = quickEvents().filter(x => x.title.toLowerCase() !== q.title.toLowerCase());
+  S().quickEvents = list.concat([{ title: q.title, allDay: !!q.allDay || !q.start, start: q.allDay ? '' : q.start || '', end: q.allDay ? '' : q.end || '', location: q.location || '', color: q.color || COLORS[0], driver: q.driver || '', list: q.list || '', remind: q.remind == null || q.remind === '' ? null : Number(q.remind) }]);
+  window.save();
+}
+const REMIND_ALLDAY = [['', '9 AM that day'], ['-420', '7 AM that day'], ['-720', 'Noon that day'], ['360', '6 PM the day before'], ['-1', 'No alert']];
+const REMIND_TIMED = [['', '30 min before'], ['0', 'At start time'], ['10', '10 min before'], ['60', '1 hour before'], ['120', '2 hours before'], ['1440', '1 day before'], ['-1', 'No alert']];
+const remindLabel = q => { const v = q.remind == null ? '' : String(q.remind); const r = (q.allDay || !q.start ? REMIND_ALLDAY : REMIND_TIMED).find(x => x[0] === v); return r ? r[1] : ''; };
+function manageQuick() {
+  const qs = quickEvents(), sug = frequentEvents().filter(f => !qs.some(q => q.title.toLowerCase() === f.title.toLowerCase()));
+  openModal('<h2>⭐ My quick adds</h2><p class="helper">These show at the top of <b>＋ Event</b>. One tap adds it on the date you picked, with the time, place and reminder already set.</p>' +
+    (qs.length ? qs.map((q, n) => '<div class="mini-row qrow"><span><i class="dot" style="background:' + esc(q.color || COLORS[0]) + '"></i><b>' + esc(q.title) + '</b><span class="sub">' + esc([q.allDay || !q.start ? 'All day' : fmtTime(q.start) + (q.end ? '–' + fmtTime(q.end) : ''), q.location, remindLabel(q) ? '🔔 ' + remindLabel(q) : ''].filter(Boolean).join(' · ')) + '</span></span><span><button type="button" class="ghost small" data-qe="' + n + '">Edit</button><button type="button" class="ghost small" data-qx="' + n + '" aria-label="Remove">✕</button></span></div>').join('') : '<p class="helper">None yet.</p>') +
+    '<div class="row-actions"><button type="button" id="qNew">＋ New quick add</button><button type="button" class="ghost" id="qDone">Done</button></div>' +
+    (sug.length ? '<p class="lbl">Suggested from your calendars</p><div class="qfreq">' + sug.map((f, n) => '<button type="button" class="qf" data-qs="' + n + '">＋ ' + esc(f.title) + '<small>' + (f.start ? fmtTime(f.start) : 'all day') + '</small></button>').join('') + '</div>' : ''));
+  $('qDone').onclick = closeModal;
+  $('qNew').onclick = () => editQuick(null);
+  $('modalBody').querySelectorAll('[data-qe]').forEach(b => b.onclick = () => editQuick(+b.dataset.qe));
+  $('modalBody').querySelectorAll('[data-qx]').forEach(b => b.onclick = () => { const q = qs[+b.dataset.qx]; if (!confirm('Remove “' + q.title + '” from quick adds?')) return; S().quickEvents = qs.filter(x => x !== q); window.save(); manageQuick(); });
+  $('modalBody').querySelectorAll('[data-qs]').forEach(b => b.onclick = () => { saveQuick(sug[+b.dataset.qs]); toast('⭐ Saved'); manageQuick(); });
+}
+function editQuick(n) {
+  const q = n == null ? { title: '', allDay: true, start: '', end: '', location: '', color: COLORS[0], driver: '', list: '', remind: null } : quickEvents()[n];
+  let color = q.color || COLORS[0];
+  openModal('<h2>' + (n == null ? 'New quick add' : 'Edit quick add') + '</h2>' +
+    '<label>What<input id="qT" value="' + esc(q.title) + '" placeholder="Work in Conway"></label>' +
+    '<label class="check"><input type="checkbox" id="qAll"' + (q.allDay || !q.start ? ' checked' : '') + '> All day</label>' +
+    '<div class="grid2" id="qTimes"><label>Starts<input id="qS" type="time" value="' + esc(q.start || '') + '"></label><label>Ends<input id="qE" type="time" value="' + esc(q.end || '') + '"></label></div>' +
+    '<label>Where<input id="qL" value="' + esc(q.location || '') + '"></label>' +
+    '<div class="grid2"><label>Remind me<select id="qR"></select></label><label>List<select id="qLi"><option value="">—</option>' + S().lists.map(l => '<option' + (l === q.list ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label></div>' +
+    '<label>Who’s driving<input id="qD" value="' + esc(q.driver || '') + '"></label>' +
+    '<p class="lbl">Color</p><div class="colors">' + COLORS.map(c => '<button type="button" class="cdot' + (c === color ? ' on' : '') + '" data-qc="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
+    '<div class="row-actions"><button type="button" id="qSave">Save</button><button type="button" class="ghost" id="qBack">Back</button></div>');
+  const opts = () => { const all = $('qAll').checked, cur = $('qR').value || (q.remind == null ? '' : String(q.remind)); $('qTimes').hidden = all; $('qR').innerHTML = (all ? REMIND_ALLDAY : REMIND_TIMED).map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + l + '</option>').join(''); };
+  $('qAll').onchange = opts; opts();
+  $('modalBody').querySelectorAll('[data-qc]').forEach(b => b.onclick = () => { color = b.dataset.qc; $('modalBody').querySelectorAll('[data-qc]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('qBack').onclick = manageQuick;
+  $('qSave').onclick = () => {
+    const title = $('qT').value.trim(); if (!title) { toast('Type what it is.'); return; }
+    const all = $('qAll').checked || !$('qS').value;
+    const nq = { title, allDay: all, start: all ? '' : $('qS').value, end: all ? '' : $('qE').value, location: $('qL').value.trim(), color, driver: $('qD').value.trim(), list: $('qLi').value, remind: $('qR').value === '' ? null : Number($('qR').value) };
+    const list = quickEvents().slice(); if (n == null) list.push(nq); else list[n] = nq;
+    S().quickEvents = list; window.save(); manageQuick();
+  };
+}
+
+// ---------- Add events from a screenshot, photo, PDF, Word file or pasted text ----------
+// Everything is read on the device: pictures with Tesseract, PDFs with PDF.js, Word files with Mammoth.
+const CDN = 'https://cdn.jsdelivr.net/npm/';
+const loadScript = (src, test) => new Promise((ok, no) => { if (test()) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('Couldn’t load the reader (needs internet the first time).')); document.head.appendChild(s); });
+async function ocrImage(img, onProgress) {
+  await loadScript(CDN + 'tesseract.js@5/dist/tesseract.min.js', () => window.Tesseract);
+  const worker = await Tesseract.createWorker('eng', 1, { workerPath: CDN + 'tesseract.js@5/dist/worker.min.js', corePath: CDN + 'tesseract.js-core@5', langPath: CDN + '@tesseract.js-data/eng/4.0.0_best_int',
+    logger: m => { if (m.status === 'recognizing text' && onProgress) onProgress(Math.round(m.progress * 100)); } });
+  try { return (await worker.recognize(img)).data.text; } finally { worker.terminate(); }
+}
+async function pdfText(file, onProgress) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => window.pdfjsLib);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise, out = [];
+  for (let n = 1; n <= Math.min(pdf.numPages, 10); n++) {
+    const page = await pdf.getPage(n), tc = await page.getTextContent(), rows = {};
+    tc.items.forEach(i => { const y = Math.round(i.transform[5] / 3); (rows[y] = rows[y] || []).push(i); });
+    let text = Object.keys(rows).sort((a, b) => b - a).map(y => rows[y].sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str).join(' ')).join('\n');
+    if (text.replace(/\s/g, '').length < 20) { // A scanned page: draw it and read the picture.
+      const vp = page.getViewport({ scale: 2 }), c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      text = await ocrImage(c, onProgress);
+    }
+    out.push(text);
+  }
+  return out.join('\n');
+}
+async function docxText(file) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', () => window.mammoth);
+  return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
+}
+// Pull every dated thing out of the text: "Oct 9 @ 7:30 pm", "10/12 No school", "Fri 9", "November 23-27 Thanksgiving break"…
+function findEvents(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.replace(/[|•·*]+/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const out = [], base = today(), M = '(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
+  let ctxMonth = 0, ctxYear = 0, cur = null, after = 0;
+  const iso = (mo, d, y) => {
+    if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return '';
+    let yr = y ? (String(y).length === 2 ? 2000 + +y : +y) : ctxYear || +base.slice(0, 4);
+    let s = yr + '-' + pad(mo) + '-' + pad(d);
+    if (!y && !ctxYear && s < addDays(base, -45)) s = (yr + 1) + s.slice(4);
+    return s;
+  };
+  const tm = (h, m, ap, apEnd) => { h = +h; ap = (ap || apEnd || '').toLowerCase(); if (ap.startsWith('p') && h < 12) h += 12; if (ap.startsWith('a') && h === 12) h = 0; if (!ap && h >= 1 && h <= 6) h += 12; return h > 23 ? '' : pad(h) + ':' + (m || '00'); };
+  const timesIn = l => {
+    let m = l.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|a|p)?\s*(?:-|–|—|to|until)\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|a|p)\b/i);
+    if (m) return { start: tm(m[1], m[2], m[3], m[6]), end: tm(m[4], m[5], m[6]), raw: m[0] };
+    m = l.match(/(\d{1,2})(?::(\d{2}))\s*(a\.?m\.?|p\.?m\.?)?|(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)\b/i);
+    if (m && !/^\d{1,2}\/\d/.test(m[0])) return m[4] ? { start: tm(m[4], '00', m[5]), end: '', raw: m[0] } : { start: tm(m[1], m[2], m[3]), end: '', raw: m[0] };
+    if (/\bnoon\b/i.test(l)) return { start: '12:00', end: '', raw: 'noon' };
+    return null;
+  };
+  const dateIn = l => {
+    let m = l.match(new RegExp('\\b' + M + '\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*(?:-|–|—|to|through|thru)\\s*(?:' + M + '\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?', 'i'));
+    if (m) { const mo = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1, mo2 = m[3] ? MONTHS.indexOf(m[3].slice(0, 3).toLowerCase()) + 1 : mo; return { date: iso(mo, +m[2], m[5]), endDate: iso(mo2, +m[4], m[5]), raw: m[0] }; }
+    m = l.match(new RegExp('\\b' + M + '\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s+(\\d{4}))?', 'i'));
+    if (m) return { date: iso(MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1, +m[2], m[3]), raw: m[0] };
+    m = l.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:-|–|to)\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (m) return { date: iso(+m[1], +m[2], m[3]), endDate: iso(+m[4], +m[5], m[6] || m[3]), raw: m[0] };
+    m = l.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (m) return { date: iso(+m[1], +m[2], m[3]), raw: m[0] };
+    m = l.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+    if (m) return { date: iso(+m[2], +m[3], m[1]), raw: m[0] };
+    // "Fri9" / "Friday 9" on a month list, using the month heading above it.
+    m = l.match(/^(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)[a-z]*\.?,?\s*(\d{1,2})(?:st|nd|rd|th)?\b/i);
+    if (m && ctxMonth) return { date: iso(ctxMonth, +m[2]), raw: m[0] };
+    return null;
+  };
+  const junk = l => /^(learn more|read more|more info|details|view|register|tickets?|free|rsvp|share|add to calendar|google calendar|ical|export)\b|https?:\/\/|www\./i.test(l) || l.length < 3;
+  const placeish = l => l.length <= 60 && /\b(auditorium|room|hall|center|centre|gym|church|school|campus|field|stadium|park|plaza|library|arena|theat(er|re)|cafeteria|office|building|union|wpn|rhs|rms|st\.?|street|ave|avenue|rd|road|blvd|hwy|dr\.?)\b|^\d+\s+\w+/i.test(l);
+  const clean = t => t.replace(/^[\s,;:@\-–—]+|[\s,;:@\-–—]+$/g, '').replace(/\s+/g, ' ').trim();
+  lines.forEach(l => {
+    const head = l.match(new RegExp('^' + M + '\\s+(\\d{4})$', 'i'));
+    if (head) { ctxMonth = MONTHS.indexOf(head[1].slice(0, 3).toLowerCase()) + 1; ctxYear = +head[2]; return; }
+    const d = dateIn(l);
+    if (d && d.date) {
+      const t = timesIn(l.replace(d.raw, ' '));
+      let rest = clean(l.replace(d.raw, ' ').replace(t ? t.raw : '', ' ').replace(/\b(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(day|nesday|rsday|urday|sday)?\b\.?,?/gi, ' ').replace(/^@|\s@\s/g, ' '));
+      // The same day repeated under a title ("October 9 @ 7:30 pm") fills in the open event instead of starting a new one.
+      if (cur && cur.date === d.date && !rest && !cur.start) { if (t) { cur.start = t.start; cur.end = t.end; } after = 0; return; }
+      cur = { date: d.date, endDate: d.endDate && d.endDate > d.date ? d.endDate : '', start: t ? t.start : '', end: t ? t.end : '', title: junk(rest) ? '' : rest, location: '' };
+      if (cur.date.slice(5, 7) && !d.raw.match(/^(sun|mon|tue|wed|thu|fri|sat)/i)) ctxMonth = +cur.date.slice(5, 7);
+      out.push(cur); after = 0; return;
+    }
+    if (!cur || ++after > 4 || junk(l)) return;
+    const t = timesIn(l);
+    if (t && !cur.start && clean(l.replace(t.raw, '')).length < 4) { cur.start = t.start; cur.end = t.end; return; }
+    if (!cur.title) { cur.title = clean(t ? l.replace(t.raw, ' ') : l); if (t && !cur.start) { cur.start = t.start; cur.end = t.end; } return; }
+    if (!cur.location && placeish(l)) { cur.location = clean(l); return; }
+  });
+  const seen = new Set();
+  return out.filter(e => e.title && e.title.length <= 120).map(e => Object.assign(e, { title: e.title.charAt(0).toUpperCase() + e.title.slice(1) }))
+    .filter(e => { const k = e.date + '|' + e.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+let impFound = [];
+function importEvents(prefill) {
+  $('modalBody').classList.add('wide');
+  openModal('<h2>📷 Add events from a picture or document</h2>' +
+    '<p class="helper">Screenshots, photos of a flyer or school calendar, PDFs, Word files or calendar (.ics) files. It finds every date, and you check them before anything is added.</p>' +
+    '<div id="impDrop" class="pastebox impdrop"><div class="row-actions"><label class="button file">Choose a picture or file<input type="file" id="impFile" hidden accept="image/*,application/pdf,.pdf,.docx,.txt,.csv,.ics,text/plain,text/calendar"></label><label class="button ghost file">Take a photo<input type="file" id="impCam" accept="image/*" capture="environment" hidden></label><button type="button" class="ghost" id="impPasteBtn">📋 Paste</button></div><p class="sub">or drop it here · on a computer press Ctrl+V</p></div>' +
+    '<label>Or paste or type the text<textarea id="impText" rows="4" placeholder="Oct 9 Faculty Recital 7:30 pm&#10;10/12 No school">' + esc(prefill || '') + '</textarea></label><div class="row-actions tight"><button type="button" class="ghost small" id="impRead">Find the dates</button></div>' +
+    '<p class="helper" id="impStatus"></p><div id="impList"></div>');
+  const go = async (file) => {
+    const st = $('impStatus'); st.textContent = 'Reading ' + (file.name || 'the picture') + '…';
+    try {
+      const name = (file.name || '').toLowerCase(), type = file.type || '';
+      let text = '';
+      if (type.startsWith('image/')) text = await ocrImage(await shrinkPic(file), p => { if ($('impStatus')) $('impStatus').textContent = 'Reading the picture… ' + p + '%'; });
+      else if (type === 'application/pdf' || name.endsWith('.pdf')) text = await pdfText(file, p => { if ($('impStatus')) $('impStatus').textContent = 'Reading the scanned page… ' + p + '%'; });
+      else if (name.endsWith('.docx')) text = await docxText(file);
+      else if (name.endsWith('.ics') || type === 'text/calendar') { const evs = parseIcs(await file.text()); showFound(evs.filter(e => !e.recurrenceId).map(e => ({ date: e.start.slice(0, 10), endDate: e.allDay && e.end ? addDays(e.end.slice(0, 10), -1) : '', start: e.allDay ? '' : e.start.slice(11, 16), end: e.allDay || !e.end ? '' : e.end.slice(11, 16), title: e.title || '(no title)', location: e.location || '' })).filter(e => e.date >= addDays(today(), -30))); return; }
+      else text = await file.text();
+      if (!$('impText')) return;
+      $('impText').value = text.trim();
+      showFound(findEvents(text));
+    } catch (e) { if ($('impStatus')) $('impStatus').textContent = '⚠ ' + e.message; }
+  };
+  impPaste.go = go;
+  $('impFile').onchange = e => { const f = e.target.files[0]; if (f) go(f); };
+  $('impCam').onchange = e => { const f = e.target.files[0]; if (f) go(f); };
+  $('impRead').onclick = () => showFound(findEvents($('impText').value));
+  $('impPasteBtn').onclick = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.read) {
+        for (const it of await navigator.clipboard.read()) { const type = it.types.find(t => t.startsWith('image/')); if (type) { go(new File([await it.getType(type)], 'screenshot', { type })); return; } }
+      }
+      const t = navigator.clipboard && navigator.clipboard.readText ? await navigator.clipboard.readText() : '';
+      if (t) { $('impText').value = t; showFound(findEvents(t)); } else toast('Nothing to paste. Copy a screenshot or some text first.');
+    } catch (e) { toast('Press and hold in the text box, then tap Paste.'); $('impText').focus(); }
+  };
+  const drop = $('impDrop');
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) go(f); });
+  if (prefill) showFound(findEvents(prefill));
+}
+function impPaste(e) {
+  const files = [...(e.clipboardData ? e.clipboardData.files : [])];
+  if (files.length && impPaste.go) { e.preventDefault(); impPaste.go(files[0]); }
+}
+// Pictures are shrunk first so reading is quick on a phone.
+function shrinkPic(file) {
+  return new Promise(ok => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); ok(c); };
+    img.onerror = () => { URL.revokeObjectURL(url); ok(file); };
+    img.src = url;
+  });
+}
+function showFound(list) {
+  impFound = list;
+  const st = $('impStatus'); if (!st) return;
+  st.textContent = list.length ? 'Found ' + list.length + (list.length === 1 ? ' event' : ' events') + '. Check them, fix anything that’s off, then add.' : 'No dates found. Try a clearer picture, or type the events in the box above (one per line, like “Oct 9 Recital 7:30pm”).';
+  let color = COLORS[2];
+  $('impList').innerHTML = list.length ? '<div class="implist">' + list.map((e, n) => '<div class="impev" data-n="' + n + '"><label class="check"><input type="checkbox" data-ion="' + n + '" checked></label>' +
+      '<div class="impf"><input data-if="title" value="' + esc(e.title) + '" aria-label="What">' +
+      '<div class="impg"><input type="date" data-if="date" value="' + esc(e.date) + '"><input type="time" data-if="start" value="' + esc(e.start) + '"><input type="time" data-if="end" value="' + esc(e.end) + '"></div>' +
+      '<input data-if="location" value="' + esc(e.location) + '" placeholder="Where (optional)"></div></div>').join('') + '</div>' +
+    '<div class="grid2"><label>List<select id="impLi"><option value="">—</option>' + S().lists.map(l => '<option>' + esc(l) + '</option>').join('') + '</select></label>' +
+    '<label>Reminders<select id="impRem"><option value="">Usual (30 min before / 9 AM)</option><option value="1440">1 day before</option><option value="360">6 PM the day before (all-day ones)</option><option value="-1">No alerts</option></select></label></div>' +
+    '<p class="lbl">Color</p><div class="colors">' + COLORS.map(c => '<button type="button" class="cdot' + (c === color ? ' on' : '') + '" data-ic="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
+    '<div class="row-actions"><button type="button" id="impAdd">Add ' + list.length + ' to my calendar</button><button type="button" class="ghost" id="impCancel">Cancel</button></div>' : '<div class="row-actions"><button type="button" class="ghost" id="impCancel">Close</button></div>';
+  $('impCancel').onclick = closeModal;
+  if (!list.length) return;
+  const count = () => { const n = $('impList').querySelectorAll('[data-ion]:checked').length; $('impAdd').textContent = 'Add ' + n + ' to my calendar'; $('impAdd').disabled = !n; };
+  $('impList').querySelectorAll('[data-ion]').forEach(c => c.onchange = () => { c.closest('.impev').classList.toggle('off', !c.checked); count(); });
+  $('impList').querySelectorAll('[data-ic]').forEach(b => b.onclick = () => { color = b.dataset.ic; $('impList').querySelectorAll('[data-ic]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('impAdd').onclick = () => {
+    const rem = $('impRem').value, list2 = $('impList').querySelectorAll('.impev'); let added = 0, first = '';
+    list2.forEach(row => {
+      if (!row.querySelector('[data-ion]').checked) return;
+      const f = k => row.querySelector('[data-if="' + k + '"]').value.trim(), e = impFound[+row.dataset.n];
+      const title = f('title'), date = f('date'); if (!title || !date) return;
+      const start = f('start'), end = f('end'), allDay = !start;
+      let remind = rem === '' ? null : Number(rem); if (remind === 360 && !allDay) remind = 1440;
+      data.items.push(newItem({ kind: 'event', title, date, endDate: e.endDate && e.endDate > date ? e.endDate : null, allDay, start, end: start ? end || pad(Math.min(23, +start.slice(0, 2) + 1)) + start.slice(2) : '', location: f('location'), list: $('impLi').value, color, remind }));
+      added++; if (!first || date < first) first = date;
+    });
+    if (!added) { toast('Pick at least one, with a name and date.'); return; }
+    window.save(); closeModal();
+    if (first) { calDay = first; calMonth = first.slice(0, 7); }
+    location.hash = 'calendar'; route();
+    toast('✓ Added ' + added + (added === 1 ? ' event' : ' events') + ' to your calendar');
+  };
 }
 // The events that come up most often (in the planner and the connected calendars), with their usual time and place.
 function frequentEvents() {
@@ -860,7 +1105,7 @@ function frequentEvents() {
   const add = (e, color) => {
     const title = (e.title || '').trim(); if (!title || title === '(busy)' || title.length > 40) return;
     const k = title.toLowerCase(), g = groups[k] = groups[k] || { n: 0, list: [] };
-    g.n++; g.list.push({ title, date: e.date, start: e.allDay ? '' : e.start || '', end: e.allDay ? '' : e.end || '', location: e.location || '', color: color || e.color || '', driver: e.driver || '' });
+    g.n++; g.list.push({ title, date: e.date, start: e.allDay ? '' : e.start || '', end: e.allDay ? '' : e.end || '', location: e.location || '', color: color || e.color || '', driver: e.driver || '', remind: e.remind == null ? null : e.remind, list: e.list || '' });
   };
   data.items.filter(i => i.kind === 'event' && i.date >= from && i.date <= to).forEach(i => add(i));
   (S().calendars || []).filter(c => c.on !== false).forEach(c => { const got = cache.get('cal_' + c.id); if (got) calendarOccurrences(got.events, from, to).forEach(e => add(e, c.color)); });
@@ -1018,6 +1263,7 @@ async function saveBlobs(files, how) {
   if (location.hash.startsWith('#files')) viewFiles();
 }
 document.addEventListener('paste', e => {
+  if ($('impDrop') && !$('modal').hidden) { impPaste(e); return; }
   if (!location.hash.startsWith('#files') || !$('modal').hidden) return;
   const files = [...(e.clipboardData ? e.clipboardData.files : [])];
   if (!files.length) return;
