@@ -602,6 +602,7 @@ function viewEvent(id) {
     '<button type="button" id="addVol">➕<span>Add volunteer</span></button>' +
     '<a class="button" href="#share/' + id + '">📣<span>Share link</span></a>' +
     '<button type="button" id="findMore">🙋<span>Find more volunteers' + (c.open ? ' (' + c.open + ' open)' : '') + '</span></button>' +
+    (c.students ? '<button type="button" id="emailDirs">📧<span>Email band directors</span></button>' : '') +
     (ev.date <= today() ? '<a class="button" href="#checkin/' + id + '">❌<span>Mark no-shows' + (c.noShows ? ' (' + c.noShows + ')' : '') + '</span></a>' : '') + '</div>' +
     '<div class="segs">' + f('all', 'All ' + c.total) + f('adult', 'Adults ' + c.adults) + f('student', 'Students ' + c.students) + (c.noPhone ? f('nophone', 'Need phone ' + c.noPhone) : '') + '</div>' +
     (rows || '<p class="helper">No jobs or volunteers yet. Tap Edit event to add the jobs you need filled.</p>') +
@@ -611,6 +612,7 @@ function viewEvent(id) {
   $('textAll').onclick = () => openTexter(id);
   $('addVol').onclick = () => addVolunteer(id);
   $('findMore').onclick = () => findMore(id);
+  if ($('emailDirs')) $('emailDirs').onclick = () => emailDirectors(id);
   document.querySelectorAll('.seg').forEach(b => b.onclick = () => { evFilter = b.dataset.f; viewEvent(id); });
   document.querySelectorAll('.vol').forEach(el => el.addEventListener('click', e => { if (e.target.closest('a.icon')) return; editSlot(el.dataset.slot); }));
 }
@@ -636,10 +638,12 @@ function personFields(p) {
     '<div class="grid2"><label>Cell phone<input id="pPhone" type="tel" inputmode="tel" value="' + esc(fmtPhone(p.phone)) + '"></label>' +
     '<label>Adult or student<select id="pType"><option value="adult"' + (p.type !== 'student' ? ' selected' : '') + '>Adult</option><option value="student"' + (p.type === 'student' ? ' selected' : '') + '>Student</option></select></label></div>' +
     '<div class="grid2"><label>Email<input id="pEmail" type="email" value="' + esc(p.email) + '"></label><label>Parent / student name<input id="pParent" value="' + esc(p.parent) + '" placeholder="optional"></label></div>' +
-    '<label>Student\'s grade (moves up each school year)' + gradeSelect('pGrade', p.classYear) + '</label>';
+    '<div class="grid2"><label>Student\'s grade (moves up each school year)' + gradeSelect('pGrade', p.classYear) + '</label>' +
+    '<label>School (students)<select id="pSchool">' + ['', 'RHS', 'RJHS', 'RMS'].map(x => '<option value="' + x + '"' + ((p.school || '') === x ? ' selected' : '') + '>' + (x || '—') + '</option>').join('') + '</select></label></div>';
 }
 function readPerson(p) {
   Object.assign(p, { first: $('pFirst').value.trim(), last: $('pLast').value.trim(), phone: digits($('pPhone').value) || $('pPhone').value.trim(), type: $('pType').value, email: $('pEmail').value.trim(), parent: $('pParent').value.trim() });
+  p.school = $('pSchool').value;
   const g = $('pGrade').value;
   if (g !== 'grad') p.classYear = classOf(g);
 }
@@ -814,6 +818,57 @@ function findMore(evId, tplId) {
     textOneByOne(ev, q.map(p => ({ s: null, p })), $('fmText').value, markAsked);
   };
   draw(true);
+}
+
+// ---------- Band director emails ----------
+// The students on a game, grouped by school, in an email to that school's band director
+// (RHS → Sarah Abbott, RJHS → Scott Johnson; set under More → Band directors).
+const DIRECTOR_TEXT = 'Hi {director},\n\nHere are the {school} band students signed up to volunteer in the concession stand for {event} on {date}{time}:\n\n{students}\n\nCould you please remind them to arrive on time, wear closed-toe shoes, tie back long hair, and sign in on the volunteer sign-in sheet when they get there? Thank you so much for your help!\n\nShaana Escobar\nVolunteer Coordinator, Russellville Band Boosters\nvolunteerRSDbandboosters@gmail.com · 479-747-9972';
+if (!data.settings.directors) data.settings.directors = { RHS: { name: 'Sarah Abbott', email: 'Sarah.abbott@rsdk12.net' }, RJHS: { name: 'Scott Johnson', email: 'Scott.johnson@rsdk12.net' }, RMS: { name: '', email: '' } };
+if (!data.settings.directorText) data.settings.directorText = DIRECTOR_TEXT;
+function directorGroups(evId) {
+  const groups = {};
+  slotsFor(evId).filter(s => !foodSlot(s)).forEach(s => {
+    const p = person(s.personId); if (!p || p.type !== 'student') return;
+    const k = p.school || '?';
+    (groups[k] = groups[k] || { school: k, slots: [] }).slots.push({ s, p });
+  });
+  return Object.values(groups).sort((a, b) => a.school.localeCompare(b.school));
+}
+function fillDirector(text, ev, g, dir) {
+  const starts = g.slots.map(x => x.s.start || (jobOf(x.s) || {}).start || ev.start).filter(Boolean).sort();
+  const names = g.slots.map(x => fullName(x.p)).sort((a, b) => a.split(' ').pop().localeCompare(b.split(' ').pop()));
+  return String(text || DIRECTOR_TEXT)
+    .replace(/\{director\}/g, (dir.name || 'there').split(' ')[0])
+    .replace(/\{school\}/g, g.school).replace(/\{event\}/g, ev.name).replace(/\{date\}/g, fmtDate(ev.date, true))
+    .replace(/\{time\}/g, starts[0] ? ' at ' + fmtTime(starts[0]) : '').replace(/\{count\}/g, String(names.length))
+    .replace(/\{students\}/g, names.map((n, i) => (i + 1) + '. ' + n).join('\n'))
+    .replace(/\{from\}/g, data.settings.from || 'Shaana Escobar');
+}
+function emailDirectors(evId) {
+  const ev = event(evId); if (!ev) return;
+  const dirs = data.settings.directors || {};
+  const groups = directorGroups(evId);
+  const subject = 'Student concession stand volunteers – ' + ev.name + ' (' + fmtDate(ev.date) + ')';
+  openModal('<h2>📧 Email band directors</h2><p class="helper">' + esc(ev.name) + ' · ' + esc(fmtDate(ev.date)) + '. One email per school with the students signed up. It opens in your email app, ready to send.</p>' +
+    groups.map((g, i) => {
+      const dir = dirs[g.school] || {};
+      const body = fillDirector(data.settings.directorText, ev, g, dir);
+      return '<div class="card pad"><h3>' + esc(g.school === '?' ? 'School not set' : g.school) + ' · ' + g.slots.length + ' students</h3>' +
+        (g.school === '?' ? '<p class="helper">Set these students\' school in People (tap a name → School): ' + esc(g.slots.map(x => fullName(x.p)).join(', ')) + '</p>'
+          : !dir.email ? '<p class="helper">No band director email for ' + esc(g.school) + ' yet. Add one under More → Band directors.</p>'
+          : '<p>To: <b>' + esc(dir.name) + '</b> &lt;' + esc(dir.email) + '&gt;</p><textarea id="dirBody' + i + '" rows="8">' + esc(body) + '</textarea>' +
+            '<div class="row-actions"><a class="button" data-mail="' + i + '" href="mailto:' + encodeURIComponent(dir.email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body) + '">📧 Open email to ' + esc(dir.name.split(' ')[0]) + '</a><button type="button" class="ghost" data-copy="' + i + '">Copy</button></div>') + '</div>';
+    }).join('') +
+    '<p class="helper">These also go out automatically around 9 AM the day before, once reminder emails are on (More → Google sign-in sheet & reminder emails).</p>' +
+    '<div class="row-actions"><button type="button" class="ghost" id="dirClose">Close</button></div>');
+  // Keep the email link in step with any edits to the message.
+  document.querySelectorAll('[data-mail]').forEach(a => a.onclick = () => {
+    const i = a.dataset.mail, dir = dirs[groups[i].school];
+    a.href = 'mailto:' + encodeURIComponent(dir.email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent($('dirBody' + i).value);
+  });
+  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copy($('dirBody' + b.dataset.copy).value, 'Email'));
+  $('dirClose').onclick = closeModal;
 }
 
 // ---------- Check-in ----------
@@ -1017,7 +1072,8 @@ function section(body, label, people, withPhone, blanks, widths) {
 
 // ---------- Reminder emails ----------
 // Run turnOnDailyReminders once (pick it in the menu at the top, then click Run). Every morning after
-// that, everyone who volunteers or drops off food tomorrow and gave an email gets a reminder from your Gmail.
+// that, everyone who volunteers or drops off food tomorrow and gave an email gets a reminder from your Gmail,
+// and each band director gets the list of their students working tomorrow.
 function turnOnDailyReminders() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendReminders').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('sendReminders').timeBased().everyDays(1).atHour(9).create();
@@ -1041,7 +1097,23 @@ function sendReminders() {
     const subject = food ? 'Reminder: please bring ' + x.role + ' tomorrow' : 'Reminder: you are volunteering at ' + x.event + ' tomorrow';
     MailApp.sendEmail(x.email, subject, fill(food ? s.foodText : s.emailText, x, s), { name: s.org || 'Band Boosters' });
   });
+  // Band directors: the students from their school working tomorrow.
+  (data.directors || []).forEach(d => {
+    MailApp.sendEmail(d.email, 'Student concession stand volunteers – ' + d.event + ' tomorrow', fillDirector(s.directorText, d, s), { name: s.org || 'Band Boosters' });
+    sent['dir|' + d.email + '|' + d.event] = true;
+  });
   Logger.log('Sent ' + Object.keys(sent).length + ' reminder emails.');
+}
+
+function fillDirector(text, d, s) {
+  const time = t => { if (!t) return ''; let [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + String(m).padStart(2, '0') + ' ' + ap; };
+  const day = x => { const [y, m, dd] = String(x).split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); };
+  const first = (d.name || 'there').split(' ')[0];
+  return String(text || 'Hi {director},\\n\\nHere are the {school} students volunteering tomorrow at {event}:\\n\\n{students}\\n\\nThank you!')
+    .replace(/\{director\}/g, first).replace(/\{school\}/g, d.school).replace(/\{event\}/g, d.event)
+    .replace(/\{date\}/g, day(d.date)).replace(/\{time\}/g, d.start ? ' at ' + time(d.start) : '')
+    .replace(/\{count\}/g, String(d.students.length)).replace(/\{students\}/g, d.students.map((n, i) => (i + 1) + '. ' + n).join('\\n'))
+    .replace(/\{from\}/g, s.from || 'Shaana Escobar');
 }
 
 function fill(text, x, s) {
@@ -1105,7 +1177,7 @@ function viewPeople() {
       const st = personStats(p), ns = noShowsOf(p);
       return '<div class="vol" data-p="' + p.id + '"><div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
         (ns ? ' <span class="chip warn">❌ ' + ns + ' no-show' + (ns > 1 ? 's' : '') + '</span>' : '') +
-        '<span class="sub">' + esc([phoneNote(p), p.parent ? (p.type === 'student' ? 'Parent: ' : 'Student: ') + p.parent : '', gradeOf(p.classYear)].filter(Boolean).join(' · ')) + '</span>' +
+        '<span class="sub">' + esc([phoneNote(p), p.parent ? (p.type === 'student' ? 'Parent: ' : 'Student: ') + p.parent : '', p.type === 'student' ? p.school : '', gradeOf(p.classYear)].filter(Boolean).join(' · ')) + '</span>' +
         '<span class="sub">' + st.yearEvents + ' events this school year' + (st.hours ? ' · ' + fmtHours(st.hours) + ' hours' : '') + '</span></div>' +
         (digits(p.phone) ? '<div class="acts"><a class="icon" href="' + esc(smsHref([p.phone], '')) + '">💬</a><a class="icon" href="tel:' + e164(p.phone) + '">📞</a></div>' : '') + '</div>';
     }).join('') || '<p class="helper">No one yet. Import sign-ups to fill this in.</p>';
@@ -1610,6 +1682,9 @@ function viewMore() {
     '<label>Your $cashtag<input id="mCash" value="' + esc(data.settings.cashtag || '') + '" placeholder="$RussellvilleBandBoosters" autocapitalize="off"></label>' +
     '<label>What donors should write in the Cash App note<textarea id="mDonate" rows="3">' + esc(data.settings.donateInfo || '') + '</textarea></label>' +
     '<p class="helper">The sign-up page shows a 💵 Donate button for the season and for each game, with a ready-to-copy note like “Band Boosters – RHS vs. Lake Hamilton 10/9 – your name”.</p></div>' +
+    '<div class="card pad"><h2>🎓 Band directors</h2><p class="helper">Student volunteers\' reminders go to their school\'s band director.</p>' +
+    ['RHS', 'RJHS', 'RMS'].map(k => { const d = (data.settings.directors || {})[k] || {}; return '<div class="grid2"><label>' + k + ' director<input data-dname="' + k + '" value="' + esc(d.name || '') + '" placeholder="Name"></label><label>Email<input type="email" data-demail="' + k + '" value="' + esc(d.email || '') + '"></label></div>'; }).join('') +
+    '<label>Email to directors. Fill-ins: {director} {school} {event} {date} {time} {students} {count}<textarea id="mDirText" rows="7">' + esc(data.settings.directorText || '') + '</textarea></label></div>' +
     docCard() +
     '<div class="card pad"><h2>✉️ Reminder email wording</h2><p class="helper">Sent the day before, once reminder emails are turned on above. Fill-ins: {first} {event} {date} {arrive} {when} {day} {job} {item} {dropoff} {stillneed} {from}</p>' +
     '<label>Volunteers working a shift<textarea id="mEmail" rows="5">' + esc(data.settings.emailText || '') + '</textarea></label>' +
@@ -1641,6 +1716,12 @@ function viewMore() {
   };
   $('mDonate').onchange = e => { data.settings.donateInfo = e.target.value.trim(); window.save(); };
   $('mEmail').onchange = e => { data.settings.emailText = e.target.value.trim(); window.save(); };
+  $('mDirText').onchange = e => { data.settings.directorText = e.target.value.trim(); window.save(); };
+  document.querySelectorAll('[data-dname],[data-demail]').forEach(inp => inp.onchange = () => {
+    const k = inp.dataset.dname || inp.dataset.demail, dirs = data.settings.directors = Object.assign({}, data.settings.directors);
+    dirs[k] = Object.assign({}, dirs[k], inp.dataset.dname ? { name: inp.value.trim() } : { email: inp.value.trim() });
+    window.save();
+  });
   $('mFoodEmail').onchange = e => { data.settings.foodText = e.target.value.trim(); window.save(); };
   $('mDrive').onchange = e => { data.settings.drive = e.target.value.trim(); window.save(); };
   $('mBand').onchange = e => { data.settings.band = e.target.value.trim(); window.save(); };

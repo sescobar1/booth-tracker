@@ -134,6 +134,7 @@
       '<label>Email' + (food ? '' : ' (optional)') + '<input id="fEmail" type="email" autocomplete="email" value="' + esc(me.email || '') + '"></label>' +
       (board.settings && board.settings.studentInfo ? '<details class="stuinfo" id="fStuInfo"' + (me.type === 'student' ? '' : ' hidden') + ' open><summary>📋 Please read: student volunteer information</summary>' + linkify(board.settings.studentInfo) + '</details>' : '') +
       '<label id="fParentLbl">' + (me.type === 'student' ? 'Parent\'s name (optional)' : 'Your student\'s name' + (food ? '' : ' (optional)')) + '<input id="fParent" value="' + esc(me.parent || '') + '"></label>' +
+      '<label id="fSchoolLbl"' + (me.type === 'student' ? '' : ' hidden') + '>Your school<select id="fSchool"><option value="">Pick your school</option>' + ['RHS', 'RJHS', 'RMS'].map(x => '<option' + (me.school === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label>' +
       '<label id="fGradeLbl">' + (me.type === 'student' ? 'Your grade' : 'Your student\'s grade') + (food ? '' : ' (optional)') + '<select id="fGrade">' + gradeOpts(me.grade) + '</select></label>' +
       '<div class="row-actions"><button type="button" id="fGo">Sign me up</button><button type="button" class="ghost" id="fCancel">Cancel</button></div>' +
       '<p class="helper">Phone numbers and emails are only seen by the volunteer coordinator.</p>');
@@ -144,17 +145,19 @@
       $('fPhoneLbl').hidden = type === 'student'; // students don't give phone numbers
       $('fGradeLbl').firstChild.textContent = (type === 'student' ? 'Your grade' : 'Your student\'s grade') + ' (optional)';
       if ($('fStuInfo')) $('fStuInfo').hidden = type !== 'student';
+      $('fSchoolLbl').hidden = type !== 'student';
     });
     $('fCancel').onclick = closeModal;
     $('fGo').onclick = async () => {
-      const v = { first: $('fFirst').value.trim(), last: $('fLast').value.trim(), phone: $('fPhone').value.trim(), email: $('fEmail').value.trim(), parent: $('fParent').value.trim(), grade: $('fGrade').value, type };
+      const v = { first: $('fFirst').value.trim(), last: $('fLast').value.trim(), phone: $('fPhone').value.trim(), email: $('fEmail').value.trim(), parent: $('fParent').value.trim(), grade: $('fGrade').value, school: $('fSchool').value, type };
+      if (type === 'student' && !v.school) { toast('Please pick your school.'); return; }
       if (!v.first || !v.last) { toast('Please enter your first and last name.'); return; }
       if (food && !/\S+@\S+\.\S+/.test(v.email)) { toast('Please enter your email.'); return; }
       if (food && (!v.parent || !v.grade)) { toast('Please enter your student\'s name and grade.'); return; }
       if (type === 'student') v.phone = '';
       else if (v.phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '').length !== 10) { toast('Please enter a 10-digit cell phone number.'); return; }
       $('fGo').disabled = true; $('fGo').textContent = 'Signing you up…';
-      const { data, error } = await sb.rpc('vol_signup', { p_owner: owner, p_job: jobId, p_first: v.first, p_last: v.last, p_phone: v.phone, p_email: v.email, p_type: v.type, p_parent: v.parent, p_grade: v.grade ? Number(v.grade) : null });
+      const { data, error } = await sb.rpc('vol_signup', { p_owner: owner, p_job: jobId, p_first: v.first, p_last: v.last, p_phone: v.phone, p_email: v.email, p_type: v.type, p_parent: v.parent, p_grade: v.grade ? Number(v.grade) : null, p_school: type === 'student' ? v.school : '' });
       if (error || !data || data.error) {
         toast((data && data.error) || 'Could not sign you up. Check your signal and try again.');
         $('fGo').disabled = false; $('fGo').textContent = 'Sign me up';
