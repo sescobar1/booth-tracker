@@ -41,7 +41,9 @@
     });
     return r;
   };
-  const toRow = (c, o, owner) => { const n = norm(c, o), r = { owner, updated_at: new Date().toISOString() }; Object.entries(c.map).forEach(([k, col]) => { r[col] = n[k]; }); return r; };
+  // A device that hasn't heard of the bank's exact amount yet must not erase it, so a blank one isn't sent.
+  const KEEP_IF_BLANK = new Set(['bankAmount']);
+  const toRow = (c, o, owner) => { const n = norm(c, o), r = { owner, updated_at: new Date().toISOString() }; Object.entries(c.map).forEach(([k, col]) => { if (!(KEEP_IF_BLANK.has(k) && n[k] == null)) r[col] = n[k]; }); return r; };
   const fromRow = (c, r) => { const o = {}; Object.entries(c.map).forEach(([k, col]) => { o[k] = r[col]; }); return norm(c, o); };
   const sig = (c, o) => JSON.stringify(norm(c, o));
   const settingsOf = d => ({ settings: d.settings || {}, templates: [] });
