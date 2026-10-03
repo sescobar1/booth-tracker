@@ -839,7 +839,14 @@ function finishQuickAdd() {
   const mem = payeeMemory()[p.payee.toLowerCase()] || {};
   const t = { id: uid(), accountId: acc.id, date: today(), time: new Date().toTimeString().slice(0, 5), payee: p.payee.replace(/\b[a-z]/g, c => c.toUpperCase()), amount: Math.abs(p.amt), type: p.type, category: p.category || autoCategory(p.payee, '', p.type) || '', note: p.note || 'Added by Siri', checkNum: '', cleared: false, taxCat: mem.taxCat || '', receipt: '', source: 'Siri' };
   data.tx.push(t); window.save(); route();
-  toast('✓ Added ' + (t.payee || 'entry') + ' ' + money(t.amount) + '. Tap it to change anything.');
+  if (!t.payee) {
+    // Amount only: open it so the place can be filled in (or tapped from the quick-add list).
+    editTx(t.id);
+    toast('✓ Saved ' + money(t.amount) + '. Where was it? Type it or pick one, then Save.');
+    setTimeout(() => { if ($('tPayee')) $('tPayee').focus(); }, 80);
+    return;
+  }
+  toast('✓ Added ' + t.payee + ' ' + money(t.amount) + '. Tap it to change anything.');
 }
 function viewSiri() {
   const base = location.origin + location.pathname;
