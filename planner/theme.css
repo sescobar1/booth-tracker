@@ -174,3 +174,61 @@ label { color: var(--muted); font-weight: 500; font-size: .8rem; letter-spacing:
 .chev { color: var(--muted); font-size: 1.4rem; }
 .tabs a { font-size: .62rem; letter-spacing: .3px; }
 .mslots .mslot:last-child { grid-column: 1 / -1; }
+
+/* ---- Interactive touches ---- */
+.topacts { display: flex; gap: 6px; }
+.top .topacts button { min-height: 34px; padding: 6px 13px; font-size: .86rem; }
+.top .topacts #topEvent { background: var(--ink); color: #fff; border: 1px solid var(--ink); }
+.top .topacts #topTask { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+@media (max-width: 360px) { .brand span { display: none; } }
+
+/* Quick tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+.tile { flex-direction: column; gap: 6px; min-height: 78px; padding: 10px 4px; border-radius: 16px; border: 1px solid transparent; color: var(--ink); font-weight: 600; font-size: .82rem; box-shadow: none; }
+.tile svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.tile:hover svg, .tile:active svg { transform: translateY(-2px) scale(1.08); }
+.t-event { background: #eceef2; color: #3d4a63; border-color: #dfe2e9; }
+.t-task { background: #edf3ee; color: #4f7058; border-color: #dce8de; }
+.t-meal { background: #f3ecdf; color: #8a6c3a; border-color: #e9dfcb; }
+.t-note { background: #f6ecef; color: #94566a; border-color: #ecdae0; }
+
+/* Up next */
+.upnext { position: relative; padding: 16px 18px 16px 22px; cursor: pointer; overflow: hidden; background: linear-gradient(120deg, #fff 60%, var(--gold-soft)); }
+.upnext::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--pc); }
+.upnext .eyebrow { font-size: .68rem; text-transform: uppercase; letter-spacing: 1.6px; color: var(--gold); font-weight: 600; }
+.upnext .eyebrow b { color: var(--ink); }
+.upnext h2 { margin: 4px 0 2px; font-size: 1.5rem; }
+.upnext .sub { color: var(--muted); font-size: .85rem; }
+
+/* Week strip */
+.strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 14px 0 4px; }
+.sday { flex-direction: column; gap: 0; min-height: 64px; padding: 6px 0; border-radius: 14px; background: transparent; border: 1px solid transparent; color: var(--ink-2); box-shadow: none; font-weight: 500; transition: background .2s, transform .15s; }
+.sday span { font-size: .66rem; letter-spacing: 1px; color: var(--muted); }
+.sday b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.35rem; font-weight: 600; line-height: 1.2; }
+.sday i { font-style: normal; color: var(--gold); font-size: .8rem; line-height: .6; height: 8px; letter-spacing: 1px; }
+.sday.now b { color: var(--gold); }
+.sday.on { background: var(--ink); color: #fff; }
+.sday.on span, .sday.on i, .sday.on.now b { color: #e9d9b8; }
+
+/* Motion */
+button, .button, .tile, .card[data-item], .ev, .mslot, .sday { -webkit-tap-highlight-color: transparent; }
+button:active, .button:active, .tile:active, .sday:active, .mslot:active { transform: scale(.96); }
+.ev { transition: background .15s, opacity .3s; border-radius: 10px; }
+.ev:active { background: var(--paper); }
+.ev.fading { opacity: .45; }
+.prog .bar i { animation: grow .9s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes grow { from { width: 0; } }
+.tick.pop { animation: pop .42s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.spark { position: fixed; z-index: 99; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; pointer-events: none; animation: spark .65s ease-out forwards; }
+@keyframes spark { to { transform: translate(var(--dx), var(--dy)) scale(.3); opacity: 0; } }
+#view.enter > * { animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; }
+#view.enter > *:nth-child(2) { animation-delay: .04s; } #view.enter > *:nth-child(3) { animation-delay: .08s; }
+#view.enter > *:nth-child(4) { animation-delay: .12s; } #view.enter > *:nth-child(5) { animation-delay: .16s; }
+#view.enter > *:nth-child(n+6) { animation-delay: .2s; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+.modal .sheet { animation: sheet .3s cubic-bezier(.2, .8, .2, 1); }
+@keyframes sheet { from { transform: translateY(40px); opacity: 0; } }
+.toast { animation: toastin .25s ease; }
+@keyframes toastin { from { transform: translate(-50%, 10px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
