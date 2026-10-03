@@ -403,7 +403,9 @@ function eventCard(ev) {
     '<div class="chips">' + (c.need ? '<span class="chip ' + (c.open ? 'gold' : 'ok') + '">' + (c.open ? c.open + ' open of ' + c.need : 'Full') + '</span>' : '') +
     '<span class="chip">' + c.adults + ' adults</span><span class="chip student">' + c.students + ' students</span>' + (ev.isPublic === false ? '<span class="chip">Hidden</span>' : '') +
     (c.foodNeed ? '<span class="chip ' + (c.foodOpen ? 'gold' : 'ok') + '">🍪 ' + (c.foodOpen ? c.foodOpen + ' food items open' : 'Food covered') + '</span>' : '') +
-    (c.noPhone ? '<span class="chip warn">' + c.noPhone + ' need phone</span>' : '') + '</div></div></a>';
+    (c.noPhone ? '<span class="chip warn">' + c.noPhone + ' need phone</span>' : '') + '</div></div>' +
+    // Quick text button right on the card; it opens the texter instead of the event.
+    (ev.date >= today() ? '<span class="card-text" role="button" tabindex="0" data-text="' + ev.id + '" title="Text volunteers">💬<small>Text</small></span>' : '') + '</a>';
 }
 function viewEvents() {
   const t = today();
@@ -418,6 +420,7 @@ function viewEvents() {
     (past.length ? '<details class="past"><summary>Past events (' + past.length + ')</summary>' + past.map(eventCard).join('') + '</details>' : '');
   $('newEvent').onclick = () => editEvent();
   if ($('docNext')) $('docNext').onclick = () => sendToDoc(nextGame().id);
+  document.querySelectorAll('[data-text]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); openTexter(b.dataset.text); });
   if (window.volSync) window.volSync.renderBox();
 }
 
