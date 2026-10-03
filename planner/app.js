@@ -1424,14 +1424,14 @@ function viewFreezer() {
     '<div class="fztabs">' + [{ id: 'all', name: 'Everything', icon: '🏠' }].concat(fz).map(f => '<button type="button" class="fztab' + (fzOn === f.id ? ' on' : '') + '" data-fzon="' + f.id + '"><span>' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + count(f.id) + ' items</small></button>').join('') + '</div>' +
     '<div class="quickbar fzbar"><input id="fzAdd" placeholder="Add: “4 cans corn”, “2 lb ground beef”, “Pizza x2”"><select id="fzWhere" aria-label="Where">' + fz.map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select><button type="button" id="fzGo">Add</button></div>' +
     fzSuggestList(fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) +
-    '<div class="row-actions tight fztools"><button type="button" class="ghost small" id="fzScan">▥ Scan a barcode</button><button type="button" class="ghost small" id="fzUp">📷 Upload a list</button><button type="button" class="ghost small" id="fzCheck">✓ Take inventory</button><input id="fzFind" type="search" placeholder="Search food on hand" value="' + esc(fzFind) + '"></div>' +
+    '<div class="row-actions tight fztools"><button type="button" class="ghost small" id="fzUp">📷 Upload a list</button><button type="button" class="ghost small" id="fzCheck">✓ Take inventory</button><input id="fzFind" type="search" placeholder="Search food on hand" value="' + esc(fzFind) + '"></div>' +
     (have.length && !q ? '<a class="card pad tip" href="#meals"><b>🍳 What can I make?</b><span class="sub">' + mealIdeas('Dinner').length + ' meal ideas from what you have →</span></a>' : '') +
     (!q && (fzOn === 'all' || lunches.some(i => i.list === fzOn)) ? '<div class="card pad lunchcard"><div class="mini-head"><h2>💼 Work lunches</h2><label class="switch"><input type="checkbox" id="fzLunchRem"' + (S().lunchReminders !== false ? ' checked' : '') + '> pack-lunch reminder</label></div>' +
       (lunches.length ? lunches.map(i => '<div class="mini-row"><span>' + fzCat(i.location)[1] + ' ' + esc(i.title) + ' <small class="sub">' + esc(fzName(i.list).name) + '</small></span><b>' + (i.priority || 1) + ' left</b></div>').join('') : '<p class="helper">Tap any meal below and check “💼 Work lunch” to keep track of grab-and-go lunches.</p>') +
       '<p class="helper">The night before a “Work” day on your calendar you get a 🥡 “Pack lunch” reminder at 8 PM.</p></div>' : '') +
     (soon.length && !q ? '<div class="card pad fzsoon"><h2>⏰ Use these soon</h2>' + soon.slice(0, 6).map(row).join('') + '</div>' : '') +
     (shown.length ? Object.keys(groups).sort((a, b) => catOrder(a) - catOrder(b)).map(k => '<div class="card pad"><h3>' + fzCat(k)[1] + ' ' + esc(k) + ' <small>' + groups[k].reduce((n, i) => n + (i.priority || 1), 0) + '</small></h3>' + groups[k].sort((a, b) => a.title.localeCompare(b.title)).map(row).join('') + '</div>').join('')
-      : '<div class="card pad"><p class="helper">' + (q ? 'Nothing matches “' + esc(fzFind) + '”.' : 'Nothing here yet. Type something above, scan a barcode, or tap 📷 Upload a list.') + '</p></div>') +
+      : '<div class="card pad"><p class="helper">' + (q ? 'Nothing matches “' + esc(fzFind) + '”.' : 'Nothing here yet. Type something above, or tap 📷 Upload a list.') + '</p></div>') +
     (used.length ? '<button type="button" class="linkish" id="fzUsedT">' + (fzShowUsed ? 'Hide' : 'Show') + ' recently used (' + used.length + ')</button>' + (fzShowUsed ? '<div class="card pad">' + used.map(i => '<div class="fzrow used"><span class="fzname"><span>' + fzCat(i.location)[1] + ' ' + esc(i.title) + '</span><small>Used up ' + esc(fmtDate(i.endDate || today(), 'rel')) + ' · ' + esc(fzName(i.list).name) + '</small></span><span class="fzqty"><button type="button" class="ghost small" data-fzshop="' + i.id + '">🛒 Buy again</button><button type="button" class="ghost small" data-fzback="' + i.id + '">↩ Put back</button></span></div>').join('') + '</div>' : '') : '') +
     '<p class="helper">Tap the box when you use one. ＋ and − change how many. Tap a name to edit it, move it, set “always keep at least”, or mark it as a work lunch. Things running low get a 🛒 button.</p>';
   const v = $('view'), find = id => data.items.find(i => i.id === id), redraw = () => { const y = window.scrollY; viewFreezer(); window.scrollTo(0, y); };
@@ -1447,7 +1447,6 @@ function viewFreezer() {
   $('fzGo').onclick = add; $('fzAdd').onkeydown = e => { if (e.key === 'Enter') add(); };
   $('fzFind').oninput = e => { fzFind = e.target.value; clearTimeout(viewFreezer.t); viewFreezer.t = setTimeout(() => { viewFreezer(); const f = $('fzFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   $('fzUp').onclick = freezerImport;
-  $('fzScan').onclick = scanBarcode;
   $('fzCheck').onclick = () => takeInventory(fzOn);
   if ($('fzLunchRem')) $('fzLunchRem').onchange = e => { S().lunchReminders = e.target.checked; window.save(); if (e.target.checked) lunchCheck(); toast(e.target.checked ? '🥡 Pack-lunch reminders on' : 'Pack-lunch reminders off'); };
   const wireSug = () => v.querySelectorAll('[data-fzsug]').forEach(b => b.onclick = () => {
@@ -1485,7 +1484,7 @@ function editFreezerItem(id) {
     '<label>Kind<select id="feC">' + catsFor(it.list).map(c => '<option' + (c[0] === it.location ? ' selected' : '') + '>' + c[0] + '</option>').join('') + '</select></label></div>' +
     '<div class="grid2"><label>Always keep at least<input id="feMin" type="number" min="0" inputmode="numeric" value="' + (keepMin(it) || '') + '" placeholder="0 = off"></label><label>Went in on<input id="feD" type="date" value="' + esc(it.date || '') + '"></label></div>' +
     '<label class="check"><input type="checkbox" id="feLunch"' + (isLunch(it) ? ' checked' : '') + '> 💼 Work lunch (grab-and-go)</label>' +
-    '<p class="helper">Best quality for about ' + keeps + ' · ' + (fzAge(it) === 0 ? 'it went in today' : 'you’ve had it ' + fzAgeText(it)) + '. With “always keep”, it goes on the shopping list when you drop below that.' + (it.repeat ? ' · barcode ' + esc(it.repeat) : '') + '</p>' +
+    '<p class="helper">Best quality for about ' + keeps + ' · ' + (fzAge(it) === 0 ? 'it went in today' : 'you’ve had it ' + fzAgeText(it)) + '. With “always keep”, it goes on the shopping list when you drop below that.</p>' +
     '<div class="row-actions"><button type="button" id="feSave">Save</button><button type="button" class="ghost" id="feX">Cancel</button><button type="button" class="danger" id="feDel">Delete</button></div>');
   $('feX').onclick = closeModal;
   $('feSave').onclick = () => {
@@ -1519,58 +1518,6 @@ function takeInventory(where) {
     $('ivStop').onclick = () => { closeModal(); viewFreezer(); };
   };
   step();
-}
-// Scan a barcode with the camera: a known product gets used/added; a new one is looked up on Open Food Facts.
-async function scanBarcode() {
-  openModal('<h2>▥ Scan a barcode</h2><div class="scanbox"><video id="scVid" playsinline muted></video><i class="scanline"></i></div><p class="helper" id="scMsg">Starting the camera…</p>' +
-    '<label>Or type the number<input id="scCode" inputmode="numeric" placeholder="0 12345 67890 5"></label><div class="row-actions"><button type="button" class="ghost" id="scGo">Look it up</button><button type="button" class="ghost" id="scX">Cancel</button></div>');
-  let stream = null, reader = null, done = false;
-  const stop = () => { done = true; try { reader && reader.reset && reader.reset(); } catch (e) {} if (stream) stream.getTracks().forEach(t => t.stop()); };
-  $('scX').onclick = () => { stop(); closeModal(); };
-  $('scGo').onclick = () => { const c = $('scCode').value.replace(/\D/g, ''); if (c.length >= 6) { stop(); gotCode(c); } };
-  const msg = t => { if ($('scMsg')) $('scMsg').textContent = t; };
-  try {
-    const vid = $('scVid');
-    if ('BarcodeDetector' in window) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      vid.srcObject = stream; await vid.play(); msg('Point the camera at the barcode.');
-      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
-      const tick = async () => { if (done || !$('scVid')) return; try { const r = await det.detect(vid); if (r.length) { stop(); gotCode(r[0].rawValue); return; } } catch (e) {} setTimeout(tick, 250); };
-      tick();
-    } else {
-      await loadScript(CDN + '@zxing/library@0.21.3/umd/index.min.js', () => window.ZXing);
-      reader = new ZXing.BrowserMultiFormatReader(); msg('Point the camera at the barcode.');
-      reader.decodeFromConstraints({ video: { facingMode: 'environment' } }, vid, r => { if (r && !done) { const c = r.getText(); stop(); gotCode(c); } });
-    }
-  } catch (e) { msg('The camera didn’t start (' + (e.message || e.name) + '). You can type the number under the barcode instead.'); }
-}
-async function gotCode(code) {
-  const known = fzItems().filter(i => i.repeat === code).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0))[0];
-  if (known) {
-    openModal('<h2>' + fzCat(known.location)[1] + ' ' + esc(known.title) + '</h2><p class="helper">' + esc(fzName(known.list).name) + ' · ' + (known.done ? 'all used up' : (known.priority || 1) + ' on hand') + '</p>' +
-      '<div class="row-actions">' + (known.done ? '' : '<button type="button" id="gcUse">✓ Used one</button>') + '<button type="button" class="ghost" id="gcAdd">＋ Add one</button><button type="button" class="ghost" id="gcAgain">Scan another</button></div>');
-    if ($('gcUse')) $('gcUse').onclick = () => { const shop = useOne(known); window.save(); closeModal(); viewFreezer(); toast('✓ Used 1 ' + known.title + (shop ? ' · 🛒 added to your shopping list' : '')); };
-    $('gcAdd').onclick = () => { if (known.done) { known.done = false; known.endDate = null; known.priority = 0; } known.priority = (known.priority || 0) + 1; window.save(); closeModal(); viewFreezer(); toast('✓ Added 1 ' + known.title); };
-    $('gcAgain').onclick = scanBarcode;
-    return;
-  }
-  openModal('<h2>New item</h2><p class="helper" id="gcMsg">Looking up ' + esc(code) + '…</p><label>What<input id="gcN" list="gcHave" placeholder="Name"></label><datalist id="gcHave">' + fzItems().filter(i => !i.done).map(i => '<option value="' + esc(i.title) + '">').join('') + '</datalist>' +
-    '<div class="grid2"><label>Where<select id="gcW">' + freezers().map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select></label><label>How many<input id="gcQ" type="number" min="1" value="1"></label></div>' +
-    '<p class="helper">If it’s something already on your list, pick its name and the barcode gets linked to it.</p><div class="row-actions"><button type="button" id="gcSave">Add</button><button type="button" class="ghost" id="gcX">Cancel</button></div>');
-  $('gcX').onclick = closeModal;
-  $('gcSave').onclick = () => {
-    const n = $('gcN').value.trim(), w = $('gcW').value, q = Math.max(1, parseInt($('gcQ').value, 10) || 1); if (!n) { toast('Type what it is.'); return; }
-    const same = fzItems().find(i => !i.done && i.list === w && i.title.toLowerCase() === n.toLowerCase());
-    if (same) { same.priority = (same.priority || 1) + q; same.repeat = code; }
-    else data.items.push(newItem({ kind: 'freezer', title: n, list: w, priority: q, notes: '', location: fzGuess(n, w), date: today(), allDay: true, repeat: code }));
-    window.save(); closeModal(); viewFreezer(); toast('✓ Added ' + q + ' × ' + n + ' · next time just scan it');
-  };
-  try {
-    const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?fields=product_name,brands,quantity');
-    const j = await r.json(), p = j && j.product;
-    if ($('gcN') && p && (p.product_name || p.brands)) { const nm = [(p.brands || '').split(',')[0].trim(), (p.product_name || '').trim()].filter(Boolean).join(' '); if (!$('gcN').value) $('gcN').value = nm; $('gcMsg').textContent = 'Found it' + (p.quantity ? ' · ' + p.quantity : '') + '. Change the name if you like.'; }
-    else if ($('gcMsg')) $('gcMsg').textContent = 'Not in the product database. Type what it is.';
-  } catch (e) { if ($('gcMsg')) $('gcMsg').textContent = 'Couldn’t look it up. Type what it is.'; }
 }
 // 🥡 Pack-lunch reminder the night before each "Work" day on the calendar (8 PM).
 function lunchCheck() {
