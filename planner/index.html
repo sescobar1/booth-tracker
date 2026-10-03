@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Planner</title>
+  <meta name="description" content="Calendar, tasks, notes and documents, with Google and Outlook calendars.">
+  <meta name="theme-color" content="#3b47a8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Planner">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="planner.css">
+</head>
+<body>
+  <header class="top no-print">
+    <div class="brand"><img src="icon.svg" alt="" width="28" height="28"> <span>Planner</span></div>
+    <button type="button" class="ghost small" id="topAdd">＋ Add</button>
+  </header>
+
+  <main id="view"></main>
+
+  <button type="button" class="fab no-print" id="fab" aria-label="Add">＋</button>
+
+  <nav class="tabs no-print">
+    <a href="#today" data-tab="today"><span>☀️</span>Today</a>
+    <a href="#calendar" data-tab="calendar"><span>🗓</span>Calendar</a>
+    <a href="#tasks" data-tab="tasks"><span>✅</span>Tasks</a>
+    <a href="#files" data-tab="files"><span>📁</span>Files</a>
+    <a href="#more" data-tab="more"><span>⚙</span>More</a>
+  </nav>
+
+  <div id="modal" class="modal no-print" hidden><div class="sheet" id="modalBody"></div></div>
+  <div id="toast" class="toast no-print" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script src="db.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  </script>
+</body>
+</html>
