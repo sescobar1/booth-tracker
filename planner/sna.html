@@ -25,6 +25,9 @@
     .q button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 1.2rem; }
     .q b { min-width: 20px; text-align: center; }
     label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+    #storeOther { margin-top: 8px; }
     input, textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
     .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
     .bar div { max-width: 640px; margin: 0 auto; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
@@ -47,15 +50,25 @@
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     const rpc = (fn, body) => fetch(CFG.url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => { if (!r.ok) throw new Error('Something went wrong (' + r.status + ')'); return r.json(); });
     const CATS = ['Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Bars & breakfast', 'Candy', 'Quick meals', 'Drinks', 'Other'];
-    let items = [], pick = {}, find = '';
+    let items = [], pick = {}, find = '', me = {};
+    try { me = JSON.parse(localStorage.getItem('snaMe') || '{}'); } catch (e) { me = {}; }
+    const todayIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    const FIELDS = ['who', 'email', 'phone', 'store', 'storeOther', 'pdate', 'ptime', 'note'];
     try { pick = JSON.parse(localStorage.getItem('snaPick-' + token) || '{}'); } catch (e) { pick = {}; }
     const keep = () => { try { localStorage.setItem('snaPick-' + token, JSON.stringify(pick)); } catch (e) {} };
     function draw() {
       const q = find.toLowerCase(), shown = items.filter(i => !q || i.name.toLowerCase().includes(q));
-      app.innerHTML = '<h1>🍿 SNA Snack Closet</h1><p class="sub">Arkansas Tech · Tap ＋ on what the closet is running low on, add your name, then tap <b>Send list</b>.</p>' +
+      app.innerHTML = '<h1>🍿 SNA Snack Closet</h1><p class="sub">Arkansas Tech · Tap ＋ on what the closet is running low on, fill in your info and pickup, then tap <b>Send list</b>.</p>' +
         '<input id="search" type="search" placeholder="Search snacks" value="' + esc(find) + '">' +
         CATS.map(c => { const l = shown.filter(i => (i.cat || 'Other') === c); return l.length ? '<div class="card"><h2>' + esc(c) + '</h2>' + l.map(i => '<div class="row' + (pick[i.id] ? ' on' : '') + '"><div class="name">' + esc(i.name) + '<small>' + esc(i.size || '') + '</small></div><div class="q">' + (pick[i.id] ? '<button type="button" data-m="' + esc(i.id) + '" aria-label="Less">−</button><b>' + pick[i.id] + '</b>' : '') + '<button type="button" data-p="' + esc(i.id) + '" aria-label="Need this">＋</button></div></div>').join('') + '</div>' : ''; }).join('') +
-        '<div class="card"><label for="who">Your name</label><input id="who" autocomplete="name" placeholder="First and last name" value="' + esc(localStorage.getItem('snaWho') || '') + '"><label for="note">Anything else? (optional)</label><textarea id="note" rows="2" placeholder="We’re out of forks, a new snack idea…"></textarea></div>';
+        '<div class="card"><h2>Your info</h2><label for="who">Full name (goes on the Sam’s Club pickup order)</label><input id="who" autocomplete="name" placeholder="First and last name" value="' + esc(me.who || '') + '">' +
+        '<label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@atu.edu" value="' + esc(me.email || '') + '">' +
+        '<label for="phone">Cell phone</label><input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="479-555-0123" value="' + esc(me.phone || '') + '"></div>' +
+        '<div class="card"><h2>Pickup</h2><label for="store">Which Sam’s Club?</label><select id="store">' + ['', 'Conway, AR', 'Fort Smith, AR', 'Little Rock, AR', 'North Little Rock, AR', 'Hot Springs, AR', 'Other'].map(x => '<option value="' + esc(x) + '"' + (x === (me.store || '') ? ' selected' : '') + '>' + (x || 'Choose a location') + '</option>').join('') + '</select>' +
+        '<input id="storeOther" placeholder="Which Sam’s Club?" value="' + esc(me.storeOther || '') + '"' + (me.store === 'Other' ? '' : ' hidden') + '>' +
+        '<div class="two"><div><label for="pdate">Pickup date</label><input id="pdate" type="date" min="' + todayIso() + '"></div><div><label for="ptime">Pickup time</label><input id="ptime" type="time" step="900"></div></div>' +
+        '<label for="note">Anything else? (optional)</label><textarea id="note" rows="2" placeholder="We’re out of forks, a new snack idea…"></textarea></div>';
+      $('store').onchange = () => { $('storeOther').hidden = $('store').value !== 'Other'; };
       bar.hidden = false;
       const n = Object.values(pick).reduce((s, x) => s + x, 0), kinds = Object.keys(pick).length;
       $('count').textContent = n ? kinds + (kinds === 1 ? ' snack' : ' snacks') + ' picked' : 'Nothing picked yet';
@@ -64,18 +77,25 @@
       app.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { const k = b.dataset.m; pick[k] = (pick[k] || 0) - 1; if (pick[k] <= 0) delete pick[k]; keep(); redraw(); });
       $('search').oninput = e => { find = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { redraw(); const s = $('search'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }, 250); };
     }
-    const redraw = () => { const y = window.scrollY, who = $('who') ? $('who').value : '', note = $('note') ? $('note').value : ''; draw(); $('who').value = who || $('who').value; $('note').value = note; window.scrollTo(0, y); };
+    const redraw = () => { const y = window.scrollY, v = {}; FIELDS.forEach(f => { if ($(f)) v[f] = $(f).value; }); draw(); FIELDS.forEach(f => { if (v[f] != null && $(f)) $(f).value = v[f]; }); $('storeOther').hidden = $('store').value !== 'Other'; window.scrollTo(0, y); };
     $('send').onclick = async () => {
-      const who = $('who').value.trim();
-      if (!who) { $('who').focus(); $('who').scrollIntoView({ block: 'center' }); alert('Please add your name.'); return; }
+      const who = $('who').value.trim(), email = $('email').value.trim(), phone = $('phone').value.trim(), store = $('store').value === 'Other' ? $('storeOther').value.trim() : $('store').value, pdate = $('pdate').value, ptime = $('ptime').value;
+      const need = (el, msg) => { $(el).focus(); $(el).scrollIntoView({ block: 'center' }); alert(msg); };
+      if (!/\S+\s+\S+/.test(who)) return need('who', 'Please add your full name (first and last) for the pickup order.');
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return need('email', 'Please add a good email address.');
+      if (phone.replace(/\D/g, '').length < 10) return need('phone', 'Please add your cell phone number with area code.');
+      if (!store) return need('store', 'Please choose which Sam’s Club.');
+      if (!pdate) return need('pdate', 'Please pick a pickup date.');
+      if (pdate < todayIso()) return need('pdate', 'The pickup date has already passed.');
+      if (!ptime) return need('ptime', 'Please pick a pickup time.');
       const lines = Object.keys(pick).map(id => { const it = items.find(i => i.id === id); return it ? { id, name: it.name, qty: pick[id] } : null; }).filter(Boolean);
       $('send').disabled = true; $('send').textContent = 'Sending…';
       try {
-        const ok = await rpc('sna_submit', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines });
+        const ok = await rpc('sna_send', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines, p_email: email, p_phone: phone, p_store: store, p_date: pdate, p_time: ptime });
         if (!ok) throw new Error('This link isn’t working anymore. Ask for a new one.');
-        try { localStorage.setItem('snaWho', who); localStorage.removeItem('snaPick-' + token); } catch (e) {}
+        try { localStorage.setItem('snaMe', JSON.stringify({ who, email, phone, store: $('store').value, storeOther: $('storeOther').value })); localStorage.removeItem('snaPick-' + token); } catch (e) {}
         pick = {}; bar.hidden = true;
-        app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p><button type="button" class="send" onclick="location.reload()">Send another</button></div>';
+        app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p><p class="sub">Pickup: <b>' + esc(store) + ' Sam’s Club</b>, ' + esc(new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + ' at ' + esc(new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ', under <b>' + esc(who) + '</b>.</p><button type="button" class="send" onclick="location.reload()">Send another</button></div>';
       } catch (e) { alert(e.message); $('send').disabled = false; $('send').textContent = 'Send list'; }
     };
     if (token.length < 20) { app.innerHTML = '<div class="msg"><h1>Link not complete</h1><p class="sub">Ask for the full SNA Snack Closet link.</p></div>'; return; }

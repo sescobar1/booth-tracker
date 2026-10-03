@@ -1679,7 +1679,7 @@ function viewAtu() {
 }
 // The snack closet catalog (Sam's Club), counts, order quantities and past orders live in settings.sna.
 const SNA_CATS = ['Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Bars & breakfast', 'Candy', 'Quick meals', 'Drinks', 'Other'];
-const snaData = () => { const s = S().sna || {}; return { items: s.items || [], orders: s.orders || [], budget: s.budget || 0 }; };
+const snaData = () => { const s = S().sna || {}; return { items: s.items || [], orders: s.orders || [], budget: s.budget || 0, pickup: s.pickup || null }; };
 const snaSave = d => { S().sna = Object.assign({}, S().sna || {}, d); window.save(); };
 const money = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
 let snaEdit = false, snaFind = '';
@@ -1694,6 +1694,7 @@ function viewSna() {
   $('view').innerHTML = '<h1>ATU</h1>' + atuTabs('sna') +
     '<div class="card pad snasum"><div><h2>🍿 Snack closet order</h2><p class="sub">' + count + ' packs · <b>' + money(total) + '</b>' + (sn.budget ? ' of ' + money(sn.budget) + ' budget' + (total > sn.budget ? ' <span class="over">· ' + money(total - sn.budget) + ' over</span>' : ' · ' + money(sn.budget - total) + ' left') : '') + '</p>' +
       (sn.budget ? '<div class="cprog"><i style="width:' + Math.min(100, Math.round(total / sn.budget * 100)) + '%' + (total > sn.budget ? ';background:#c0675c' : '') + '"></i></div>' : '') + '</div>' +
+      (sn.pickup && (sn.pickup.store || sn.pickup.date) ? '<p class="pickupbox">🚗 ' + esc((sn.pickup.store || '') + ' Sam’s Club') + (sn.pickup.date ? ' · ' + esc(fmtDate(sn.pickup.date, 'rel')) : '') + (sn.pickup.time ? ' at ' + esc(fmtTime(sn.pickup.time)) : '') + ' · 🏷 ' + esc(sn.pickup.name || '') + ' <button type="button" class="linkish" id="snaPkX">clear</button></p>' : '') +
       '<div class="row-actions tight"><button type="button" id="snaForm"' + (count ? '' : ' disabled') + '>📄 Order form</button><button type="button" class="ghost small" id="snaSheet">🖨 Count sheet</button><button type="button" class="ghost small" id="snaFill">✨ Fill from counts</button><button type="button" class="ghost small" id="snaLast"' + (sn.orders.length ? '' : ' disabled') + '>↺ Same as last order</button><button type="button" class="ghost small" id="snaClear"' + (count ? '' : ' disabled') + '>Clear</button></div></div>' +
     '<div class="card pad snareq"><div class="mini-head"><h2>📨 Student requests</h2><span><button type="button" class="small" id="snaShare">📤 Share link</button></span></div><div id="snaReqs"><p class="helper">' + (signedIn() ? 'Loading…' : 'Sign in to see requests.') + '</p></div></div>' +
     '<p class="helper">Count what’s in the closet (<b>Have</b>), set how many you like to keep on the shelf (<b>Keep</b>), then tap <b>✨ Fill from counts</b> and the order fills itself. Or tap ＋ to order. Tap a name to open it at Sam’s Club.</p>' +
@@ -1721,6 +1722,7 @@ function viewSna() {
   $('snaForm').onclick = () => snaForm(null);
   $('snaShare').onclick = snaShare;
   $('snaSheet').onclick = snaCountSheet;
+  if ($('snaPkX')) $('snaPkX').onclick = () => { snaSave({ pickup: null }); viewSna(); };
   loadSnaRequests();
   $('snaBudget').onchange = e => { snaSave({ budget: Math.max(0, +e.target.value || 0) }); viewSna(); };
   v.querySelectorAll('[data-oview]').forEach(b => b.onclick = () => snaForm(sn.orders[+b.dataset.oview]));
@@ -1766,6 +1768,26 @@ function snaShare() {
   $('slNew').onclick = () => { if (!confirm('Make a new link? Students with the old link won’t be able to send lists.')) return; S().snaToken = ''; window.save(); snaShare(); };
 }
 let snaShowDone = false;
+const pickupWhen = r => (r.pickup_date ? fmtDate(r.pickup_date, 'rel') : '') + (r.pickup_time ? ' at ' + fmtTime(r.pickup_time) : '');
+function pickupHtml(r) {
+  if (!r.store && !r.email && !r.phone) return '';
+  const tel = (r.phone || '').replace(/[^\d+]/g, '');
+  return '<div class="spick">' + (r.store || r.pickup_date ? '<span>🚗 <b>' + esc(r.store || '') + ' Sam’s Club</b>' + (r.pickup_date ? ' · ' + esc(pickupWhen(r)) : '') + '</span>' : '') +
+    '<span>🏷 Name on order: <b>' + esc(r.name || '') + '</b></span>' +
+    (r.email ? '<span>✉️ <a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a></span>' : '') +
+    (r.phone ? '<span>📞 <a href="tel:' + esc(tel) + '">' + esc(r.phone) + '</a> · <a href="sms:' + esc(tel) + '">text</a></span>' : '') + '</div>';
+}
+// When a request is added to the order, its pickup details go on the order form, and the pickup goes on the calendar.
+function usePickup(r) {
+  if (!r.store && !r.pickup_date) return false;
+  snaSave({ pickup: { name: r.name, email: r.email, phone: r.phone, store: r.store, date: r.pickup_date, time: r.pickup_time } });
+  if (r.pickup_date) {
+    const id = 'snapick-' + r.id.slice(0, 8);
+    if (!data.items.some(i => i.id === id)) data.items.push(newItem({ id, kind: 'event', title: '🛒 Sam’s pickup – ' + (r.name || 'SNA order'), date: r.pickup_date, allDay: !r.pickup_time, start: r.pickup_time || '', end: r.pickup_time ? pad(Math.min(23, +r.pickup_time.slice(0, 2) + 1)) + r.pickup_time.slice(2, 5) : '', location: (r.store || '') + ' Sam’s Club', list: 'ATU', color: '#7f9fa3', notes: 'SNA Snack Closet order · name on order: ' + (r.name || '') + (r.phone ? ' · ' + r.phone : '') + (r.email ? ' · ' + r.email : '') }));
+    window.save();
+  }
+  return true;
+}
 async function loadSnaRequests() {
   const box = $('snaReqs'), c = client(); if (!box || !c || !signedIn()) return;
   let rows, error;
@@ -1775,14 +1797,15 @@ async function loadSnaRequests() {
   const open = rows.filter(r => !r.handled), done = rows.filter(r => r.handled);
   const sn = snaData(), card = r => '<div class="sreq' + (r.handled ? ' done' : '') + '"><div class="mini-row"><span><b>' + esc(r.name || 'Someone') + '</b> <small class="sub">' + esc(fmtDate(r.created_at.slice(0, 10), 'rel')) + ' ' + new Date(r.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '</small></span>' +
     (r.handled ? '<small class="sub">✓ added</small>' : '<span><button type="button" class="small" data-radd="' + r.id + '">＋ Add to order</button><button type="button" class="ghost small" data-rdone="' + r.id + '">Done</button></span>') + '</div>' +
+    pickupHtml(r) +
     '<p class="sreql">' + r.lines.map(l => esc(l.name) + (l.qty > 1 ? ' <b>×' + l.qty + '</b>' : '') + (sn.items.some(i => i.id === l.id) ? '' : ' <small>(not on the list anymore)</small>')).join(' · ') + '</p>' + (r.note ? '<p class="sub">💬 ' + esc(r.note) + '</p>' : '') + '</div>';
   box.innerHTML = (open.length ? (open.length > 1 ? '<div class="row-actions tight"><button type="button" class="ghost small" id="raAll">＋ Add all ' + open.length + ' to the order</button></div>' : '') + open.map(card).join('') : '<p class="helper">No new requests. Tap 📤 Share link to send students the form.</p>') +
     (done.length ? '<button type="button" class="linkish" id="raShow">' + (snaShowDone ? 'Hide' : 'Show') + ' earlier requests (' + done.length + ')</button>' + (snaShowDone ? done.slice(0, 20).map(card).join('') : '') : '');
   const mark = async ids => { const r = await c.from('sna_requests').update({ handled: true }).in('id', ids); if (r.error) toast('Couldn’t update: ' + r.error.message); };
   const addLines = reqs => { const d = snaData(); let n = 0; reqs.forEach(r => r.lines.forEach(l => { const it = d.items.find(i => i.id === l.id); if (it) { it.order = (it.order || 0) + (l.qty || 1); n += l.qty || 1; } })); snaSave({ items: d.items }); return n; };
-  box.querySelectorAll('[data-radd]').forEach(b => b.onclick = async () => { const r = rows.find(x => x.id === b.dataset.radd); const n = addLines([r]); await mark([r.id]); viewSna(); toast('✓ Added ' + n + ' packs from ' + (r.name || 'the request')); });
+  box.querySelectorAll('[data-radd]').forEach(b => b.onclick = async () => { const r = rows.find(x => x.id === b.dataset.radd); const n = addLines([r]); const pk = usePickup(r); await mark([r.id]); viewSna(); toast('✓ Added ' + n + ' packs from ' + (r.name || 'the request') + (pk ? ' · pickup is on your calendar' : '')); });
   box.querySelectorAll('[data-rdone]').forEach(b => b.onclick = async () => { await mark([b.dataset.rdone]); loadSnaRequests(); });
-  if ($('raAll')) $('raAll').onclick = async () => { const n = addLines(open); await mark(open.map(r => r.id)); viewSna(); toast('✓ Added ' + n + ' packs from ' + open.length + ' requests'); };
+  if ($('raAll')) $('raAll').onclick = async () => { const n = addLines(open); open.slice().reverse().forEach(usePickup); await mark(open.map(r => r.id)); viewSna(); toast('✓ Added ' + n + ' packs from ' + open.length + ' requests'); };
   if ($('raShow')) $('raShow').onclick = () => { snaShowDone = !snaShowDone; loadSnaRequests(); };
 }
 function editSna(id) {
@@ -1808,8 +1831,10 @@ function snaForm(past) {
   lines.sort((a, b) => SNA_CATS.indexOf(a.cat || 'Other') - SNA_CATS.indexOf(b.cat || 'Other') || a.name.localeCompare(b.name));
   const table = '<table class="snaform"><thead><tr><th>Qty</th><th>Item</th><th>Aisle</th><th>Price</th><th>Total</th></tr></thead><tbody>' + lines.map(l => '<tr><td>' + l.qty + '</td><td>' + esc(l.name) + (l.size ? ' <small>(' + esc(l.size) + ')</small>' : '') + '</td><td>' + esc(l.aisle || '') + '</td><td>' + money(l.price) + '</td><td>' + money(l.qty * l.price) + '</td></tr>').join('') +
     '</tbody><tfoot><tr><td>' + lines.reduce((s, l) => s + l.qty, 0) + '</td><td colspan="3"><b>Total (before tax)</b></td><td><b>' + money(total) + '</b></td></tr></tfoot></table>';
-  const head = '<h2>SNA Snack Closet order</h2><p class="sub">Arkansas Tech University · ' + esc(fmtDate(date, 'long')) + ' · Sam’s Club · ordered by Shaana Escobar</p>';
-  const text = 'SNA Snack Closet order – ' + fmtDate(date, 'long') + '\nSam’s Club\n\n' + lines.map(l => l.qty + ' × ' + l.name + (l.size ? ' (' + l.size + ')' : '') + (l.aisle ? ' – aisle ' + l.aisle : '') + ' – ' + money(l.price) + ' = ' + money(l.qty * l.price)).join('\n') + '\n\nTotal (before tax): ' + money(total) + '\n\nShaana Escobar';
+  const pk = past ? past.pickup : sn.pickup;
+  const pkLine = pk && (pk.store || pk.date) ? '<p class="pickupbox">🚗 <b>Pickup:</b> ' + esc((pk.store || '') + ' Sam’s Club') + (pk.date ? ' · ' + esc(fmtDate(pk.date, 'long')) : '') + (pk.time ? ' at ' + esc(fmtTime(pk.time)) : '') + '<br>🏷 <b>Name on the order:</b> ' + esc(pk.name || '') + (pk.phone ? ' · 📞 ' + esc(pk.phone) : '') + (pk.email ? ' · ✉️ ' + esc(pk.email) : '') + '</p>' : '';
+  const head = '<h2>SNA Snack Closet order</h2><p class="sub">Arkansas Tech University · ' + esc(fmtDate(date, 'long')) + ' · Sam’s Club · ordered by Shaana Escobar</p>' + pkLine;
+  const text = 'SNA Snack Closet order – ' + fmtDate(date, 'long') + '\nSam’s Club' + (pk && (pk.store || pk.date) ? '\nPickup: ' + (pk.store || '') + ' Sam’s Club' + (pk.date ? ', ' + fmtDate(pk.date, 'long') : '') + (pk.time ? ' at ' + fmtTime(pk.time) : '') + '\nName on the order: ' + (pk.name || '') + (pk.phone ? ' · ' + pk.phone : '') + (pk.email ? ' · ' + pk.email : '') : '') + '\n\n' + lines.map(l => l.qty + ' × ' + l.name + (l.size ? ' (' + l.size + ')' : '') + (l.aisle ? ' – aisle ' + l.aisle : '') + ' – ' + money(l.price) + ' = ' + money(l.qty * l.price)).join('\n') + '\n\nTotal (before tax): ' + money(total) + '\n\nShaana Escobar';
   $('modalBody').classList.add('wide');
   openModal(head + table + '<div class="row-actions"><button type="button" id="sfPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="sfMail">✉️ Email</button><button type="button" class="ghost" id="sfCopy">Copy</button><button type="button" class="ghost" id="sfCsv">Excel (.csv)</button></div>' +
     (past ? '<div class="row-actions"><button type="button" class="ghost" id="sfX">Close</button></div>' : '<div class="row-actions"><button type="button" id="sfDone">✓ Mark as ordered</button><button type="button" class="ghost" id="sfX">Keep editing</button></div><p class="helper">“Mark as ordered” saves it under Orders and clears the order for next time. When it arrives, tap ✓ Got it.</p>'));
@@ -1819,9 +1844,9 @@ function snaForm(past) {
   $('sfCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(text).then(() => toast('Copied. Paste it into an email or Teams.'), () => toast('Could not copy.'));
   $('sfCsv').onclick = () => download('SNA-order-' + date + '.csv', 'Qty,Item,Size,Aisle,Price,Total,Link\n' + lines.map(l => [l.qty, l.name, l.size || '', l.aisle || '', l.price.toFixed(2), (l.qty * l.price).toFixed(2), l.url || ''].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n') + '\n,Total,,,,' + total.toFixed(2) + ',', 'text/csv');
   if (!past) $('sfDone').onclick = () => {
-    const orders = [{ date, lines: lines.map(l => ({ id: l.id, name: l.name, size: l.size, aisle: l.aisle, price: l.price, qty: l.qty, url: l.url, cat: l.cat })), total: Math.round(total * 100) / 100 }].concat(sn.orders).slice(0, 52);
+    const orders = [{ date, pickup: sn.pickup || null, lines: lines.map(l => ({ id: l.id, name: l.name, size: l.size, aisle: l.aisle, price: l.price, qty: l.qty, url: l.url, cat: l.cat })), total: Math.round(total * 100) / 100 }].concat(sn.orders).slice(0, 52);
     sn.items.forEach(i => { i.order = 0; });
-    snaSave({ items: sn.items, orders }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
+    snaSave({ items: sn.items, orders, pickup: null }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
   };
 }
 // ---------- Cleaning: weekly and monthly chores, room by room ----------

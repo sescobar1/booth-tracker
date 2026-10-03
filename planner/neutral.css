@@ -506,3 +506,6 @@ table.countsheet td:first-child { text-align: left; font-weight: 400; }
 @media print { table.countsheet { font-size: 9.5pt; } table.countsheet td { padding: 3px 4px; } table.countsheet td.box { height: 20px; } }
 table.countsheet td small { color: var(--muted); white-space: nowrap; } table.countsheet td.box { width: 46px; }
 table.countsheet td:first-child { white-space: normal; font-weight: 400; text-align: left; } table.countsheet td small { white-space: normal; }
+.spick { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin: 4px 0; }
+.spick a { color: inherit; }
+.pickupbox { background: var(--sage-soft); border-radius: 12px; padding: 8px 12px; font-size: 14px; margin: 8px 0; }
