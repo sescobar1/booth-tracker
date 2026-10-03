@@ -213,3 +213,10 @@ h2.food-head small { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .must p { margin: .4rem 0 0; }
 .tpl-card { display: flex; flex-direction: column; gap: 4px; }
 .tpl-card .row-actions { margin: 6px 0 0; }
+.toptabs, .ptabs { display: flex; gap: 6px; margin: 4px 0 12px; border-bottom: 2px solid var(--line); overflow-x: auto; }
+.toptabs a, .ptab { flex: 0 0 auto; padding: 10px 14px; border-radius: 10px 10px 0 0; text-decoration: none; font-weight: 700; color: var(--muted); background: none; border: 0; min-height: 0; font-size: .95rem; margin-bottom: -2px; border-bottom: 3px solid transparent; }
+.toptabs a.on, .ptab.on { color: var(--navy); border-bottom-color: var(--gold); background: var(--card); }
+.food-ev { display: block; text-decoration: none; color: var(--navy); margin-bottom: 6px; }
+.food-row { cursor: default; }
+.ptabs .ptab, .toptabs a { flex: 1 1 0; text-align: center; white-space: nowrap; padding: 10px 6px; }
+@media (max-width: 420px) { .ptabs .ptab, .toptabs a { font-size: .84rem; } }

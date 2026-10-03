@@ -274,9 +274,9 @@ function fillMessage(text, ev, slot, p) {
 // ---------- routing ----------
 function route() {
   const [tab, id] = (location.hash.slice(1) || 'events').split('/');
-  const tabOf = { event: 'events', checkin: 'events', sheet: 'events', import: 'more', sug: 'events', templates: 'events' };
+  const tabOf = { event: 'events', checkin: 'events', sheet: 'events', import: 'more', sug: 'events', templates: 'events', food: 'events' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { events: viewEvents, event: viewEvent, checkin: viewCheckin, sheet: viewSheet, people: viewPeople, import: viewImport, more: viewMore, share: viewShare, sug: viewSug, templates: viewTemplates };
+  const views = { events: viewEvents, event: viewEvent, checkin: viewCheckin, sheet: viewSheet, people: viewPeople, import: viewImport, more: viewMore, share: viewShare, sug: viewSug, templates: viewTemplates, food: viewFood };
   (views[tab] || viewEvents)(id);
   window.scrollTo(0, 0);
 }
@@ -409,7 +409,7 @@ function viewEvents() {
   const t = today();
   const up = data.events.filter(e => e.date >= t).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   const past = data.events.filter(e => e.date < t).sort((a, b) => b.date.localeCompare(a.date));
-  $('view').innerHTML =
+  $('view').innerHTML = topTabs('events') +
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') + quickLinks() +
     (nextGame() ? '<div class="row-actions"><button type="button" id="docNext">📄 Send next game to sign-in sheet <small>(' + esc(fmtDate(nextGame().date)) + ')</small></button>' + (data.settings.signinDoc ? '<a class="button ghost" href="' + esc(data.settings.signinDoc) + '" target="_blank" rel="noopener">Open sign-in sheet</a>' : '') + '</div>' : '') +
     '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><a class="button ghost" href="#templates">📋 New from template</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
@@ -419,6 +419,33 @@ function viewEvents() {
   $('newEvent').onclick = () => editEvent();
   if ($('docNext')) $('docNext').onclick = () => sendToDoc(nextGame().id);
   if (window.volSync) window.volSync.renderBox();
+}
+
+// Tabs across the top of Events: the events themselves, and every food item being asked for.
+const topTabs = on => '<div class="toptabs"><a href="#events"' + (on === 'events' ? ' class="on"' : '') + '>📅 Events</a><a href="#food"' + (on === 'food' ? ' class="on"' : '') + '>🍪 Food requests</a></div>';
+let foodFilter = 'open';
+function viewFood() {
+  const t = today();
+  const evs = data.events.filter(e => e.date >= t).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+    .map(ev => ({ ev, items: jobsFor(ev.id).filter(isFood) })).filter(x => x.items.length);
+  const all = evs.reduce((n, x) => n + x.items.length, 0);
+  const open = evs.reduce((n, x) => n + x.items.reduce((m, j) => m + Math.max(0, j.need - filledOf(j.id)), 0), 0);
+  const f = (k, label) => '<button type="button" class="seg' + (foodFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + '</button>';
+  $('view').innerHTML = topTabs('food') +
+    '<h1>🍪 Food requests</h1><p class="helper">' + all + ' items across ' + evs.length + ' upcoming events · <b>' + open + ' still needed</b>. Add or change items with Edit event on each event.</p>' +
+    '<div class="segs">' + f('open', 'Still needed') + f('all', 'All items') + '</div>' +
+    (evs.map(({ ev, items }) => {
+      const rows = items.filter(j => foodFilter === 'all' || filledOf(j.id) < j.need).map(j => {
+        const filled = filledOf(j.id), left = Math.max(0, j.need - filled);
+        const who = data.slots.filter(s => s.jobId === j.id).map(s => person(s.personId)).filter(Boolean).map(fullName);
+        return '<div class="vol food-row"><div class="who"><b>' + esc(j.role) + '</b> <span class="fill' + (left ? '' : ' full') + '">' + filled + ' of ' + j.need + (left ? ' · ' + left + ' needed' : ' · covered') + '</span>' +
+          (dropLine(j, ev) ? '<span class="sub">📦 ' + esc(dropLine(j, ev)) + '</span>' : '') + (who.length ? '<span class="sub">Bringing: ' + esc(who.join(', ')) + '</span>' : '') + '</div></div>';
+      }).join('');
+      return rows ? '<div class="card pad"><a class="food-ev" href="#event/' + ev.id + '"><b>' + esc(fmtDate(ev.date)) + ' · ' + esc(ev.name) + '</b>' + (ev.isPublic === false ? ' <span class="chip">Hidden</span>' : '') + ' ›</a>' + rows +
+        '<div class="row-actions"><button type="button" class="ghost small" data-ask="' + ev.id + '">💬 Ask for food</button></div></div>' : '';
+    }).join('') || '<div class="empty"><p>' + (foodFilter === 'open' ? 'Every food item is covered. 🎉' : 'No food requests yet. Add food items with Edit event.') + '</p></div>');
+  document.querySelectorAll('.seg').forEach(b => b.onclick = () => { foodFilter = b.dataset.f; viewFood(); });
+  document.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => findMore(b.dataset.ask, 'foodask'));
 }
 
 const EVENT_IDEAS = ['Football game concessions', 'Marching competition', 'Home game – stands help', 'Uniform fitting', 'Chaperones', 'Fundraiser', 'Band camp', 'Concert', 'Pit crew / equipment'];
@@ -735,7 +762,7 @@ function textOneByOne(ev, queue, text, onSent) {
 // Past volunteers who aren't on this event yet, best bets first: people who said they'd help with the
 // concession stand, then people who have volunteered the most. No-shows sink to the bottom.
 function noShowsOf(p) { return data.slots.filter(s => s.personId === p.id && s.noShow).length; }
-function findMore(evId) {
+function findMore(evId, tplId) {
   const ev = event(evId); if (!ev) return;
   const c = eventCounts(ev);
   const here = new Set(slotsFor(evId).map(s => s.personId));
@@ -747,7 +774,7 @@ function findMore(evId) {
   };
   const pool = () => data.people.filter(p => digits(p.phone) && !here.has(p.id) && (who === 'all' || p.type !== 'student'))
     .sort((a, b) => score(b) - score(a) || sortName(a).localeCompare(sortName(b)));
-  const tplOpts = data.templates.map(t => '<option value="' + t.id + '"' + (t.id === (c.open || !c.foodOpen ? 'ask' : 'foodask') ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
+  const tplOpts = data.templates.map(t => '<option value="' + t.id + '"' + (t.id === (tplId || (c.open || !c.foodOpen ? 'ask' : 'foodask')) ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
   openModal('<h2>🙋 Find more volunteers</h2><p class="helper">' + esc(ev.name) + ' · ' + esc(fmtDate(ev.date)) + ' · <b>' + c.open + ' spots open</b>' + (c.foodNeed ? ' · ' + c.foodOpen + ' food items open' : '') + '</p>' +
     '<div class="segs" id="fmWho"><button type="button" class="seg on" data-w="adult">Adults</button><button type="button" class="seg" data-w="all">Everyone with a phone</button></div>' +
     '<label>Message<select id="fmTpl">' + tplOpts + '</select></label><textarea id="fmText" rows="4"></textarea>' +
@@ -1514,6 +1541,7 @@ async function viewShare(evId) {
   $('view').innerHTML = '<div class="no-print">' + (ev ? '<a class="back" href="#event/' + ev.id + '">‹ ' + esc(ev.name) + '</a>' : '') +
     '<h1>Share your sign-up link</h1>' + (data.settings.signupLink ? '<p class="helper">This shares your SignUpGenius link. Change it under More → Sign-up page.</p>' : '') +
     (signedIn() ? '' : '<p class="chip warn">Sign in (More → Account) so new events and jobs show on the page.</p>') +
+    (data.settings.signupLink ? '' : '<p class="helper">Food requests only: <a href="' + esc(signupUrl() + (signupUrl().includes('?') ? '&' : '?') + 'tab=food') + '" target="_blank" rel="noopener">' + esc(signupUrl() + (signupUrl().includes('?') ? '&' : '?') + 'tab=food') + '</a></p>') +
     '<label>Link for<select id="shWhich"><option value="">The whole season (all upcoming events)</option>' + upcoming.map(e => '<option value="' + e.id + '"' + (ev && ev.id === e.id ? ' selected' : '') + '>' + esc(fmtDate(e.date) + ' – ' + e.name) + '</option>').join('') + '</select></label>' +
     '<div class="linkbox"><input id="shUrl" readonly value="' + esc(url) + '"></div>' +
     '<div class="share-grid">' +
