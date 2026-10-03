@@ -419,7 +419,73 @@
   function textRows(text) {
     return text.replace(/\r/g, '').split('\n').filter(l => l.trim()).map(l => l.includes('\t') ? l.split('\t') : csvLine(l));
   }
+  // PDF sales reports: rebuild the table from where each word sits on the page. Words on the same line form a
+  // row; the header row (DETAIL, PAYOUT, DATE SOLD…) gives the column positions, and every word goes to the
+  // column it sits under. Item names that wrap onto a second line are joined back to their row.
+  async function pdfRows(f) {
+    const pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    const lines = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n), tc = await page.getTextContent(), rows = [];
+      for (const it of tc.items) {
+        const str = it.str.trim(); if (!str) continue;
+        const x = it.transform[4], y = it.transform[5], size = Math.abs(it.transform[3]) || 10;
+        let row = rows.find(r => Math.abs(r.y - y) < size * 0.5);
+        if (!row) rows.push(row = { y, size, words: [] });
+        row.words.push({ x, end: x + (it.width || str.length * size * 0.5), str });
+      }
+      rows.sort((a, b) => b.y - a.y).forEach(r => {
+        r.words.sort((a, b) => a.x - b.x);
+        // Words close together belong to the same cell ("DATE SOLD", "Blue mug").
+        const cells = [];
+        r.words.forEach(w => { const last = cells[cells.length - 1]; if (last && w.x - last.end < r.size * 0.9) { last.str += ' ' + w.str; last.end = w.end; } else cells.push({ ...w }); });
+        lines.push({ page: n, y: r.y, size: r.size, cells });
+      });
+    }
+    const isHead = l => { const h = l.cells.map(c => hkey(c.str)); return h.some(x => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(x)) && h.some(x => ['PAYOUT', 'NETPAYOUT', 'NET'].includes(x)); };
+    const heads = lines.filter(isHead);
+    if (!heads.length) return pdfLooseRows(lines);
+    const out = [heads[0].cells.map(c => c.str)], data = [], lone = [];
+    let cols = null, itemCol = -1;
+    for (const l of lines) {
+      if (isHead(l)) { cols = l.cells.map(c => ({ x: c.x, end: c.end })); itemCol = l.cells.findIndex(c => ['DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'].includes(hkey(c.str))); continue; }
+      if (!cols) continue;
+      const row = cols.map(() => '');
+      l.cells.forEach(c => {
+        // The column whose header overlaps this cell, or the nearest one.
+        let k = cols.findIndex(h => c.x < h.end + 2 && c.end > h.x - 2);
+        if (k < 0) { let best = 1e9; cols.forEach((h, i) => { const d = Math.min(Math.abs(c.x - h.x), Math.abs(c.end - h.end)); if (d < best) { best = d; k = i; } }); }
+        row[k] = row[k] ? row[k] + ' ' + c.str : c.str;
+      });
+      const filled = row.filter(Boolean).length;
+      if (filled === 1 && itemCol >= 0 && row[itemCol]) { if (!/page \d|total|printed|report/i.test(row[itemCol])) lone.push({ l, text: row[itemCol] }); continue; }
+      if (filled) { data.push({ l, row, before: [], after: [] }); out.push(row); }
+    }
+    // A wrapped name can sit above or below its sale line; join each piece to the closest line on that page.
+    lone.forEach(({ l, text }) => {
+      let best = null, d = 1e9;
+      data.forEach(x => { const dd = Math.abs(x.l.y - l.y); if (x.l.page === l.page && dd < d) { d = dd; best = x; } });
+      if (best && d < l.size * 2.6) (l.y > best.l.y ? best.before : best.after).push(text);
+    });
+    data.forEach(x => { x.row[itemCol] = [...x.before, x.row[itemCol], ...x.after].filter(Boolean).join(' '); });
+    return out;
+  }
+  // No header row found: take any line with a dollar amount, using its date (if any) and the words as the item.
+  function pdfLooseRows(lines) {
+    const out = [['DETAIL', 'PAYOUT', 'DATE SOLD']];
+    for (const l of lines) {
+      const text = l.cells.map(c => c.str).join(' '), money = text.match(/-?\$?\d{1,4}(?:,\d{3})*\.\d{2}\b/g);
+      if (!money || /total|subtotal|balance|rent|fee|commission/i.test(text)) continue;
+      const date = (text.match(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b/) || [''])[0];
+      const item = text.replace(/-?\$?\d{1,4}(?:,\d{3})*\.\d{2}\b/g, '').replace(date, '').replace(/\b\d{5,}\b/g, '').replace(/\s+/g, ' ').trim();
+      if (item.length > 1) out.push([item, money[money.length - 1], date]);
+    }
+    return out;
+  }
   async function fileRows(f) {
+    if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') return pdfRows(f);
     if (/\.(xlsx|xls)$/i.test(f.name)) {
       const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
       const book = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
@@ -470,7 +536,7 @@
   $('relicFile').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     $('relicMsg').textContent = 'Reading ' + f.name + '…';
-    try { importRelic(await fileRows(f)); } catch (err) { $('relicMsg').textContent = 'That file could not be read. Try the CSV export, or paste the rows below.'; }
+    try { importRelic(await fileRows(f)); } catch (err) { $('relicMsg').textContent = /\.pdf$/i.test(f.name) ? 'That PDF could not be read (it may be a scanned picture). Try the CSV export, or paste the rows below.' : 'That file could not be read. Try the CSV export, or paste the rows below.'; }
   });
   $('relicPasteBtn').addEventListener('click', () => { const t = $('relicPaste').value; if (t.trim()) { importRelic(textRows(t)); $('relicPaste').value = ''; } });
 
