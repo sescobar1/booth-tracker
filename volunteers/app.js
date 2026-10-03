@@ -27,6 +27,21 @@ var data = (() => {
   return blank();
 })();
 // Devices set up before the concession stand text existed get it once (and keep it deleted if removed).
+// Messages for food donors and for asking past volunteers to fill open spots, added once to every device.
+const MORE_TEMPLATES = [
+  { id: 'food', name: 'Food donation reminder', text: 'Hi {first}! Thank you for signing up to bring {item} for {event} {when}. {dropoff}We appreciate you supporting the band! 🎶 – {from}' },
+  { id: 'ask', name: 'Can you help? (open spots)', text: 'Hi {first}! We still need {open} more volunteers for {event} {when}{time}. Could you help? Sign up here: {link} Thank you! – {from}' },
+  { id: 'foodask', name: 'Food still needed', text: 'Hi {first}! We still need food donations for {event} on {date}: {foodneeded}. Could you bring something? Sign up here: {link} Thank you! – {from}' }
+];
+const FOOD_EMAIL = 'Hi {first}! Thank you for signing up to bring {item} for {event}. {dropoff}We appreciate you supporting the band! – {from}';
+const DONATE_INFO = 'Please type what your donation is for in the Cash App note ("For"), for example: "Concessions 10/9 – Jane Smith" or "Band trip – student name". That way it goes to the right place. Thank you!';
+if (!data.settings.emailText) data.settings.emailText = CONCESSION_TEMPLATE.text;
+if (!data.settings.foodText) data.settings.foodText = FOOD_EMAIL;
+if (!data.settings.donateInfo) data.settings.donateInfo = DONATE_INFO;
+if (!data.settings.hasMoreTemplates) {
+  MORE_TEMPLATES.forEach(t => { if (!data.templates.some(x => x.id === t.id)) data.templates.push(Object.assign({}, t)); });
+  data.settings.hasMoreTemplates = true;
+}
 // The 9-12th grade student instructions, kept in More → Sign-up page and sent with this message.
 if (!data.settings.hasStudentInfo) {
   if (!data.templates.some(t => t.id === 'stuinfo')) data.templates.push({ id: 'stuinfo', name: 'Student volunteer info', text: '{studentinfo}' });
@@ -117,6 +132,16 @@ const event = id => data.events.find(e => e.id === id);
 const slotsFor = evId => data.slots.filter(s => s.eventId === evId);
 const jobsFor = evId => data.jobs.filter(j => j.eventId === evId).sort((a, b) => (a.sort - b.sort) || (a.start || '').localeCompare(b.start || '') || a.role.localeCompare(b.role));
 const filledOf = jobId => data.slots.filter(s => s.jobId === jobId).length;
+// Food and supply donations are jobs of kind 'food': "need" is how many people bring one.
+const isFood = j => !!j && j.kind === 'food';
+const jobOf = s => data.jobs.find(j => j.id === s.jobId);
+const foodSlot = s => isFood(jobOf(s));
+// "Drop off Fri, Oct 9, 4:00–5:00 PM at the concession stand back door"
+function dropLine(j, ev) {
+  const d = j.dropDate || (ev && ev.date);
+  return [d ? fmtDate(d) : '', fmtRange(j.start, j.end)].filter(Boolean).join(', ') + (j.note ? (d || j.start ? ' – ' : '') + j.note : '');
+}
+const FOOD_IDEAS = ['Water (case)', 'Gatorade (case)', 'Cookies (dozen)', 'Brownies (pan)', 'Chips (bag)', 'Candy (bag)', 'Hot dog buns (pack)', 'Ice (bag)', 'Paper plates (pack)', 'Napkins (pack)', 'Cups (sleeve)', 'Sandwiches (tray)', 'Fruit (tray)'];
 // The job a volunteer belongs to, matched by name; made on the spot for imports and walk-ins.
 function jobFor(evId, role, create) {
   const r = (role || '').trim().toLowerCase();
@@ -218,10 +243,15 @@ function whenWords(ev, start, short) {
   return 'on ' + fmtDate(ev.date, true);
 }
 function fillMessage(text, ev, slot, p) {
-  const start = (slot && slot.start) || (ev && ev.start);
+  const job = slot && jobOf(slot);
+  const start = (slot && slot.start) || (job && !isFood(job) && job.start) || (ev && ev.start);
   const role = slot && slot.role;
   const open = ev ? eventCounts(ev).open : 0;
+  const foodNeeded = ev ? jobsFor(ev.id).filter(isFood).map(j => [j, Math.max(0, j.need - filledOf(j.id))]).filter(([, n]) => n).map(([j, n]) => j.role + (n > 1 ? ' ×' + n : '')).join(', ') : '';
   return String(text || '')
+    .replace(/\{item\}/g, role || 'your item')
+    .replace(/\{dropoff\}/g, job && isFood(job) && dropLine(job, ev) ? 'Please drop it off ' + dropLine(job, ev).replace(/[.!]?$/, '. ') : '')
+    .replace(/\{foodneeded\}/g, foodNeeded || 'a few items')
     .replace(/\{when\}/g, whenWords(ev, start, false))
     .replace(/\{day\}/g, whenWords(ev, start, true))
     .replace(/\{arrive\}/g, start ? fmtTime(start) : 'your start time')
@@ -256,7 +286,8 @@ $('topShare').onclick = () => { location.hash = 'share'; };
 
 // ---------- Events ----------
 function eventCounts(ev) {
-  const ss = slotsFor(ev.id);
+  const ss = slotsFor(ev.id).filter(s => !foodSlot(s));
+  const shifts = jobsFor(ev.id).filter(j => !isFood(j)), food = jobsFor(ev.id).filter(isFood);
   const ppl = ss.map(s => person(s.personId)).filter(Boolean);
   return {
     total: ss.length,
@@ -264,8 +295,11 @@ function eventCounts(ev) {
     students: ppl.filter(p => p.type === 'student').length,
     noPhone: ppl.filter(needsPhone).length,
     inNow: ss.filter(s => s.inAt).length,
-    need: jobsFor(ev.id).reduce((t, j) => t + Number(j.need || 0), 0),
-    open: jobsFor(ev.id).reduce((t, j) => t + Math.max(0, Number(j.need || 0) - filledOf(j.id)), 0)
+    need: shifts.reduce((t, j) => t + Number(j.need || 0), 0),
+    open: shifts.reduce((t, j) => t + Math.max(0, Number(j.need || 0) - filledOf(j.id)), 0),
+    foodNeed: food.reduce((t, j) => t + Number(j.need || 0), 0),
+    foodOpen: food.reduce((t, j) => t + Math.max(0, Number(j.need || 0) - filledOf(j.id)), 0),
+    noShows: slotsFor(ev.id).filter(s => s.noShow).length
   };
 }
 function eventCard(ev) {
@@ -275,6 +309,7 @@ function eventCard(ev) {
     '<div class="what"><b>' + esc(ev.name) + '</b>' + (ev.location ? '<span>' + esc(ev.location) + '</span>' : '') +
     '<div class="chips">' + (c.need ? '<span class="chip ' + (c.open ? 'gold' : 'ok') + '">' + (c.open ? c.open + ' open of ' + c.need : 'Full') + '</span>' : '') +
     '<span class="chip">' + c.adults + ' adults</span><span class="chip student">' + c.students + ' students</span>' + (ev.isPublic === false ? '<span class="chip">Hidden</span>' : '') +
+    (c.foodNeed ? '<span class="chip ' + (c.foodOpen ? 'gold' : 'ok') + '">🍪 ' + (c.foodOpen ? c.foodOpen + ' food items open' : 'Food covered') + '</span>' : '') +
     (c.noPhone ? '<span class="chip warn">' + c.noPhone + ' need phone</span>' : '') + '</div></div></a>';
 }
 function viewEvents() {
@@ -298,7 +333,7 @@ function editEvent(id, copyFrom) {
   const src = copyFrom ? event(copyFrom) : null;
   const ev = id ? event(id) : { name: src ? src.name : '', date: src ? '' : today(), start: src ? src.start : '', end: src ? src.end : '', location: src ? src.location : '', notes: src ? src.notes : '', isPublic: true };
   // Work on a copy of the jobs so Cancel leaves them alone.
-  let jobs = (id ? jobsFor(id) : src ? jobsFor(src.id).map(j => Object.assign({}, j, { id: null })) : [{ role: 'Concession Stand', need: 10, start: '', end: '' }]).map(j => Object.assign({}, j));
+  let jobs = (id ? jobsFor(id) : src ? jobsFor(src.id).map(j => Object.assign({}, j, { id: null, dropDate: '' })) : [{ role: 'Concession Stand', need: 10, start: '', end: '' }]).map(j => Object.assign({}, j));
   openModal('<h2>' + (id ? 'Edit event' : src ? 'Copy of ' + esc(src.name) : 'New event') + '</h2>' +
     '<label>Event<input id="evName" list="evIdeas" value="' + esc(ev.name) + '" placeholder="RHS vs. Lake Hamilton"></label>' +
     '<datalist id="evIdeas">' + EVENT_IDEAS.map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
@@ -309,20 +344,32 @@ function editEvent(id, copyFrom) {
     '<label>Notes for volunteers<textarea id="evNotes" rows="2" placeholder="Wear a band shirt. Park by the field house.">' + esc(ev.notes) + '</textarea></label>' +
     '<h3>Jobs to fill</h3><p class="helper">How many people each job needs. Leave times blank to use the event times.</p><div id="evJobs"></div>' +
     '<button type="button" class="ghost small" id="evAddJob">+ Add a job</button>' +
+    '<h3>🍪 Food &amp; supplies needed</h3><p class="helper">Each item, how many people you need to bring one, and where or when to drop it off.</p><div id="evFood"></div>' +
+    '<button type="button" class="ghost small" id="evAddFood">+ Add a food item</button>' +
     '<label class="check"><input type="checkbox" id="evPublic"' + (ev.isPublic !== false ? ' checked' : '') + '> Show on the sign-up page</label>' +
     '<div class="row-actions"><button type="button" id="evSave">Save</button><button type="button" class="ghost" id="evCancel">Cancel</button>' +
     (id ? '<button type="button" class="ghost" id="evCopy">Copy to a new date</button><button type="button" class="danger" id="evDel">Delete</button>' : '') + '</div>');
-  const readJobs = () => document.querySelectorAll('#evJobs .jobrow').forEach((row, i) => {
-    Object.assign(jobs[i], { role: row.querySelector('.jRole').value.trim(), need: Math.max(0, Number(row.querySelector('.jNeed').value) || 0), start: row.querySelector('.jStart').value, end: row.querySelector('.jEnd').value });
+  const readJobs = () => document.querySelectorAll('#evJobs .jobrow, #evFood .jobrow').forEach(row => {
+    const j = jobs[Number(row.dataset.i)], q = c => row.querySelector(c);
+    Object.assign(j, { role: q('.jRole').value.trim(), need: Math.max(0, Number(q('.jNeed').value) || 0) });
+    Object.assign(j, { start: q('.jStart').value, end: q('.jEnd').value });
+    if (isFood(j)) Object.assign(j, { note: q('.jNote').value.trim(), dropDate: q('.jDate').value });
   });
   const drawJobs = () => {
-    $('evJobs').innerHTML = jobs.map((j, i) => '<div class="jobrow"><input class="jRole" list="jobIdeas" value="' + esc(j.role) + '" placeholder="Job">' +
+    const signed = j => j.id ? '<span class="sub">' + filledOf(j.id) + ' signed up</span>' : '';
+    const rm = i => '<button type="button" class="icon" data-rm="' + i + '" title="Remove">✕</button>';
+    $('evJobs').innerHTML = jobs.map((j, i) => isFood(j) ? '' : '<div class="jobrow" data-i="' + i + '"><input class="jRole" list="jobIdeas" value="' + esc(j.role) + '" placeholder="Job">' +
       '<label>Need<input class="jNeed" type="number" min="0" inputmode="numeric" value="' + esc(j.need) + '"></label>' +
       '<label>From<input class="jStart" type="time" value="' + esc(j.start) + '"></label><label>To<input class="jEnd" type="time" value="' + esc(j.end) + '"></label>' +
-      '<button type="button" class="icon" data-rm="' + i + '" title="Remove job">✕</button>' +
-      (j.id ? '<span class="sub">' + filledOf(j.id) + ' signed up</span>' : '') + '</div>').join('') +
+      rm(i) + signed(j) + '</div>').join('') +
       '<datalist id="jobIdeas">' + JOB_IDEAS.map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>';
-    $('evJobs').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+    $('evFood').innerHTML = jobs.map((j, i) => !isFood(j) ? '' : '<div class="jobrow food" data-i="' + i + '"><input class="jRole" list="foodIdeas" value="' + esc(j.role) + '" placeholder="Cookies (dozen)">' +
+      '<label>How many<input class="jNeed" type="number" min="0" inputmode="numeric" value="' + esc(j.need) + '"></label>' + rm(i) +
+      '<div class="drop"><label>Drop-off date<input class="jDate" type="date" value="' + esc(j.dropDate || $('evDate').value || '') + '"></label>' +
+      '<label>From<input class="jStart" type="time" value="' + esc(j.start) + '"></label><label>Until<input class="jEnd" type="time" value="' + esc(j.end) + '"></label></div>' +
+      '<input class="jNote" value="' + esc(j.note || '') + '" placeholder="Where: concession stand back door">' + signed(j) + '</div>').join('') +
+      '<datalist id="foodIdeas">' + FOOD_IDEAS.map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>';
+    document.querySelectorAll('#evJobs [data-rm], #evFood [data-rm]').forEach(b => b.onclick = () => {
       readJobs();
       const j = jobs[Number(b.dataset.rm)];
       if (j.id && filledOf(j.id) && !confirm(filledOf(j.id) + ' people signed up for ' + j.role + '. Remove the job anyway? They stay on the event under Other.')) return;
@@ -330,7 +377,8 @@ function editEvent(id, copyFrom) {
     });
   };
   drawJobs();
-  $('evAddJob').onclick = () => { readJobs(); jobs.push({ role: '', need: 1, start: '', end: '' }); drawJobs(); };
+  $('evAddJob').onclick = () => { readJobs(); jobs.push({ role: '', need: 1, start: '', end: '', kind: 'shift' }); drawJobs(); };
+  $('evAddFood').onclick = () => { readJobs(); jobs.push({ role: '', need: 1, start: '', end: '', kind: 'food', note: '', dropDate: $('evDate').value }); drawJobs(); };
   $('evCancel').onclick = closeModal;
   $('evSave').onclick = () => {
     readJobs();
@@ -344,7 +392,7 @@ function editEvent(id, copyFrom) {
     data.jobs = data.jobs.filter(j => j.eventId !== ev.id || keep.has(j.id));
     jobs.forEach((j, i) => {
       const row = j.id && data.jobs.find(x => x.id === j.id);
-      const vals = { role: j.role, need: j.need, start: j.start, end: j.end, sort: i };
+      const vals = { role: j.role, need: j.need, start: j.start, end: j.end, sort: i, kind: j.kind || 'shift', note: j.note || '', dropDate: isFood(j) ? (j.dropDate || date) : '' };
       if (row) { Object.assign(row, vals); data.slots.forEach(s => { if (s.jobId === row.id) s.role = j.role; }); }
       else data.jobs.push(Object.assign({ id: uid(), eventId: ev.id }, vals));
     });
@@ -387,11 +435,13 @@ function viewEvent(id) {
     return '<div class="vol" data-slot="' + s.id + '">' +
       '<div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
       '<span class="sub">' + esc([fmtRange(s.start, s.end), phoneNote(p), s.source].filter(Boolean).join(' · ')) + '</span>' +
-      (s.inAt ? '<span class="sub ok">✓ In ' + clock(s.inAt) + (s.outAt ? ' – out ' + clock(s.outAt) + ' (' + fmtHours(hoursOf(s)) + ' h)' : '') + '</span>' : '') + '</div>' +
-      '<div class="acts">' + (d ? '<a class="icon" href="' + esc(smsHref([d], '')) + '" title="Text">💬</a><a class="icon" href="tel:' + e164(d) + '" title="Call">📞</a>' : '<button type="button" class="icon edit" title="Add phone">✏️</button>') + '</div></div>';
+      (s.inAt ? '<span class="sub ok">✓ In ' + clock(s.inAt) + (s.outAt ? ' – out ' + clock(s.outAt) + ' (' + fmtHours(hoursOf(s)) + ' h)' : '') + '</span>' : '') +
+      (s.noShow ? '<span class="sub bad">❌ No-show</span>' : '') + '</div>' +
+      '<div class="acts">' + (d ? '<a class="icon" href="' + esc(smsHref([d], '')) + '" title="Text">💬</a><a class="icon" href="tel:' + e164(d) + '" title="Call">📞</a>' : '<button type="button" class="icon edit" title="Edit">✏️</button>') + '</div></div>';
   };
   const jobIds = new Set(jobsFor(id).map(j => j.id));
-  let rows = jobsFor(id).map(j => {
+  const food = jobsFor(id).filter(isFood);
+  let rows = jobsFor(id).filter(j => !isFood(j)).map(j => {
     const mine = ss.filter(x => x.s.jobId === j.id), filled = filledOf(j.id), open = Math.max(0, j.need - filled);
     return '<h3 class="role">' + esc(j.role) + (j.start ? ' <small>' + esc(fmtRange(j.start, j.end)) + '</small>' : '') +
       '<span class="fill' + (open ? '' : ' full') + '">' + filled + ' of ' + j.need + (open ? ' · ' + open + ' open' : ' · full') + '</span></h3>' +
@@ -399,6 +449,11 @@ function viewEvent(id) {
   }).join('');
   const other = ss.filter(x => !jobIds.has(x.s.jobId));
   if (other.length) rows += '<h3 class="role">Other</h3>' + other.map(volRow).join('');
+  if (food.length) rows += '<h2 class="food-head">🍪 Food &amp; supplies <small>' + (c.foodOpen ? c.foodOpen + ' still needed' : 'all covered') + '</small></h2>' + food.map(j => {
+    const mine = ss.filter(x => x.s.jobId === j.id), filled = filledOf(j.id), open = Math.max(0, j.need - filled);
+    return '<h3 class="role food">' + esc(j.role) + '<span class="fill' + (open ? '' : ' full') + '">' + filled + ' of ' + j.need + (open ? ' · ' + open + ' open' : ' · covered') + '</span></h3>' +
+      (dropLine(j, ev) ? '<p class="helper">📦 Drop off ' + esc(dropLine(j, ev)) + '</p>' : '') + (mine.map(volRow).join('') || (evFilter === 'all' ? '<p class="helper">No one yet.</p>' : ''));
+  }).join('');
   const f = (k, label) => '<button type="button" class="seg' + (evFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + '</button>';
   $('view').innerHTML =
     '<a class="back" href="#events">‹ Events</a>' + (ev.isPublic === false ? '<p class="chip">Hidden from the sign-up page</p>' : '') +
@@ -409,7 +464,9 @@ function viewEvent(id) {
     '<a class="button" href="#checkin/' + id + '">✅<span>Check in (' + c.inNow + '/' + c.total + ')</span></a>' +
     '<a class="button" href="#sheet/' + id + '">🖨<span>Sign-in sheet</span></a>' +
     '<button type="button" id="addVol">➕<span>Add volunteer</span></button>' +
-    '<a class="button" href="#share/' + id + '">📣<span>Share link</span></a></div>' +
+    '<a class="button" href="#share/' + id + '">📣<span>Share link</span></a>' +
+    '<button type="button" id="findMore">🙋<span>Find more volunteers' + (c.open ? ' (' + c.open + ' open)' : '') + '</span></button>' +
+    (ev.date <= today() ? '<a class="button" href="#checkin/' + id + '">❌<span>Mark no-shows' + (c.noShows ? ' (' + c.noShows + ')' : '') + '</span></a>' : '') + '</div>' +
     '<div class="segs">' + f('all', 'All ' + c.total) + f('adult', 'Adults ' + c.adults) + f('student', 'Students ' + c.students) + (c.noPhone ? f('nophone', 'Need phone ' + c.noPhone) : '') + '</div>' +
     (rows || '<p class="helper">No jobs or volunteers yet. Tap Edit event to add the jobs you need filled.</p>') +
     '<div class="row-actions"><button type="button" class="ghost" id="evDoc">📄 Send to Google sign-in sheet</button><a class="button ghost" href="#import/' + id + '">⬆ Import a list into this event</a></div>';
@@ -417,18 +474,38 @@ function viewEvent(id) {
   $('evDoc').onclick = () => sendToDoc(id);
   $('textAll').onclick = () => openTexter(id);
   $('addVol').onclick = () => addVolunteer(id);
+  $('findMore').onclick = () => findMore(id);
   document.querySelectorAll('.seg').forEach(b => b.onclick = () => { evFilter = b.dataset.f; viewEvent(id); });
   document.querySelectorAll('.vol').forEach(el => el.addEventListener('click', e => { if (e.target.closest('a.icon')) return; editSlot(el.dataset.slot); }));
+}
+
+// Grades are saved as the student's graduating class, so 9th grade this year shows as 10th next year.
+// The school year ends in May: from August on, "this school year" ends next spring.
+const schoolYearEnd = (d = new Date()) => d.getMonth() >= 7 ? d.getFullYear() + 1 : d.getFullYear();
+const classOf = grade => grade ? schoolYearEnd() + (12 - Number(grade)) : null;
+function gradeOf(classYear) {
+  if (!classYear) return '';
+  const g = 12 - (Number(classYear) - schoolYearEnd());
+  return g > 12 ? 'Graduated ' + classYear : g < 1 ? 'Class of ' + classYear : g + (g === 1 ? 'st' : g === 2 ? 'nd' : g === 3 ? 'rd' : 'th') + ' grade';
+}
+const gradeNum = classYear => classYear ? 12 - (Number(classYear) - schoolYearEnd()) : '';
+function gradeSelect(id, classYear) {
+  const g = gradeNum(classYear);
+  return '<select id="' + id + '"><option value="">—</option>' + [6, 7, 8, 9, 10, 11, 12].map(n => '<option value="' + n + '"' + (g === n ? ' selected' : '') + '>' + n + 'th grade</option>').join('') +
+    (g > 12 ? '<option value="grad" selected>Graduated (' + classYear + ')</option>' : '') + '</select>';
 }
 
 function personFields(p) {
   return '<div class="grid2"><label>First name<input id="pFirst" value="' + esc(p.first) + '"></label><label>Last name<input id="pLast" value="' + esc(p.last) + '"></label></div>' +
     '<div class="grid2"><label>Cell phone<input id="pPhone" type="tel" inputmode="tel" value="' + esc(fmtPhone(p.phone)) + '"></label>' +
     '<label>Adult or student<select id="pType"><option value="adult"' + (p.type !== 'student' ? ' selected' : '') + '>Adult</option><option value="student"' + (p.type === 'student' ? ' selected' : '') + '>Student</option></select></label></div>' +
-    '<div class="grid2"><label>Email<input id="pEmail" type="email" value="' + esc(p.email) + '"></label><label>Parent / student name<input id="pParent" value="' + esc(p.parent) + '" placeholder="optional"></label></div>';
+    '<div class="grid2"><label>Email<input id="pEmail" type="email" value="' + esc(p.email) + '"></label><label>Parent / student name<input id="pParent" value="' + esc(p.parent) + '" placeholder="optional"></label></div>' +
+    '<label>Student\'s grade (moves up each school year)' + gradeSelect('pGrade', p.classYear) + '</label>';
 }
 function readPerson(p) {
   Object.assign(p, { first: $('pFirst').value.trim(), last: $('pLast').value.trim(), phone: digits($('pPhone').value) || $('pPhone').value.trim(), type: $('pType').value, email: $('pEmail').value.trim(), parent: $('pParent').value.trim() });
+  const g = $('pGrade').value;
+  if (g !== 'grad') p.classYear = classOf(g);
 }
 const toTime = iso => iso ? pad(new Date(iso).getHours()) + ':' + pad(new Date(iso).getMinutes()) : '';
 const fromTime = (date, t) => { if (!t) return null; const [y, m, d] = date.split('-').map(Number); const [h, mi] = t.split(':').map(Number); return new Date(y, m - 1, d, h, mi).toISOString(); };
@@ -442,12 +519,13 @@ function editSlot(sid) {
     '<label>Job<input id="sRole" list="eRoles" value="' + esc(s.role) + '" placeholder="Concession Stand"></label><datalist id="eRoles">' + jobsFor(ev.id).map(j => '<option value="' + esc(j.role) + '">').join('') + '</datalist>' +
     '<div class="grid2"><label>Starts<input id="sStart" type="time" value="' + esc(s.start) + '"></label><label>Ends<input id="sEnd" type="time" value="' + esc(s.end) + '"></label></div>' +
     '<div class="grid2"><label>Checked in<input id="sIn" type="time" value="' + toTime(s.inAt) + '"></label><label>Checked out<input id="sOut" type="time" value="' + toTime(s.outAt) + '"></label></div>' +
+    '<label class="check"><input type="checkbox" id="sNoShow"' + (s.noShow ? ' checked' : '') + '> ❌ Didn\'t show up</label>' +
     '<div class="row-actions"><button type="button" id="sSave">Save</button><button type="button" class="ghost" id="sCancel">Cancel</button><button type="button" class="danger" id="sDel">Remove from event</button></div>');
   $('sCancel').onclick = closeModal;
   $('sSave').onclick = () => {
     readPerson(p);
     const job = jobFor(ev.id, $('sRole').value, true);
-    Object.assign(s, { jobId: job.id, role: job.role, start: $('sStart').value, end: $('sEnd').value, inAt: fromTime(ev.date, $('sIn').value), outAt: fromTime(ev.date, $('sOut').value) });
+    Object.assign(s, { jobId: job.id, role: job.role, start: $('sStart').value, end: $('sEnd').value, inAt: fromTime(ev.date, $('sIn').value), outAt: fromTime(ev.date, $('sOut').value), noShow: $('sNoShow').checked });
     window.save(); closeModal(); route();
   };
   $('sDel').onclick = () => {
@@ -527,7 +605,7 @@ function openTexter(evId) {
   drawPick();
 }
 
-function textOneByOne(ev, queue, text) {
+function textOneByOne(ev, queue, text, onSent) {
   let i = 0;
   function step() {
     if (i >= queue.length) { closeModal(); route(); toast('All ' + queue.length + ' texts done.'); return; }
@@ -539,12 +617,67 @@ function textOneByOne(ev, queue, text) {
       '<button type="button" id="oNext">' + (i + 1 < queue.length ? 'Next person ›' : 'Done') + '</button>' +
       '<button type="button" class="ghost" id="oSkip">Skip</button><button type="button" class="ghost" id="oStop">Stop</button></div>' +
       '<p class="helper">Tap Open text, press Send in Messages, then come back here and tap Next.</p>');
-    $('oSend').onclick = () => { s.textedAt = new Date().toISOString(); window.save(); };
+    $('oSend').onclick = () => { if (s) s.textedAt = new Date().toISOString(); if (onSent) onSent(p); window.save(); };
     $('oNext').onclick = () => { i++; step(); };
     $('oSkip').onclick = () => { i++; step(); };
     $('oStop').onclick = () => { closeModal(); route(); };
   }
   step();
+}
+
+// ---------- Find more volunteers ----------
+// Past volunteers who aren't on this event yet, best bets first: people who said they'd help with the
+// concession stand, then people who have volunteered the most. No-shows sink to the bottom.
+function noShowsOf(p) { return data.slots.filter(s => s.personId === p.id && s.noShow).length; }
+function findMore(evId) {
+  const ev = event(evId); if (!ev) return;
+  const c = eventCounts(ev);
+  const here = new Set(slotsFor(evId).map(s => s.personId));
+  const asked = (data.settings.asked || {})[evId] || {};
+  let who = 'adult';
+  const score = p => {
+    const done = data.slots.filter(s => s.personId === p.id && !s.noShow).length;
+    return (/concession/i.test(p.notes || '') ? 5 : 0) + Math.min(done, 6) - 3 * noShowsOf(p);
+  };
+  const pool = () => data.people.filter(p => digits(p.phone) && !here.has(p.id) && (who === 'all' || p.type !== 'student'))
+    .sort((a, b) => score(b) - score(a) || sortName(a).localeCompare(sortName(b)));
+  const tplOpts = data.templates.map(t => '<option value="' + t.id + '"' + (t.id === (c.open || !c.foodOpen ? 'ask' : 'foodask') ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
+  openModal('<h2>🙋 Find more volunteers</h2><p class="helper">' + esc(ev.name) + ' · ' + esc(fmtDate(ev.date)) + ' · <b>' + c.open + ' spots open</b>' + (c.foodNeed ? ' · ' + c.foodOpen + ' food items open' : '') + '</p>' +
+    '<div class="segs" id="fmWho"><button type="button" class="seg on" data-w="adult">Adults</button><button type="button" class="seg" data-w="all">Everyone with a phone</button></div>' +
+    '<label>Message<select id="fmTpl">' + tplOpts + '</select></label><textarea id="fmText" rows="4"></textarea>' +
+    '<div class="row-actions"><button type="button" class="ghost small" id="fmTop">Pick top 20</button><button type="button" class="ghost small" id="fmNone">Clear</button><span class="helper" id="fmCount"></span></div>' +
+    '<div id="fmPick" class="pick tall"></div>' +
+    '<div class="row-actions stack"><button type="button" id="fmOne">Text one at a time (personal)</button><button type="button" class="ghost" id="fmCopy">Copy phone numbers</button><button type="button" class="ghost" id="fmClose">Close</button></div>' +
+    '<p class="helper">Texting one at a time keeps replies private. People you text are marked “asked” for this event.</p>');
+  const tpl = () => data.templates.find(t => t.id === $('fmTpl').value);
+  $('fmText').value = tpl() ? tpl().text : '';
+  $('fmTpl').onchange = () => { $('fmText').value = tpl() ? tpl().text : ''; };
+  let list = [];
+  const chosen = () => [...document.querySelectorAll('#fmPick input:checked')].map(i => list[Number(i.value)]);
+  const count = () => { $('fmCount').textContent = chosen().length + ' picked'; };
+  function draw(pickTop) {
+    list = pool();
+    $('fmPick').innerHTML = list.map((p, i) => {
+      const done = data.slots.filter(s => s.personId === p.id && !s.noShow).length, ns = noShowsOf(p);
+      const on = pickTop ? i < 20 && !asked[p.id] : false;
+      return '<label class="check"><input type="checkbox" value="' + i + '"' + (on ? ' checked' : '') + '> ' + esc(fullName(p)) +
+        ' <span class="sub">' + esc([fmtPhone(p.phone), done ? 'helped ' + done + '×' : '', /concession/i.test(p.notes || '') ? 'interested in concessions' : '', p.type === 'student' ? 'student' : ''].filter(Boolean).join(' · ')) + '</span>' +
+        (ns ? ' <span class="chip warn">' + ns + ' no-show' + (ns > 1 ? 's' : '') + '</span>' : '') + (asked[p.id] ? ' <span class="chip">asked ' + esc(fmtDate(asked[p.id].slice(0, 10))) + '</span>' : '') + '</label>';
+    }).join('') || '<p class="helper">Everyone with a phone number is already signed up. 🎉</p>';
+    count();
+  }
+  $('fmPick').addEventListener('change', count);
+  $('fmWho').querySelectorAll('.seg').forEach(b => b.onclick = () => { who = b.dataset.w; $('fmWho').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); draw(true); });
+  $('fmTop').onclick = () => draw(true);
+  $('fmNone').onclick = () => { document.querySelectorAll('#fmPick input').forEach(i => { i.checked = false; }); count(); };
+  $('fmCopy').onclick = () => copy(chosen().map(p => fmtPhone(p.phone)).join(', '), 'Phone numbers');
+  $('fmClose').onclick = closeModal;
+  $('fmOne').onclick = () => {
+    const q = chosen(); if (!q.length) { toast('Pick at least one person.'); return; }
+    const markAsked = p => { data.settings.asked = data.settings.asked || {}; (data.settings.asked[evId] = data.settings.asked[evId] || {})[p.id] = new Date().toISOString(); };
+    textOneByOne(ev, q.map(p => ({ s: null, p })), $('fmText').value, markAsked);
+  };
+  draw(true);
 }
 
 // ---------- Check-in ----------
@@ -555,27 +688,35 @@ function viewCheckin(id) {
   const all = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p).sort((a, b) => sortName(a.p).localeCompare(sortName(b.p)));
   const inCount = all.filter(x => x.s.inAt).length;
   $('view').innerHTML = '<a class="back" href="#event/' + id + '">‹ ' + esc(ev.name) + '</a>' +
-    '<h1>Check in</h1><p class="helper">' + inCount + ' of ' + all.length + ' here · ' + esc(fmtDate(ev.date)) + '</p>' +
+    '<h1>Check in</h1><p class="helper">' + inCount + ' of ' + all.length + ' here · ' + esc(fmtDate(ev.date)) + (all.some(x => x.s.noShow) ? ' · ' + all.filter(x => x.s.noShow).length + ' no-shows' : '') + '</p>' +
     '<input id="ciFind" type="search" placeholder="Find a name" value="' + esc(ciSearch) + '">' +
     '<div id="ciList"></div><div class="row-actions"><button type="button" id="ciWalk">+ Walk-in volunteer</button><a class="button ghost" href="#sheet/' + id + '">🖨 Paper sign-in sheet</a></div>';
   function draw() {
     const q = ciSearch.toLowerCase();
+    // After the game starts, anyone not checked in can be marked as a no-show. Food donations are just "got it".
+    const started = ev.date < today() || (ev.date === today() && (!ev.start || toTime(new Date().toISOString()) >= ev.start));
     $('ciList').innerHTML = all.filter(x => !q || fullName(x.p).toLowerCase().includes(q)).map(({ s, p }) => {
-      const state = s.outAt ? 'done' : s.inAt ? 'in' : 'wait';
-      return '<div class="ci ' + state + '"><div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
-        '<span class="sub">' + esc([s.role, fmtRange(s.start, s.end)].filter(Boolean).join(' · ')) + '</span>' +
-        (s.inAt ? '<span class="sub ok">In ' + clock(s.inAt) + (s.outAt ? ' · out ' + clock(s.outAt) + ' · ' + fmtHours(hoursOf(s)) + ' h' : '') + '</span>' : '') + '</div>' +
-        (state === 'wait' ? '<button type="button" data-in="' + s.id + '">Check in</button>' : state === 'in' ? '<button type="button" class="ghost" data-out="' + s.id + '">Check out</button>' : '<button type="button" class="ghost small" data-undo="' + s.id + '">Undo</button>') + '</div>';
+      const food = foodSlot(s);
+      const state = s.noShow ? 'noshow' : s.outAt || (food && s.inAt) ? 'done' : s.inAt ? 'in' : 'wait';
+      const btn = state === 'noshow' ? '<button type="button" class="ghost small" data-unnoshow="' + s.id + '">Undo no-show</button>'
+        : state === 'wait' ? '<div class="ci-btns"><button type="button" data-in="' + s.id + '">' + (food ? 'Got it' : 'Check in') + '</button>' + (started ? '<button type="button" class="ghost small" data-noshow="' + s.id + '">No-show</button>' : '') + '</div>'
+        : state === 'in' ? '<button type="button" class="ghost" data-out="' + s.id + '">Check out</button>'
+        : '<button type="button" class="ghost small" data-undo="' + s.id + '">Undo</button>';
+      return '<div class="ci ' + state + '"><div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + (food ? '🍪 Food' : typeLabel(p.type)) + '</span>' +
+        '<span class="sub">' + esc([s.role, food ? '' : fmtRange(s.start, s.end)].filter(Boolean).join(' · ')) + '</span>' +
+        (s.noShow ? '<span class="sub bad">❌ No-show</span>' : food && s.inAt ? '<span class="sub ok">✓ Received</span>' : s.inAt ? '<span class="sub ok">In ' + clock(s.inAt) + (s.outAt ? ' · out ' + clock(s.outAt) + ' · ' + fmtHours(hoursOf(s)) + ' h' : '') + '</span>' : '') + '</div>' + btn + '</div>';
     }).join('') || '<p class="helper">No one matches.</p>';
   }
   draw();
   $('ciFind').oninput = e => { ciSearch = e.target.value; draw(); };
   $('ciList').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
-    const s = data.slots.find(x => x.id === (b.dataset.in || b.dataset.out || b.dataset.undo)); if (!s) return;
+    const s = data.slots.find(x => x.id === (b.dataset.in || b.dataset.out || b.dataset.undo || b.dataset.noshow || b.dataset.unnoshow)); if (!s) return;
     if (b.dataset.in) s.inAt = new Date().toISOString();
     else if (b.dataset.out) s.outAt = new Date().toISOString();
-    else if (b.dataset.undo) s.outAt = null;
+    else if (b.dataset.undo) { if (foodSlot(s)) s.inAt = null; else s.outAt = null; }
+    else if (b.dataset.noshow) s.noShow = true;
+    else if (b.dataset.unnoshow) s.noShow = false;
     window.save(); viewCheckin(id);
   };
   $('ciWalk').onclick = () => addVolunteer(id, true);
@@ -587,7 +728,7 @@ let sheetOpts = { style: 'booster', split: false, blanks: 8, phone: true };
 function viewSheet(id) {
   const ev = event(id);
   if (!ev) { missingEvent(); return; }
-  const list = slotsFor(id).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
+  const list = slotsFor(id).filter(s => !foodSlot(s)).map(s => ({ s, p: person(s.personId) })).filter(x => x.p)
     .sort((a, b) => ((a.s.role || '') + sortName(a.p)).localeCompare((b.s.role || '') + sortName(b.p)));
   const table = (title, rows) => {
     let body = rows.map((x, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(fullName(x.p)) + '</b>' + (sheetOpts.split ? '' : ' <small>' + typeLabel(x.p.type) + '</small>') + '</td><td>' + esc([x.s.role, fmtRange(x.s.start, x.s.end)].filter(Boolean).join(', ')) + '</td>' +
@@ -644,7 +785,7 @@ async function sendToDoc(evId) {
   const ev = event(evId);
   if (!ev) return;
   if (!docSetUp()) { toast('First connect your Google sign-in sheet (More → Google sign-in sheet).'); location.hash = 'more'; setTimeout(() => { const el = $('docCard'); if (el) el.scrollIntoView(); }, 300); return; }
-  const list = slotsFor(evId).map(s => person(s.personId)).filter(Boolean);
+  const list = slotsFor(evId).filter(s => !foodSlot(s)).map(s => person(s.personId)).filter(Boolean);
   const uniq = xs => xs.filter((p, i) => xs.indexOf(p) === i).sort((a, b) => sortName(a).localeCompare(sortName(b)));
   const adults = uniq(list.filter(p => p.type !== 'student')).map(p => ({ name: fullName(p), phone: fmtPhone(p.phone) }));
   const students = uniq(list.filter(p => p.type === 'student')).map(p => ({ name: fullName(p) }));
@@ -668,6 +809,10 @@ function docScript() {
 // (Google Docs keeps version history: File → Version history shows every earlier copy.)
 const DOC_ID = '${docIdOf(data.settings.signinDoc)}';
 const KEY = '${docToken()}';
+// For the daily reminder emails (see sendReminders at the bottom).
+const DB_URL = '${CFG.sync.url}';
+const DB_KEY = '${CFG.sync.key}';
+const OWNER = '${(signedIn() && window.volSync.user().id) || CFG.ownerId}';
 
 function doPost(e) {
   try {
@@ -733,11 +878,58 @@ function section(body, label, people, withPhone, blanks, widths) {
     }
   }
 }
+
+// ---------- Reminder emails ----------
+// Run turnOnDailyReminders once (pick it in the menu at the top, then click Run). Every morning after
+// that, everyone who volunteers or drops off food tomorrow and gave an email gets a reminder from your Gmail.
+function turnOnDailyReminders() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendReminders').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('sendReminders').timeBased().everyDays(1).atHour(9).create();
+  Logger.log('Daily reminders are on (around 9 AM).');
+}
+
+function sendReminders() {
+  const res = UrlFetchApp.fetch(DB_URL + '/rest/v1/rpc/vol_reminders', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: DB_KEY, Authorization: 'Bearer ' + DB_KEY },
+    payload: JSON.stringify({ p_owner: OWNER, p_key: KEY })
+  });
+  const data = JSON.parse(res.getContentText());
+  if (data.error) throw new Error(data.error);
+  const s = data.settings || {}, sent = {};
+  (data.items || []).forEach(x => {
+    const key = x.email + '|' + x.event + '|' + x.role;
+    if (sent[key]) return;
+    sent[key] = true;
+    const food = x.kind === 'food';
+    const subject = food ? 'Reminder: please bring ' + x.role + ' tomorrow' : 'Reminder: you are volunteering at ' + x.event + ' tomorrow';
+    MailApp.sendEmail(x.email, subject, fill(food ? s.foodText : s.emailText, x, s), { name: s.org || 'Band Boosters' });
+  });
+  Logger.log('Sent ' + Object.keys(sent).length + ' reminder emails.');
+}
+
+function fill(text, x, s) {
+  const time = t => { if (!t) return ''; let [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + String(m).padStart(2, '0') + ' ' + ap; };
+  const day = d => { const [y, m, dd] = String(d).split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); };
+  const range = x.start ? time(x.start) + (x.end ? '–' + time(x.end) : '') : '';
+  const drop = [range, x.note].filter(String).join(' – ');
+  return String(text || 'Hi {first}! Reminder: {event} is tomorrow{time}. Thank you for supporting the band! – {from}')
+    .replace(/\{first\}/g, x.first || 'there').replace(/\{name\}/g, (x.first + ' ' + x.last).trim())
+    .replace(/\{event\}/g, x.event).replace(/\{date\}/g, day(x.date))
+    .replace(/\{time\}/g, x.start ? ' at ' + time(x.start) : '').replace(/\{arrive\}/g, x.start ? time(x.start) : 'your start time')
+    .replace(/\{when\}/g, x.start && x.start >= '15:00' ? 'tomorrow night' : 'tomorrow').replace(/\{day\}/g, 'tomorrow')
+    .replace(/\{job\}/g, x.role ? ' with ' + x.role : '').replace(/\{role\}|\{item\}/g, x.role || '')
+    .replace(/\{location\}/g, x.location || 'the band room')
+    .replace(/\{dropoff\}/g, drop ? 'Please drop it off tomorrow, ' + drop + '. ' : '')
+    .replace(/\{stillneed\}/g, x.open ? 'We are also still looking for ' + x.open + ' more volunteers.\\n' : '').replace(/\{open\}/g, String(x.open || 0))
+    .replace(/\{from\}/g, s.from || s.org || 'Band Boosters')
+    .replace(/\{link\}|\{studentinfo\}|\{foodneeded\}/g, '');
+}
 `;
 }
 function docCard() {
   const ready = docSetUp();
-  return '<div class="card pad" id="docCard"><h2>📄 Google sign-in sheet</h2>' +
+  return '<div class="card pad" id="docCard"><h2>📄 Google sign-in sheet &amp; reminder emails</h2>' +
     '<label>Sign-in sheet Google Doc link<input id="mDoc" type="url" value="' + esc(data.settings.signinDoc || '') + '" placeholder="https://docs.google.com/document/d/…"></label>' +
     '<label>Connection link (from step 4 below)<input id="mHook" type="url" value="' + esc(data.settings.docHook || '') + '" placeholder="https://script.google.com/macros/s/…/exec"></label>' +
     (ready ? '<p class="chip ok">Connected. Use “Send to Google sign-in sheet” on any game.</p>' : '') +
@@ -747,6 +939,7 @@ function docCard() {
     '<li>Click <b>Deploy → New deployment</b>. Click the ⚙ gear next to "Select type" and choose <b>Web app</b>. Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Click <b>Deploy</b>.</li>' +
     '<li>Click <b>Authorize access</b> and pick your Google account. If Google says the app isn\'t verified, click <b>Advanced → Go to Untitled project</b> → <b>Allow</b>. (It\'s your own script.) Copy the <b>Web app URL</b> and paste it in the Connection link box above.</li></ol>' +
     '<div class="row-actions"><button type="button" class="ghost" id="mDocCode">📋 Copy code</button></div>' +
+    '<p class="helper"><b>Reminder emails:</b> after step 4, in the Apps Script page pick <b>turnOnDailyReminders</b> in the menu next to ▶ Run and click <b>Run</b> once. Every morning around 9, people who volunteer or drop off food the next day (and gave an email) get a reminder from your Gmail. If you change the code later, use <b>Deploy → Manage deployments → ✏️ → New version</b>.</p>' +
     '<p class="helper">Each time you send a game, the doc is rebuilt in this app\'s layout (adults, then students, with blank lines for walk-ins). Earlier versions stay under File → Version history. The code includes a private key, so only this app can change your sheet. Your Google account must be able to edit the doc.</p></details></div>';
 }
 
@@ -761,20 +954,22 @@ function personStats(p) {
 function viewPeople() {
   const f = (k, label) => '<button type="button" class="seg' + (pplFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + '</button>';
   const noPhone = data.people.filter(needsPhone).length;
+  const flaky = data.people.filter(p => noShowsOf(p)).length;
   $('view').innerHTML = '<h1>People</h1><p class="helper">' + data.people.length + ' volunteers. Phone numbers you add here are remembered for every event.</p>' +
     '<input id="pFind" type="search" placeholder="Search names or numbers" value="' + esc(pplSearch) + '">' +
-    '<div class="segs">' + f('all', 'All') + f('adult', 'Adults') + f('student', 'Students') + (noPhone ? f('nophone', 'Need phone ' + noPhone) : '') + '</div>' +
+    '<div class="segs">' + f('all', 'All') + f('adult', 'Adults') + f('student', 'Students') + (noPhone ? f('nophone', 'Need phone ' + noPhone) : '') + (flaky ? f('noshow', '❌ No-shows ' + flaky) : '') + '</div>' +
     '<div id="pList"></div>' +
     '<div class="row-actions"><button type="button" id="pNew">+ Add person</button><button type="button" class="ghost" id="pVcf">📇 Save to phone contacts</button><button type="button" class="ghost" id="pHours">⏱ Hours report (CSV)</button></div>';
   function draw() {
     const q = pplSearch.toLowerCase(), qd = pplSearch.replace(/\D/g, '');
-    const list = data.people.filter(p => pplFilter === 'all' || (pplFilter === 'student' ? p.type === 'student' : pplFilter === 'adult' ? p.type !== 'student' : needsPhone(p)))
+    const list = data.people.filter(p => pplFilter === 'all' || (pplFilter === 'student' ? p.type === 'student' : pplFilter === 'adult' ? p.type !== 'student' : pplFilter === 'noshow' ? noShowsOf(p) : needsPhone(p)))
       .filter(p => !q || fullName(p).toLowerCase().includes(q) || (qd.length >= 3 && digits(p.phone).includes(qd)))
       .sort((a, b) => sortName(a).localeCompare(sortName(b)));
     $('pList').innerHTML = list.map(p => {
-      const st = personStats(p);
+      const st = personStats(p), ns = noShowsOf(p);
       return '<div class="vol" data-p="' + p.id + '"><div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
-        '<span class="sub">' + esc([phoneNote(p), p.parent].filter(Boolean).join(' · ')) + '</span>' +
+        (ns ? ' <span class="chip warn">❌ ' + ns + ' no-show' + (ns > 1 ? 's' : '') + '</span>' : '') +
+        '<span class="sub">' + esc([phoneNote(p), p.parent ? (p.type === 'student' ? 'Parent: ' : 'Student: ') + p.parent : '', gradeOf(p.classYear)].filter(Boolean).join(' · ')) + '</span>' +
         '<span class="sub">' + st.yearEvents + ' events this school year' + (st.hours ? ' · ' + fmtHours(st.hours) + ' hours' : '') + '</span></div>' +
         (digits(p.phone) ? '<div class="acts"><a class="icon" href="' + esc(smsHref([p.phone], '')) + '">💬</a><a class="icon" href="tel:' + e164(p.phone) + '">📞</a></div>' : '') + '</div>';
     }).join('') || '<p class="helper">No one yet. Import sign-ups to fill this in.</p>';
@@ -793,7 +988,7 @@ function editPerson(id) {
   const hist = id ? data.slots.filter(s => s.personId === id).map(s => ({ s, ev: event(s.eventId) })).filter(x => x.ev).sort((a, b) => b.ev.date.localeCompare(a.ev.date)) : [];
   openModal('<h2>' + (id ? esc(fullName(p)) : 'Add person') + '</h2>' + personFields(p) +
     '<label>Notes<textarea id="pNotes" rows="2">' + esc(p.notes) + '</textarea></label>' +
-    (hist.length ? '<h3>Volunteered</h3><ul class="hist">' + hist.map(x => '<li><a href="#event/' + x.ev.id + '">' + esc(fmtDate(x.ev.date)) + ' – ' + esc(x.ev.name) + '</a>' + (x.s.role ? ' · ' + esc(x.s.role) : '') + (hoursOf(x.s) ? ' · ' + fmtHours(hoursOf(x.s)) + ' h' : '') + '</li>').join('') + '</ul>' : '') +
+    (hist.length ? '<h3>Volunteered</h3><ul class="hist">' + hist.map(x => '<li><a href="#event/' + x.ev.id + '">' + esc(fmtDate(x.ev.date)) + ' – ' + esc(x.ev.name) + '</a>' + (x.s.role ? ' · ' + esc(x.s.role) : '') + (hoursOf(x.s) ? ' · ' + fmtHours(hoursOf(x.s)) + ' h' : '') + (x.s.noShow ? ' · <b class="bad">no-show</b>' : '') + '</li>').join('') + '</ul>' : '') +
     '<div class="row-actions"><button type="button" id="pSave">Save</button><button type="button" class="ghost" id="pCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="pDel">Delete</button>' : '') + '</div>');
   $('pCancel').onclick = closeModal;
   document.querySelectorAll('.hist a').forEach(a => a.addEventListener('click', closeModal));
@@ -1263,7 +1458,7 @@ function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<div class="card pad"><h2>Your info</h2><div class="grid2"><label>Group name<input id="mOrg" value="' + esc(data.settings.org) + '"></label>' +
     '<label>Sign texts as<input id="mFrom" value="' + esc(data.settings.from) + '" placeholder="Shaana, Volunteer Coordinator"></label></div></div>' +
-    '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {arrive} {when} (tomorrow night) {day} (tomorrow) {stillneed} {open} {job} {location} {from} {link} {studentinfo}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
+    '<div class="card pad"><h2>Text messages</h2><p class="helper">Fill-ins: {first} {name} {event} {date} {time} {arrive} {when} (tomorrow night) {day} (tomorrow) {stillneed} {open} {job} {location} {from} {link} {studentinfo} {item} {dropoff} {foodneeded}</p><div id="mTpls"></div><button type="button" class="ghost" id="mAddTpl">+ Add a message</button></div>' +
     '<div class="card pad"><h2>Sign-up page</h2><label>Page title<input id="mTitle" value="' + esc(data.settings.title || '') + '" placeholder="Band Booster & Parent Volunteer Opportunities"></label>' +
     '<label>Where volunteers sign up<select id="mWhere"><option value="">My own sign-up page</option><option value="sug"' + (data.settings.signupLink ? ' selected' : '') + '>SignUpGenius</option></select></label>' +
     '<label' + (data.settings.signupLink ? '' : ' hidden') + ' id="mSugWrap">SignUpGenius sign-up link (open your sign-up, tap Share, copy the link)<input id="mSug" type="url" value="' + esc(data.settings.signupLink || '') + '" placeholder="https://www.signupgenius.com/go/…"></label>' +
@@ -1274,7 +1469,14 @@ function viewMore() {
     '<label>Instructions for student volunteers (shown when a student signs up, and in the “Student volunteer info” message)<textarea id="mStuInfo" rows="6">' + esc(data.settings.studentInfo || '') + '</textarea></label>' +
     '<label>Welcome note<textarea id="mIntro" rows="2" placeholder="Thank you for supporting the band!">' + esc(data.settings.intro || '') + '</textarea></label>' +
     '<div class="row-actions"><a class="button ghost" href="#share">📣 Share link and QR code</a><a class="button ghost" href="' + esc(signupUrl()) + '" target="_blank" rel="noopener">See the page</a></div></div>' +
+    '<div class="card pad"><h2>💵 Money donations (Cash App)</h2>' +
+    '<label>Your $cashtag<input id="mCash" value="' + esc(data.settings.cashtag || '') + '" placeholder="$RussellvilleBandBoosters" autocapitalize="off"></label>' +
+    '<label>What donors should write in the Cash App note<textarea id="mDonate" rows="3">' + esc(data.settings.donateInfo || '') + '</textarea></label>' +
+    '<p class="helper">The sign-up page shows a 💵 Donate button for the season and for each game, with a ready-to-copy note like “Band Boosters – RHS vs. Lake Hamilton 10/9 – your name”.</p></div>' +
     docCard() +
+    '<div class="card pad"><h2>✉️ Reminder email wording</h2><p class="helper">Sent the day before, once reminder emails are turned on above. Fill-ins: {first} {event} {date} {arrive} {when} {day} {job} {item} {dropoff} {stillneed} {from}</p>' +
+    '<label>Volunteers working a shift<textarea id="mEmail" rows="5">' + esc(data.settings.emailText || '') + '</textarea></label>' +
+    '<label>Food donors<textarea id="mFoodEmail" rows="3">' + esc(data.settings.foodText || '') + '</textarea></label></div>' +
     '<div class="card pad"><h2>Account and sync</h2><div data-syncbox></div></div>' +
     '<div class="card pad"><h2>Import a list</h2><p class="helper">Move over sign-ups you already have in SignUpGenius, BAND, or a spreadsheet.</p><a class="button ghost" href="#import">⬆ Import</a></div>' +
     '<div class="card pad"><h2>Back up</h2><p class="helper">Your list saves on this device (and in the cloud when signed in). Download a backup now and then.</p>' +
@@ -1295,6 +1497,14 @@ function viewMore() {
   $('mFrom').onchange = e => { data.settings.from = e.target.value.trim(); window.save(); };
   $('mTitle').onchange = e => { data.settings.title = e.target.value.trim(); window.save(); };
   $('mFb').onchange = e => { data.settings.facebook = e.target.value.trim(); window.save(); };
+  $('mCash').onchange = e => {
+    let v = e.target.value.trim().replace(/^https?:\/\/cash\.app\//i, '').replace(/\s+/g, '');
+    if (v && v[0] !== '$') v = '$' + v;
+    e.target.value = v; data.settings.cashtag = v; window.save(); toast(v ? 'The Donate button now opens ' + v + ' in Cash App.' : 'Donate button removed.');
+  };
+  $('mDonate').onchange = e => { data.settings.donateInfo = e.target.value.trim(); window.save(); };
+  $('mEmail').onchange = e => { data.settings.emailText = e.target.value.trim(); window.save(); };
+  $('mFoodEmail').onchange = e => { data.settings.foodText = e.target.value.trim(); window.save(); };
   $('mDrive').onchange = e => { data.settings.drive = e.target.value.trim(); window.save(); };
   $('mBand').onchange = e => { data.settings.band = e.target.value.trim(); window.save(); };
   $('mDoc').onchange = e => {

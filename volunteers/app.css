@@ -193,3 +193,21 @@ table.signin.boost td.ph { white-space: nowrap; width: 1%; }
 .stuinfo { background: #fff8e1; border: 1px solid #f2d27a; border-radius: 10px; padding: 8px 12px; margin: 10px 0; font-size: .9rem; }
 .stuinfo summary { font-weight: 700; cursor: pointer; }
 .stuinfo p { margin: .5rem 0; }
+.sub.bad, .bad { color: var(--danger); font-weight: 600; }
+.ci.noshow { border-color: #f1b8b4; background: #fdf3f2; }
+.ci-btns { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.ci-btns .small { min-width: 104px; }
+h2.food-head { margin-top: 1.6rem; }
+h2.food-head small { font-weight: 400; color: var(--muted); font-size: .85rem; }
+.jobrow.food { grid-template-columns: 1fr 80px 44px; }
+.jobrow.food .jNote { grid-column: 1 / -1; }
+@media (max-width: 560px) { .jobrow.food { grid-template-columns: 1fr 70px 40px; } .jobrow.food label { grid-row: auto !important; grid-column: auto !important; } }
+.pick.tall { max-height: 360px; }
+.jobrow.food .drop { grid-column: 1 / -1; display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 6px; }
+.jobrow.food .drop label { margin: 0; font-size: .75rem; }
+.food-sub { margin: 16px 0 0; font-size: 1rem; color: var(--navy); border-top: 2px solid var(--gold); padding-top: 10px; }
+.job.food .who b::before { content: ''; }
+.donate-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: #e9f7ee; border: 1px solid #b9e2c8; border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+.donate-bar span { font-weight: 600; }
+.must { background: #fff4cc; border: 1px solid #f2d27a; border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.must p { margin: .4rem 0 0; }

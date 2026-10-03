@@ -18,13 +18,13 @@
   // App list -> table, with field names on each side. Order matters: parents before children.
   const COLS = [
     { key: 'events', table: 'vol_events', map: { id: 'id', name: 'name', date: 'date', start: 'start_time', end: 'end_time', location: 'location', notes: 'notes', isPublic: 'is_public' } },
-    { key: 'jobs', table: 'vol_jobs', map: { id: 'id', eventId: 'event_id', role: 'role', need: 'need', start: 'start_time', end: 'end_time', sort: 'sort' } },
-    { key: 'people', table: 'vol_people', map: { id: 'id', first: 'first', last: 'last', phone: 'phone', email: 'email', type: 'type', parent: 'parent', notes: 'notes' } },
-    { key: 'slots', table: 'vol_signups', map: { id: 'id', eventId: 'event_id', jobId: 'job_id', personId: 'person_id', role: 'role', start: 'start_time', end: 'end_time', source: 'source', inAt: 'in_at', outAt: 'out_at', textedAt: 'texted_at' } }
+    { key: 'jobs', table: 'vol_jobs', map: { id: 'id', eventId: 'event_id', role: 'role', need: 'need', start: 'start_time', end: 'end_time', sort: 'sort', kind: 'kind', note: 'note', dropDate: 'drop_date' } },
+    { key: 'people', table: 'vol_people', map: { id: 'id', first: 'first', last: 'last', phone: 'phone', email: 'email', type: 'type', parent: 'parent', notes: 'notes', classYear: 'class_year' } },
+    { key: 'slots', table: 'vol_signups', map: { id: 'id', eventId: 'event_id', jobId: 'job_id', personId: 'person_id', role: 'role', start: 'start_time', end: 'end_time', source: 'source', inAt: 'in_at', outAt: 'out_at', textedAt: 'texted_at', noShow: 'no_show' } }
   ];
-  const DEFAULTS = { isPublic: true, need: 1, sort: 0, type: 'adult' };
+  const DEFAULTS = { isPublic: true, need: 1, sort: 0, type: 'adult', kind: 'shift', noShow: false };
 
-  const NULLABLE = new Set(['jobId', 'inAt', 'outAt', 'textedAt']);
+  const NULLABLE = new Set(['jobId', 'inAt', 'outAt', 'textedAt', 'classYear']);
   // One shape for comparing a row from this device with the cloud's copy of it.
   const norm = (c, o) => {
     const r = {};
@@ -33,7 +33,8 @@
       if (v == null || v === '') v = k in DEFAULTS ? DEFAULTS[k] : NULLABLE.has(k) ? null : '';
       if (/At$/.test(k) && v) v = new Date(v).toISOString();
       if (k === 'need' || k === 'sort') v = Number(v) || 0;
-      if (k === 'isPublic') v = !!v;
+      if (k === 'classYear' && v != null) v = Number(v) || null;
+      if (k === 'isPublic' || k === 'noShow') v = !!v;
       r[k] = v;
     });
     return r;
