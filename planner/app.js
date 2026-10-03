@@ -71,7 +71,7 @@ let toastTimer;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3400); }
 window.toast = toast;
 function openModal(html) { $('modalBody').innerHTML = html; $('modal').hidden = false; document.body.classList.add('locked'); }
-function closeModal() { $('modal').hidden = true; $('modalBody').innerHTML = ''; document.body.classList.remove('locked'); }
+function closeModal() { $('modal').hidden = true; $('modalBody').innerHTML = ''; $('modalBody').classList.remove('wide'); document.body.classList.remove('locked'); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 const signedIn = () => !!(window.plannerSync && window.plannerSync.user());
 const client = () => window.plannerSync && window.plannerSync.client();
@@ -440,7 +440,7 @@ function viewToday() {
     '<button type="button" class="tile t-event" data-tile="event">' + TILE_ICONS.event + '<b>Event</b></button>' +
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
     '<button type="button" class="tile t-meal" data-tile="meal">' + TILE_ICONS.meal + '<b>Meal</b></button>' +
-    '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Note</b></button></div>' +
+    '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Write</b></button></div>' +
     (upNext ? '<div class="card upnext" ' + rowOpen(upNext) + ' style="--pc:' + esc(upNext.color || '#b0905a') + '"><span class="eyebrow">Up next · <b id="untilTxt" data-d="' + upNext.date + '" data-t="' + upNext.start + '">' + esc(untilText(upNext.date, upNext.start)) + '</b></span><h2>' + esc(upNext.title) + '</h2><span class="sub">' + esc(fmtDate(upNext.date, 'rel') + ' · ' + fmtTime(upNext.start) + (upNext.end ? '–' + fmtTime(upNext.end) : '') + (upNext.location ? ' · ' + upNext.location : '')) + '</span></div>' : '') +
     '<div class="quickbar"><input id="quick" placeholder="Type it: “Dentist friday 3pm”, “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
     (overdue.length ? '<div class="card pad warnbox"><h2 class="section-title">Past due <small>' + overdue.length + '</small></h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
@@ -458,7 +458,7 @@ function viewToday() {
     const k = b.dataset.tile;
     if (k === 'event' || k === 'task') editItem(null, { kind: k, date: sel });
     else if (k === 'meal') editMeal(sel, nextSlot);
-    else { $('dayNote').focus(); $('dayNote').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    else openInkPage(sel);
   });
   if ($('addHere')) $('addHere').onclick = () => editItem(null, { kind: 'event', date: sel });
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
@@ -547,29 +547,165 @@ function drawWeek() {
   $('calBody').querySelectorAll('[data-addday]').forEach(b => b.onclick = ev => { ev.stopPropagation(); editItem(null, { kind: 'event', date: b.dataset.addday }); });
   wireCal();
 }
-// One day on an hour-by-hour timeline, with all-day items and tasks above it.
-function drawDay() {
-  const d = calDay, es = onDay(agenda(addDays(d, -30), addDays(d, 1)), d);
-  const allDay = es.filter(e => e.allDay || !e.start), timed = es.filter(e => !e.allDay && e.start);
-  const startH = Math.min(7, ...timed.map(e => +e.start.slice(0, 2))), endH = Math.max(21, ...timed.map(e => Math.min(23, +((e.end || e.start).slice(0, 2)) + 1)));
-  const H = 56, mins = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
-  let grid = '';
-  for (let h = startH; h <= endH; h++) grid += '<div class="hr" style="top:' + (h - startH) * H + 'px"><span>' + fmtTime(pad(h) + ':00') + '</span></div>';
-  // Overlapping events sit side by side.
-  const placed = [];
-  timed.sort((a, b) => a.start.localeCompare(b.start)).forEach(e => {
-    const s = mins(e.start), en = Math.max(s + 30, e.end && e.end > e.start ? mins(e.end) : s + 60);
-    let col = 0; while (placed.some(p => p.col === col && p.s < en && s < p.en)) col++;
-    placed.push({ e, s, en, col });
+// ---------- Handwriting (Apple Pencil or finger) ----------
+// Strokes are kept as small lists of points scaled to the pad's width, so they redraw sharply at any size.
+// Each stroke: { c: color, w: width, h: 1 if highlighter, p: [x, y, pressure, x, y, pressure, ...] } with x/y in 0–1000 units of width.
+const INK_COLORS = ['#2b2522', '#7d9b76', '#c99a8e', '#5b7fa6', '#b07e6a'];
+function inkPad(host, strokes, onChange, opts) {
+  opts = opts || {};
+  let color = INK_COLORS[0], size = 2.2, mode = 'pen', fingerOk = !('ontouchstart' in window) || !!opts.finger, penSeen = false;
+  host.innerHTML = '<div class="inkbar">' + INK_COLORS.map((c, k) => '<button type="button" class="inkc' + (k ? '' : ' on') + '" data-ic="' + c + '" style="background:' + c + '" aria-label="Color"></button>').join('') +
+    '<span class="sep"></span><button type="button" class="inkt on" data-it="pen" title="Pen">✎</button><button type="button" class="inkt" data-it="hi" title="Highlighter">▬</button><button type="button" class="inkt" data-it="erase" title="Eraser">⌫</button>' +
+    '<span class="sep"></span><button type="button" class="inkt" data-is="1.4" title="Fine">•</button><button type="button" class="inkt on" data-is="2.2" title="Medium">●</button><button type="button" class="inkt" data-is="4" title="Bold">⬤</button>' +
+    '<span class="sep"></span><button type="button" class="inkt" data-iu title="Undo">↶</button><button type="button" class="inkt" data-ix title="Clear">✕</button>' +
+    '<label class="fing"><input type="checkbox"' + (fingerOk ? ' checked' : '') + '> finger</label></div><div class="inkwrap"><canvas class="ink"></canvas></div>';
+  const cv = host.querySelector('canvas'), ctx = cv.getContext('2d'), undo = [];
+  const scale = () => cv.clientWidth / 1000;
+  function size2() {
+    const r = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.round(w * r); cv.height = Math.round(h * r); ctx.setTransform(r, 0, 0, r, 0, 0); redraw();
+  }
+  function drawStroke(s) {
+    const k = scale(), p = s.p;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = s.c;
+    if (s.h) { ctx.globalAlpha = .32; ctx.lineCap = 'butt'; }
+    if (p.length <= 3) { ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(p[0] * k, p[1] * k, s.w * k * 1.6, 0, 7); ctx.fill(); ctx.restore(); return; }
+    for (let i = 3; i < p.length; i += 3) {
+      ctx.lineWidth = Math.max(.6, s.w * (s.h ? 6 : .55 + (p[i + 2] || .5)) * k * 1.6);
+      ctx.beginPath(); ctx.moveTo(p[i - 3] * k, p[i - 2] * k); ctx.lineTo(p[i] * k, p[i + 1] * k); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function redraw() { ctx.clearRect(0, 0, cv.width, cv.height); strokes.forEach(drawStroke); }
+  let cur = null;
+  const pt = e => { const r = cv.getBoundingClientRect(), k = scale(); return [Math.round((e.clientX - r.left) / k * 10) / 10, Math.round((e.clientY - r.top) / k * 10) / 10, Math.round((e.pressure || .5) * 100) / 100]; };
+  const allowed = e => { if (e.pointerType === 'pen') { penSeen = true; return true; } return e.pointerType === 'mouse' || fingerOk; };
+  function eraseAt(x, y) {
+    const before = strokes.length;
+    for (let i = strokes.length - 1; i >= 0; i--) { const p = strokes[i].p; for (let j = 0; j < p.length; j += 3) if (Math.abs(p[j] - x) < 14 && Math.abs(p[j + 1] - y) < 14) { undo.push(['add', strokes[i], i]); strokes.splice(i, 1); break; } }
+    if (strokes.length !== before) { redraw(); onChange(strokes); }
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (!allowed(e)) return;
+    e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    const [x, y, pr] = pt(e);
+    if (mode === 'erase') { cur = { erase: true }; eraseAt(x, y); return; }
+    cur = { c: color, w: size, p: [x, y, pr] }; if (mode === 'hi') cur.h = 1;
   });
-  const cols = Math.max(1, ...placed.map(p => p.col + 1));
-  grid += placed.map(p => '<div class="blk" ' + rowOpen(p.e) + ' style="--pc:' + esc(p.e.color || '#9a958c') + ';top:' + ((p.s - startH * 60) / 60 * H) + 'px;height:' + Math.max(26, (p.en - p.s) / 60 * H - 3) + 'px;left:calc(54px + (100% - 58px) * ' + p.col / cols + ');width:calc((100% - 58px) / ' + cols + ' - 4px)"><b>' + esc(p.e.title) + '</b><span>' + fmtTime(p.e.start) + (p.e.end ? '–' + fmtTime(p.e.end) : '') + (p.e.location ? ' · ' + esc(p.e.location) : '') + '</span></div>').join('');
-  if (d === today()) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); if (m >= startH * 60 && m <= (endH + 1) * 60) grid += '<div class="nowline" style="top:' + ((m - startH * 60) / 60 * H) + 'px"></div>'; }
-  const note = data.items.find(i => i.kind === 'note' && i.date === d);
-  $('calBody').innerHTML = (allDay.length ? '<div class="card pad">' + allDay.map(entryRow).join('') + '</div>' : '') +
-    mealsCard(d) +
-    '<div class="card timeline" style="height:' + ((endH - startH + 1) * H + 10) + 'px">' + grid + '</div>' +
-    (note && note.notes ? '<div class="card pad journal"><h2>Notes</h2><p class="notes">' + esc(note.notes) + '</p></div>' : '');
+  cv.addEventListener('pointermove', e => {
+    if (!cur) return; e.preventDefault();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    evs.forEach(ev => {
+      const [x, y, pr] = pt(ev);
+      if (cur.erase) { eraseAt(x, y); return; }
+      const p = cur.p, lx = p[p.length - 3], ly = p[p.length - 2];
+      if (Math.abs(x - lx) + Math.abs(y - ly) < 1.2) return;
+      p.push(x, y, pr);
+      const k = scale(); ctx.save(); ctx.lineCap = cur.h ? 'butt' : 'round'; ctx.strokeStyle = cur.c; if (cur.h) ctx.globalAlpha = .32;
+      ctx.lineWidth = Math.max(.6, cur.w * (cur.h ? 6 : .55 + pr) * k * 1.6); ctx.beginPath(); ctx.moveTo(lx * k, ly * k); ctx.lineTo(x * k, y * k); ctx.stroke(); ctx.restore();
+    });
+  });
+  const end = () => { if (!cur) return; if (!cur.erase) { strokes.push(cur); undo.push(['del']); if (cur.h) redraw(); else drawStroke(cur); onChange(strokes); } cur = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  // Stop the page from scrolling while writing with the pencil (fingers still scroll unless finger writing is on).
+  cv.addEventListener('touchstart', e => { if (fingerOk || (e.touches[0] && e.touches[0].touchType === 'stylus')) e.preventDefault(); }, { passive: false });
+  cv.addEventListener('touchmove', e => { if (cur) e.preventDefault(); }, { passive: false });
+  host.querySelectorAll('[data-ic]').forEach(b => b.onclick = () => { color = b.dataset.ic; if (mode === 'erase') setMode('pen'); host.querySelectorAll('[data-ic]').forEach(x => x.classList.toggle('on', x === b)); });
+  const setMode = m => { mode = m; host.querySelectorAll('[data-it]').forEach(x => x.classList.toggle('on', x.dataset.it === m)); };
+  host.querySelectorAll('[data-it]').forEach(b => b.onclick = () => setMode(b.dataset.it));
+  host.querySelectorAll('[data-is]').forEach(b => b.onclick = () => { size = +b.dataset.is; host.querySelectorAll('[data-is]').forEach(x => x.classList.toggle('on', x === b)); });
+  host.querySelector('[data-iu]').onclick = () => {
+    const u = undo.pop(); if (!u) return;
+    if (u[0] === 'del') strokes.pop(); else strokes.splice(u[2], 0, u[1]);
+    redraw(); onChange(strokes);
+  };
+  host.querySelector('[data-ix]').onclick = () => { if (!strokes.length || !confirm('Clear this page?')) return; strokes.length = 0; undo.length = 0; redraw(); onChange(strokes); };
+  host.querySelector('.fing input').onchange = e => { fingerOk = e.target.checked; cv.style.touchAction = fingerOk ? 'none' : 'pan-y'; };
+  cv.style.touchAction = fingerOk ? 'none' : 'pan-y';
+  new ResizeObserver(size2).observe(cv);
+  return { redraw };
+}
+// A big writing page for any day, opened from the daily spread.
+function openInkPage(d) {
+  const v = dayPage(d), strokes = v.ink || [];
+  openModal('<div class="mini-head"><h2>Write · ' + esc(fmtDate(d)) + '</h2><button type="button" class="ghost small" id="inkDone">Done</button></div><div id="inkBig" class="inkhost big"></div>');
+  $('modalBody').classList.add('wide');
+  let t;
+  inkPad($('inkBig'), strokes, s => { clearTimeout(t); t = setTimeout(() => { const nv = dayPage(d); nv.ink = s; saveDayPage(d, nv); }, 400); });
+  $('inkDone').onclick = () => { $('modalBody').classList.remove('wide'); closeModal(); route(); };
+}
+
+// One day as a two-page planner spread (side by side on an iPad or computer, stacked on a phone).
+// Left: month, date dots, weekday and an hour-by-hour schedule she can write on (events fill in at their hour).
+// Right: the vibe, priorities, to-do/notes, mindfulness boxes, water, mood and tomorrow.
+// Everything she writes is kept in one "daypage" item per date (as JSON in its notes); the to-do/notes box is the
+// same note as on the Today screen.
+const MOODS = ['😞', '😕', '😐', '🙂', '😄'];
+function dayPage(d) {
+  let it = data.items.find(i => i.kind === 'daypage' && i.date === d), v = {};
+  try { v = it ? JSON.parse(it.notes || '{}') : {}; } catch (e) { v = {}; }
+  v.pri = v.pri || [{}, {}, {}, {}, {}]; v.hours = v.hours || {};
+  return v;
+}
+function saveDayPage(d, v) {
+  let it = data.items.find(i => i.kind === 'daypage' && i.date === d);
+  if (!it) { it = { id: 'page-' + d, kind: 'daypage', title: 'Day page', date: d, notes: '' }; data.items.push(it); }
+  it.notes = JSON.stringify(v); window.save();
+}
+function drawDay() {
+  const d = calDay, dt = new Date(d + 'T12:00'), es = onDay(agenda(addDays(d, -30), addDays(d, 1)), d);
+  const v = dayPage(d), note = data.items.find(i => i.kind === 'note' && i.date === d);
+  const allDay = es.filter(e => e.allDay || !e.start), timed = es.filter(e => !e.allDay && e.start);
+  const [y, m] = d.split('-').map(Number), n = lastDay(y, m);
+  const firstH = Math.min(5, ...timed.map(e => +e.start.slice(0, 2))), lastH = Math.max(21, ...timed.map(e => +e.start.slice(0, 2)));
+  const dots = Array.from({ length: n }, (_, k) => { const iso = d.slice(0, 8) + pad(k + 1); return '<button type="button" class="ddot' + (iso === d ? ' on' : '') + (iso === today() ? ' now' : '') + '" data-dday="' + iso + '">' + (k + 1) + '</button>'; }).join('');
+  // Monday-to-Sunday row, like the paper planner.
+  const mon = addDays(d, -((dt.getDay() + 6) % 7)), days = [0, 1, 2, 3, 4, 5, 6].map(k => addDays(mon, k));
+  let hours = '';
+  for (let h = firstH; h <= lastH; h++) {
+    const hh = pad(h), here = timed.filter(e => e.start.slice(0, 2) === hh);
+    hours += '<div class="hrow"><span class="hl">' + (h % 12 || 12) + ' ' + (h < 12 ? 'AM' : 'PM') + '</span><div class="hc">' +
+      here.map(e => '<span class="hev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#8c7a6b') + '">' + esc(fmtTime(e.start) + ' ' + e.title) + '</span>').join('') +
+      '<input class="hin" data-hour="' + hh + '" value="' + esc(v.hours[hh] || '') + '" aria-label="' + (h % 12 || 12) + (h < 12 ? 'am' : 'pm') + ' notes"></div></div>';
+  }
+  const box = (k, label) => '<div class="mbox"><span>' + label + '</span><textarea data-dp="' + k + '" rows="3">' + esc(v[k] || '') + '</textarea></div>';
+  $('calBody').innerHTML = '<div class="spread">' +
+    '<div class="pg left"><div class="pgtop"><div class="mon">' + esc(dt.toLocaleDateString([], { month: 'short' }).toUpperCase()) + '<small>' + dt.getDate() + '</small></div>' +
+      '<div class="ddots">' + dots + '</div></div>' +
+      '<div class="wkrow"><span class="todaylbl">' + (d === today() ? 'TODAY' : esc(dt.toLocaleDateString([], { weekday: 'long' }).toUpperCase())) + '</span>' +
+      days.map(x => '<button type="button" class="wd' + (x === d ? ' on' : '') + '" data-dday="' + x + '">' + new Date(x + 'T12:00').toLocaleDateString([], { weekday: 'short' }).toUpperCase() + '</button>').join('') + '</div>' +
+      (allDay.length ? '<div class="alld">' + allDay.map(e => '<span class="hev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#8c7a6b') + '">' + (e.kind === 'task' ? (e.done ? '✓ ' : '○ ') : '') + esc(e.title) + '</span>').join('') + '</div>' : '') +
+      '<div class="hours">' + hours + '</div>' +
+      '<div class="pbox2"><span>Evening</span><textarea data-dp="evening" rows="2">' + esc(v.evening || '') + '</textarea></div>' +
+    '</div>' +
+    '<div class="rings" aria-hidden="true"></div>' +
+    '<div class="pg right">' +
+      '<div class="pbox2 vibe"><span>The vibe</span><input data-dp="vibe" value="' + esc(v.vibe || '') + '" placeholder="Calm & focused"></div>' +
+      '<div class="cols"><div class="pbox2"><span>Priority</span>' + v.pri.map((p, k) => '<div class="pri"><button type="button" class="pc' + (p.done ? ' on' : '') + '" data-pri="' + k + '">' + (p.done ? '✓' : '') + '</button><input data-prit="' + k + '" value="' + esc(p.t || '') + '"></div>').join('') + '</div>' +
+      '<div class="pbox2 todo"><span>To do / notes</span><textarea id="dpNote" rows="7">' + esc(note ? note.notes : '') + '</textarea></div></div>' +
+      '<h3 class="mh">Mindfulness</h3><div class="mgrid">' + box('affirm', 'Affirmations') + box('grat', 'Gratitude') + box('refl', 'Reflection') + box('high', 'Highlight') + '</div>' +
+      '<div class="trackers"><div><span>Hydration</span><div class="drops">' + Array.from({ length: 8 }, (_, k) => '<button type="button" class="drop' + (k < (v.water || 0) ? ' on' : '') + '" data-water="' + (k + 1) + '" aria-label="' + (k + 1) + ' glasses"></button>').join('') + '</div></div>' +
+      '<div><span>Mood</span><div class="moods">' + MOODS.map((e, k) => '<button type="button" class="mood' + (v.mood === k + 1 ? ' on' : '') + '" data-mood="' + (k + 1) + '">' + e + '</button>').join('') + '</div></div></div>' +
+      '<div class="pbox2"><span>Tomorrow</span><textarea data-dp="tomorrow" rows="3">' + esc(v.tomorrow || '') + '</textarea></div>' +
+      '<div class="pbox2 writebox"><span>Write it down</span><button type="button" class="ghost small bigwrite" id="inkOpen">Full page ⤢</button><div id="inkHere" class="inkhost"></div></div>' +
+    '</div></div>';
+  const body = $('calBody'), put = fn => { const nv = dayPage(d); fn(nv); saveDayPage(d, nv); };
+  body.querySelectorAll('[data-dday]').forEach(b => b.onclick = () => { calDay = b.dataset.dday; viewCalendar(); });
+  body.querySelectorAll('[data-hour]').forEach(i => i.onchange = () => put(nv => { nv.hours[i.dataset.hour] = i.value; }));
+  body.querySelectorAll('[data-dp]').forEach(i => i.onchange = () => put(nv => { nv[i.dataset.dp] = i.value; }));
+  body.querySelectorAll('[data-prit]').forEach(i => i.onchange = () => put(nv => { nv.pri[+i.dataset.prit] = Object.assign({}, nv.pri[+i.dataset.prit], { t: i.value }); }));
+  body.querySelectorAll('[data-pri]').forEach(b => b.onclick = () => { put(nv => { const p = nv.pri[+b.dataset.pri] || {}; p.done = !p.done; nv.pri[+b.dataset.pri] = p; if (p.done && p.t) celebrate(b); }); drawDay(); });
+  body.querySelectorAll('[data-water]').forEach(b => b.onclick = () => { put(nv => { const w = +b.dataset.water; nv.water = nv.water === w ? w - 1 : w; }); drawDay(); });
+  body.querySelectorAll('[data-mood]').forEach(b => b.onclick = () => { put(nv => { nv.mood = nv.mood === +b.dataset.mood ? 0 : +b.dataset.mood; }); drawDay(); });
+  $('dpNote').onchange = e => {
+    let nn = data.items.find(i => i.kind === 'note' && i.date === d);
+    if (!nn) { nn = { id: 'note-' + d, kind: 'note', title: 'Notes', date: d, notes: '' }; data.items.push(nn); }
+    nn.notes = e.target.value; window.save(); toast('Saved.');
+  };
+  let inkT;
+  inkPad($('inkHere'), v.ink || [], s => { clearTimeout(inkT); inkT = setTimeout(() => { const nv = dayPage(d); nv.ink = s; saveDayPage(d, nv); }, 400); });
+  $('inkOpen').onclick = () => openInkPage(d);
+  const sel = body.querySelector('.ddot.on'), strip = body.querySelector('.ddots'); if (sel && strip) strip.scrollLeft = sel.offsetLeft - strip.clientWidth / 2;
   wireCal();
 }
 const rowOpen = e => e.src === 'planner' ? 'data-item="' + e.id + '"' : e.link ? 'data-link="' + esc(e.link) + '"' : 'data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
