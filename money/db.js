@@ -18,7 +18,7 @@
   // App list -> table, with field names on each side. Order matters: parents before children.
   const COLS = [
     { key: 'accounts', table: 'money_accounts', map: { id: 'id', name: 'name', kind: 'kind', openingBalance: 'opening_balance', openingDate: 'opening_date', sort: 'sort' } },
-    { key: 'tx', table: 'money_tx', map: { id: 'id', accountId: 'account_id', date: 'date', time: 'time', payee: 'payee', amount: 'amount', type: 'type', category: 'category', note: 'note', checkNum: 'check_num', cleared: 'cleared', taxCat: 'tax_cat', receipt: 'receipt', source: 'source', bankAmount: 'bank_amount' } },
+    { key: 'tx', table: 'money_tx', map: { id: 'id', accountId: 'account_id', date: 'date', time: 'time', payee: 'payee', amount: 'amount', type: 'type', category: 'category', note: 'note', checkNum: 'check_num', cleared: 'cleared', taxCat: 'tax_cat', receipt: 'receipt', source: 'source', bankAmount: 'bank_amount', tags: 'tags' } },
     { key: 'docs', table: 'money_docs', map: { id: 'id', year: 'year', kind: 'kind', title: 'title', checklist: 'checklist', taxCat: 'tax_cat', amount: 'amount', file: 'file', fileName: 'file_name', txId: 'tx_id', note: 'note' } }
   ];
   const DEFAULTS = { sort: 0, kind: 'checking', type: 'expense', cleared: false, openingBalance: 0 };

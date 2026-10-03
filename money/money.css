@@ -98,3 +98,46 @@ label.bline .sub { display: block; overflow-wrap: anywhere; }
 .tx { -webkit-tap-highlight-color: transparent; }
 .tx:active { background: #f0f5f2; }
 main#view { padding-bottom: 70px; }
+.favs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; margin: 0 -2px; scrollbar-width: none; }
+.favs::-webkit-scrollbar { display: none; }
+.favs .chipbtn { flex: 0 0 auto; }
+.favl { flex: 0 0 auto; align-self: center; font-size: .78rem; font-weight: 700; color: var(--muted); }
+.chipbtn.tag { color: #6b3fa0; border-color: #6b3fa0; }
+.chipbtn.tag.on { background: #6b3fa0; color: #fff; }
+.chip.tagc { background: #efe7fa; color: #6b3fa0; }
+p.lbl { font-size: .85rem; color: var(--muted); margin: 8px 0 2px; }
+.scanbtn { width: 100%; margin: 4px 0; }
+.addgrid .wide { grid-column: 1 / -1; min-height: 60px; }
+.inbox-link { display: flex; align-items: center; gap: 6px; text-decoration: none; color: var(--ink); }
+.inbox-link .sub { margin-left: auto; color: var(--navy); font-weight: 600; }
+.inbox-card .big { font-size: 1.25rem; }
+.catchips.big .chipbtn { min-height: 42px; font-size: .95rem; padding: 6px 14px; }
+.rule { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rule input, .rule select { margin: 0; }
+.rule .sub { display: block; }
+.progress { position: relative; }
+.progress i { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .35; }
+.progress.green span { background: #2a9d5c; }
+.progress.yellow span { background: #e0a526; }
+.progress.red span { background: #c4513b; }
+.bud { cursor: pointer; padding: 2px 0; }
+.bud .mini-row { border: 0; padding: 4px 0 2px; }
+.bud .progress { margin: 0 0 6px; }
+.warnc { color: #a65b00; }
+.safe .mini-row { border: 0; padding: 0; }
+.safe-amt { text-align: right; white-space: nowrap; }
+.safe-amt b { font-size: 1.3rem; }
+.safe-amt .sub { display: block; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; }
+.cal-head h2 { margin: 0; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin: 6px 0 10px; }
+.cal-w { text-align: center; font-size: .75rem; font-weight: 700; color: var(--muted); }
+.cal-d { min-height: 58px; padding: 3px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--ink); display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 1px; font-weight: 400; }
+.cal-d.empty { background: none; border: 0; }
+.cal-d .n { font-size: .78rem; font-weight: 700; text-align: left; }
+.cal-d .calamt { font-size: .68rem; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-d.has { border-color: var(--navy-2); }
+.cal-d.today { outline: 2px solid var(--gold); }
+table.cmp tr.tot td { font-weight: 700; border-top: 2px solid var(--line); }
+.safe .mini-row > span:first-child .sub { display: block; }
+table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
