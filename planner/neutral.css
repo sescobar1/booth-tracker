@@ -324,3 +324,4 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .qf { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #fff; border: 1px solid #e8ddd2; color: inherit; font-size: 14px; box-shadow: none; }
 .qf small { opacity: .65; font-size: 11px; }
 .qt:active, .qf:active { transform: scale(.95); }
+.nick { font-size: .8rem; color: var(--muted); font-family: Inter, sans-serif; margin-left: 4px; }
