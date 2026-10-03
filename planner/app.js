@@ -17,7 +17,17 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 
 const DEFAULT_LISTS = ['Home', 'Band', 'Booth', 'Work', 'Kids', 'Errands'];
 const DEFAULT_FOLDERS = ['Band', 'Booth', 'Home', 'School', 'Medical', 'Taxes', 'Work', 'Other'];
-const COLORS = ['#3b47a8', '#1d7a46', '#c4513b', '#e0a526', '#7b3fa0', '#2a8fb8', '#c2577f', '#5c6f82'];
+const COLORS = ['#9b7bff', '#ff7eb6', '#4aa8ff', '#2fbf8f', '#ff9f68', '#f5b82e', '#e5487d', '#4cc4c4'];
+// Each task list and document folder gets its own candy color (accent, light background).
+const PASTELS = [['#ff7eb6', '#ffe3ef'], ['#2fbf8f', '#d9f7ea'], ['#9b7bff', '#ece5ff'], ['#4aa8ff', '#dcefff'], ['#ff9f68', '#ffe9da'], ['#f5b82e', '#fff4c7'], ['#4cc4c4', '#d8f5f5'], ['#e5487d', '#ffdbe7']];
+const NAMED = { home: 0, band: 2, booth: 4, work: 3, kids: 1, errands: 5, school: 1, medical: 7, taxes: 5, other: 6 };
+function pastel(name) {
+  const k = String(name || '').toLowerCase();
+  if (k in NAMED) return PASTELS[NAMED[k]];
+  let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return PASTELS[h % PASTELS.length];
+}
+const chipStyle = name => name ? ' style="--cc:' + pastel(name)[0] + ';--cbg:' + pastel(name)[1] + '"' : '';
 
 function blank() {
   return { items: [], docs: [], settings: { lists: DEFAULT_LISTS.slice(), folders: DEFAULT_FOLDERS.slice(), calendars: [], showBand: true, showBills: true } };
@@ -240,7 +250,7 @@ function agenda(from, to) {
   const out = [];
   data.items.filter(i => i.kind === 'event' || (i.kind === 'task' && i.date)).forEach(i => itemDates(i, from, to).forEach(d => {
     const span = i.endDate && i.endDate > i.date ? Math.round((new Date(i.endDate) - new Date(i.date)) / 864e5) : 0;
-    out.push({ src: 'planner', id: i.id, kind: i.kind, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.color || (i.kind === 'task' ? '' : COLORS[0]), list: i.list, priority: i.priority });
+    out.push({ src: 'planner', id: i.id, kind: i.kind, listName: i.list, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.kind === 'task' ? (i.list ? pastel(i.list)[0] : '#c9b8ff') : (i.color || COLORS[0]), list: i.list, priority: i.priority });
   }));
   S().calendars.filter(c => c.on !== false).forEach(c => {
     const got = cache.get('cal_' + c.id); if (!got) return;
@@ -254,9 +264,9 @@ function agenda(from, to) {
 const onDay = (list, d) => list.filter(e => e.date <= d && (e.endDate || e.date) >= d);
 
 function entryRow(e) {
-  const when = e.allDay ? (e.endDate && e.endDate > e.date ? 'until ' + fmtDate(e.endDate) : 'All day') : fmtTime(e.start) + (e.end ? '–' + fmtTime(e.end) : '');
+  const when = e.kind === 'task' ? '' : e.allDay ? (e.endDate && e.endDate > e.date ? 'until ' + fmtDate(e.endDate) : 'All day') : fmtTime(e.start) + (e.end ? '–' + fmtTime(e.end) : '');
   const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.kind === 'task' ? (e.list || 'Task') : '';
-  const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '">' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
+  const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '"' + (e.listName ? ' style="--lc:' + pastel(e.listName)[0] + '"' : '') + '>' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
   const open = e.src === 'planner' ? ' data-item="' + e.id + '"' : e.link ? ' data-link="' + esc(e.link) + '"' : ' data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
   return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '❗ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, src].filter(Boolean).join(' · ')) + '</span></div></div>';
 }
@@ -293,8 +303,8 @@ function route() {
 window.render = () => { const y = window.scrollY; route(); window.scrollTo(0, y); if (!render.started) { render.started = true; refreshAll(); } };
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
 $('topAdd').onclick = $('fab').onclick = () => {
-  openModal('<h2>Add</h2><div class="addgrid"><button type="button" data-addk="event">🗓 Event<span>on the calendar</span></button><button type="button" class="ghost" data-addk="task">✅ Task<span>to-do</span></button>' +
-    '<button type="button" class="ghost" data-addk="note">📝 Note<span>for today</span></button><button type="button" class="ghost" data-addk="file">📎 Document<span>upload a file</span></button></div>' +
+  openModal('<h2>Add</h2><div class="addgrid"><button type="button" class="t1" data-addk="event">🗓 Event<span>on the calendar</span></button><button type="button" class="t2" data-addk="task">✅ Task<span>to-do</span></button>' +
+    '<button type="button" class="t3" data-addk="note">📝 Note<span>for today</span></button><button type="button" class="t4" data-addk="file">📎 Document<span>upload a file</span></button></div>' +
     '<label>Or just type it<input id="qAdd" placeholder="Dentist friday 3pm · Call Mrs. Abbott tomorrow"></label><p class="helper">Dates and times are picked up from what you type.</p>' +
     '<div class="row-actions"><button type="button" id="qGo">Add</button><button type="button" class="ghost" id="addX">Cancel</button></div>');
   $('addX').onclick = closeModal;
@@ -347,18 +357,21 @@ function viewToday() {
   const overdue = data.items.filter(i => i.kind === 'task' && !i.done && i.date && i.date < t).sort((a, b) => a.date.localeCompare(b.date));
   const note = data.items.find(i => i.kind === 'note' && i.date === t);
   const hr = new Date().getHours();
+  const todayTasks = data.items.filter(i => i.kind === 'task' && i.date && (i.date === t || (i.date < t && !i.done)));
+  const doneToday = todayTasks.filter(i => i.done).length;
   let next = '';
   for (let k = 1; k <= 7; k++) {
     const d = addDays(t, k), es = onDay(week, d).filter(e => !(e.kind === 'task' && e.done));
     if (es.length) next += '<div class="day">' + esc(fmtDate(d, 'rel')) + '</div>' + es.map(entryRow).join('');
   }
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="hello"><span>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1></div>' +
+    '<div class="hello"><span class="sticker">' + (hr < 12 ? '🌸' : hr < 17 ? '🌻' : '🌙') + '</span><span>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana ✨</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
+    (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks done' + (doneToday === todayTasks.length ? ' 🎉' : '') + '<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
     '<div class="quickbar"><input id="quick" placeholder="Add: “Dentist friday 3pm” or “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
-    (overdue.length ? '<div class="card pad warnbox"><h2>⏰ Past due (' + overdue.length + ')</h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
-    '<div class="card pad"><h2>Today</h2>' + (todays.length ? todays.map(entryRow).join('') : '<p class="helper">Nothing scheduled. Enjoy it! 🎉</p>') + '</div>' +
-    '<div class="card pad"><h2>📝 Notes for today</h2><textarea id="dayNote" rows="4" placeholder="Anything to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
-    '<div class="card pad"><h2>Next 7 days</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
+    (overdue.length ? '<div class="card pad warnbox"><h2>⏰ Past due (' + overdue.length + ')</h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
+    '<div class="card pad t-today"><h2>☀️ Today</h2>' + (todays.length ? todays.map(entryRow).join('') : '<p class="helper">Nothing scheduled. Enjoy it! 🎉</p>') + '</div>' +
+    '<div class="card pad sticky"><h2>📝 Notes for today</h2><textarea id="dayNote" rows="4" placeholder="Anything to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
+    '<div class="card pad t-next"><h2>🗓 Next 7 days</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars">🔗 <b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
@@ -399,7 +412,7 @@ function viewCalendar() {
   wireRows($('view'));
 }
 function legend() {
-  const parts = [['#3b47a8', 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
+  const parts = [[COLORS[0], 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
   if (S().showBand !== false && cache.get('band')) parts.push(['#e0a526', 'Band']);
   if (S().showBills !== false && cache.get('bills')) parts.push(['#c4513b', 'Bills']);
   return '<p class="helper legend">' + parts.map(([c, n]) => '<span><i style="background:' + esc(c) + '"></i>' + esc(n) + '</span>').join('') + '</p>';
@@ -414,8 +427,9 @@ function viewTasks() {
   const open = tasks.filter(i => !i.done && match(i)).sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.date || '9999').localeCompare(b.date || '9999') || a.title.localeCompare(b.title));
   const done = tasks.filter(i => i.done && match(i));
   const count = f => tasks.filter(i => !i.done && (f === 'today' ? i.date && i.date <= t : f === 'upcoming' ? i.date && i.date > t : f === 'someday' ? !i.date : i.list === f)).length;
-  const chip = (k, l) => '<button type="button" class="chipbtn' + (taskFilter === k ? ' on' : '') + '" data-tf="' + esc(k) + '">' + esc(l) + (k !== 'open' && count(k) ? ' <b>' + count(k) + '</b>' : '') + '</button>';
-  const row = i => entryRow({ src: 'planner', id: i.id, kind: 'task', date: i.date, endDate: i.date, allDay: true, done: i.done, title: i.title, list: [i.list, i.date ? (i.date < t && !i.done ? '⚠ ' : '') + fmtDate(i.date, 'rel') : '', REPEATS[i.repeat] && i.repeat ? '🔁' : ''].filter(Boolean).join(' · '), priority: i.priority });
+  const fixed = { open: ['#9b7bff', '#ece5ff'], today: ['#f5b82e', '#fff4c7'], upcoming: ['#4aa8ff', '#dcefff'], someday: ['#4cc4c4', '#d8f5f5'] };
+  const chip = (k, l) => '<button type="button" class="chipbtn' + (taskFilter === k ? ' on' : '') + '" data-tf="' + esc(k) + '"' + (fixed[k] ? ' style="--cc:' + fixed[k][0] + ';--cbg:' + fixed[k][1] + '"' : chipStyle(k)) + '>' + esc(l) + (k !== 'open' && count(k) ? ' <b>' + count(k) + '</b>' : '') + '</button>';
+  const row = i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, endDate: i.date, allDay: true, done: i.done, title: i.title, list: [i.list, i.date ? (i.date < t && !i.done ? '⚠ ' : '') + fmtDate(i.date, 'rel') : '', REPEATS[i.repeat] && i.repeat ? '🔁' : ''].filter(Boolean).join(' · '), priority: i.priority });
   $('view').innerHTML = '<h1>✅ Tasks</h1>' +
     '<div class="quickbar"><input id="quick" placeholder="Add a task… “Turn in band forms friday”"><button type="button" id="quickGo">Add</button></div>' +
     '<div class="chips scrollx">' + chip('open', 'All') + chip('today', 'Today') + chip('upcoming', 'Upcoming') + chip('someday', 'Someday') + lists.map(l => chip(l, l)).join('') + '</div>' +
@@ -547,10 +561,10 @@ function viewFiles() {
   $('view').innerHTML = '<h1>📁 Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
     '<div class="row-actions"><label class="button file">⬆ Upload<input type="file" id="fUp" multiple hidden></label><label class="button ghost file">📷 Photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label></div>' +
     '<input id="fFind" type="search" placeholder="Search documents" value="' + esc(fileFind) + '">' +
-    '<div class="chips scrollx"><button type="button" class="chipbtn' + (!fileFolder ? ' on' : '') + '" data-ff="">All <b>' + data.docs.length + '</b></button>' + folders.map(f => '<button type="button" class="chipbtn' + (fileFolder === f ? ' on' : '') + '" data-ff="' + esc(f) + '">' + esc(f) + (count(f) ? ' <b>' + count(f) + '</b>' : '') + '</button>').join('') + '</div>' +
+    '<div class="chips scrollx"><button type="button" class="chipbtn' + (!fileFolder ? ' on' : '') + '" data-ff="">All <b>' + data.docs.length + '</b></button>' + folders.map(f => '<button type="button" class="chipbtn' + (fileFolder === f ? ' on' : '') + '" data-ff="' + esc(f) + '"' + chipStyle(f) + '>' + esc(f) + (count(f) ? ' <b>' + count(f) + '</b>' : '') + '</button>').join('') + '</div>' +
     '<div class="card pad">' + (list.map(d => {
       const it = d.itemId && data.items.find(i => i.id === d.itemId);
-      return '<div class="doc" data-doc="' + d.id + '"><span class="dicon">' + icon(d.fileName) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([d.folder, fileSize(d.size || 0), it ? '🗓 ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
+      return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fbg:' + pastel(d.folder)[1] + '"' : '') + '>' + icon(d.fileName) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([d.folder, fileSize(d.size || 0), it ? '🗓 ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
     }).join('') || '<p class="helper">No documents' + (fileFolder || q ? ' here' : ' yet') + '. Upload permission slips, receipts, schedules, forms…</p>') + '</div>';
   $('view').querySelectorAll('[data-ff]').forEach(b => b.onclick = () => { fileFolder = b.dataset.ff; viewFiles(); });
   $('fFind').oninput = e => { fileFind = e.target.value; clearTimeout(viewFiles.t); viewFiles.t = setTimeout(() => { viewFiles(); const f = $('fFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
