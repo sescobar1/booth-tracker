@@ -317,7 +317,7 @@ function toggleDone(id) {
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
-  const views = { today: viewToday, calendar: viewCalendar, tasks: viewTasks, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  const views = { today: viewToday, calendar: viewCalendar, tasks: viewTasks, meals: viewMeals, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -392,10 +392,12 @@ function viewToday() {
     '<div class="quickbar"><input id="quick" placeholder="Add: “Dentist friday 3pm” or “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
     (overdue.length ? '<div class="card pad warnbox"><h2 class="section-title">Past due <small>' + overdue.length + '</small></h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
     '<div class="card pad"><h2 class="section-title">Today <small>' + esc(new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' + (todays.length ? todays.map(entryRow).join('') : '<p class="helper">Nothing scheduled today.</p>') + '</div>' +
+    mealsCard(t) +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
+  $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
   $('quickGo').onclick = go; $('quick').onkeydown = e => { if (e.key === 'Enter') go(); };
   $('dayNote').onchange = e => {
@@ -408,9 +410,34 @@ function viewToday() {
 
 // ---------- Calendar ----------
 let calMonth = '', calDay = '';
+let calMode = (() => { try { return localStorage.getItem(KEY + 'CalMode') || 'month'; } catch (e) { return 'month'; } })();
+const weekStart = iso => addDays(iso, -new Date(iso + 'T12:00').getDay());
 function viewCalendar() {
-  if (!calMonth) calMonth = today().slice(0, 7);
-  if (!calDay || !calDay.startsWith(calMonth)) calDay = today().startsWith(calMonth) ? today() : calMonth + '-01';
+  if (!calDay) calDay = today();
+  calMonth = calDay.slice(0, 7);
+  const seg = '<div class="segs viewseg">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(([k, l]) => '<button type="button" class="seg' + (calMode === k ? ' on' : '') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>';
+  const title = calMode === 'month' ? monthName(calMonth) : calMode === 'week' ? weekTitle(weekStart(calDay)) : fmtDate(calDay, 'long');
+  $('view').innerHTML = seg + '<div class="cal-head"><button type="button" class="ghost small" id="cPrev">‹</button><h2>' + esc(title) + '</h2><button type="button" class="ghost small" id="cNext">›</button></div>' +
+    '<div class="row-actions center"><button type="button" class="ghost small" id="cToday">Today</button>' + (S().calendars.length ? '<button type="button" class="ghost small" id="cRefresh">Refresh</button>' : '<a class="button ghost small" href="#calendars">Connect Google or Outlook</a>') + '<button type="button" class="small" id="cAdd">＋ Add</button></div>' +
+    '<div id="calBody"></div>' + legend();
+  ({ month: drawMonth, week: drawWeek, day: drawDay })[calMode]();
+  const step = calMode === 'day' ? 1 : calMode === 'week' ? 7 : 0;
+  const move = dir => {
+    if (step) calDay = addDays(calDay, dir * step);
+    else { const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + dir, 1); calDay = isoDay(d); }
+    viewCalendar();
+  };
+  $('cPrev').onclick = () => move(-1); $('cNext').onclick = () => move(1);
+  $('cToday').onclick = () => { calDay = today(); viewCalendar(); };
+  if ($('cRefresh')) $('cRefresh').onclick = () => { toast('Refreshing…'); refreshAll(true); };
+  $('cAdd').onclick = () => editItem(null, { kind: 'event', date: calDay });
+  $('view').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { calMode = b.dataset.mode; try { localStorage.setItem(KEY + 'CalMode', calMode); } catch (e) {} viewCalendar(); });
+}
+function weekTitle(ws) {
+  const we = addDays(ws, 6), a = new Date(ws + 'T12:00'), b = new Date(we + 'T12:00');
+  return a.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' – ' + (a.getMonth() === b.getMonth() ? b.getDate() : b.toLocaleDateString([], { month: 'short', day: 'numeric' })) + ', ' + b.getFullYear();
+}
+function drawMonth() {
   const [y, m] = calMonth.split('-').map(Number), n = lastDay(y, m), first = new Date(y, m - 1, 1).getDay();
   const list = agenda(calMonth + '-01', calMonth + '-' + pad(n));
   let cells = '';
@@ -418,20 +445,56 @@ function viewCalendar() {
   for (let d = 1; d <= n; d++) {
     const iso = calMonth + '-' + pad(d), es = onDay(list, iso);
     cells += '<button type="button" class="cd' + (iso === today() ? ' today' : '') + (iso === calDay ? ' sel' : '') + '" data-day="' + iso + '"><span class="n">' + d + '</span>' +
-      es.slice(0, 3).map(e => '<span class="pill" style="--pc:' + esc(e.color || '#888') + '">' + esc(e.title.replace(/^[🎺🧾💵] /u, '')) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
+      es.slice(0, 3).map(e => '<span class="pill" style="--pc:' + esc(e.color || '#888') + '">' + esc(e.title) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
   }
   const dayList = onDay(list, calDay);
-  $('view').innerHTML = '<div class="cal-head"><button type="button" class="ghost small" id="cPrev">‹</button><h2>' + esc(monthName(calMonth)) + '</h2><button type="button" class="ghost small" id="cNext">›</button></div>' +
-    '<div class="row-actions center"><button type="button" class="ghost small" id="cToday">Today</button>' + (S().calendars.length ? '<button type="button" class="ghost small" id="cRefresh">Refresh</button>' : '<a class="button ghost small" href="#calendars">Connect Google or Outlook</a>') + '</div>' +
-    '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
-    '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="small" id="cAdd">＋ Add</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + '</div>' + legend();
-  $('cPrev').onclick = () => { calMonth = isoDay(new Date(y, m - 2, 1)).slice(0, 7); viewCalendar(); };
-  $('cNext').onclick = () => { calMonth = isoDay(new Date(y, m, 1)).slice(0, 7); viewCalendar(); };
-  $('cToday').onclick = () => { calMonth = today().slice(0, 7); calDay = today(); viewCalendar(); };
-  if ($('cRefresh')) $('cRefresh').onclick = () => { toast('Refreshing…'); refreshAll(true); };
-  $('cAdd').onclick = () => editItem(null, { kind: 'event', date: calDay });
-  $('view').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; viewCalendar(); });
-  wireRows($('view'));
+  $('calBody').innerHTML = '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
+    '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="ghost small" data-goday="' + calDay + '">Open day</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + mealsLine(calDay) + '</div>';
+  $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; viewCalendar(); });
+  wireCal();
+}
+// The week as seven stacked days (easy to read on a phone), each with its events, tasks and dinner plan.
+function drawWeek() {
+  const ws = weekStart(calDay), list = agenda(ws, addDays(ws, 6));
+  let html = '';
+  for (let k = 0; k < 7; k++) {
+    const d = addDays(ws, k), es = onDay(list, d), dt = new Date(d + 'T12:00');
+    html += '<div class="wkday' + (d === today() ? ' today' : '') + '"><button type="button" class="wkdate" data-goday="' + d + '"><span>' + dt.toLocaleDateString([], { weekday: 'short' }) + '</span><b>' + dt.getDate() + '</b></button>' +
+      '<div class="wkitems">' + (es.length ? es.map(e => '<div class="wkev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#9a958c') + '"><span class="t">' + esc(e.kind === 'task' ? (e.done ? '✓' : '○') : e.allDay ? 'All day' : fmtTime(e.start)) + '</span><span class="n' + (e.done ? ' done' : '') + '">' + esc(e.title) + '</span></div>').join('') : '<span class="helper">—</span>') + mealsLine(d, true) + '</div></div>';
+  }
+  $('calBody').innerHTML = '<div class="card wk">' + html + '</div>';
+  wireCal();
+}
+// One day on an hour-by-hour timeline, with all-day items and tasks above it.
+function drawDay() {
+  const d = calDay, es = onDay(agenda(addDays(d, -30), addDays(d, 1)), d);
+  const allDay = es.filter(e => e.allDay || !e.start), timed = es.filter(e => !e.allDay && e.start);
+  const startH = Math.min(7, ...timed.map(e => +e.start.slice(0, 2))), endH = Math.max(21, ...timed.map(e => Math.min(23, +((e.end || e.start).slice(0, 2)) + 1)));
+  const H = 56, mins = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+  let grid = '';
+  for (let h = startH; h <= endH; h++) grid += '<div class="hr" style="top:' + (h - startH) * H + 'px"><span>' + fmtTime(pad(h) + ':00') + '</span></div>';
+  // Overlapping events sit side by side.
+  const placed = [];
+  timed.sort((a, b) => a.start.localeCompare(b.start)).forEach(e => {
+    const s = mins(e.start), en = Math.max(s + 30, e.end && e.end > e.start ? mins(e.end) : s + 60);
+    let col = 0; while (placed.some(p => p.col === col && p.s < en && s < p.en)) col++;
+    placed.push({ e, s, en, col });
+  });
+  const cols = Math.max(1, ...placed.map(p => p.col + 1));
+  grid += placed.map(p => '<div class="blk" ' + rowOpen(p.e) + ' style="--pc:' + esc(p.e.color || '#9a958c') + ';top:' + ((p.s - startH * 60) / 60 * H) + 'px;height:' + Math.max(26, (p.en - p.s) / 60 * H - 3) + 'px;left:calc(54px + (100% - 58px) * ' + p.col / cols + ');width:calc((100% - 58px) / ' + cols + ' - 4px)"><b>' + esc(p.e.title) + '</b><span>' + fmtTime(p.e.start) + (p.e.end ? '–' + fmtTime(p.e.end) : '') + (p.e.location ? ' · ' + esc(p.e.location) : '') + '</span></div>').join('');
+  if (d === today()) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); if (m >= startH * 60 && m <= (endH + 1) * 60) grid += '<div class="nowline" style="top:' + ((m - startH * 60) / 60 * H) + 'px"></div>'; }
+  const note = data.items.find(i => i.kind === 'note' && i.date === d);
+  $('calBody').innerHTML = (allDay.length ? '<div class="card pad">' + allDay.map(entryRow).join('') + '</div>' : '') +
+    mealsCard(d) +
+    '<div class="card timeline" style="height:' + ((endH - startH + 1) * H + 10) + 'px">' + grid + '</div>' +
+    (note && note.notes ? '<div class="card pad journal"><h2>Notes</h2><p class="notes">' + esc(note.notes) + '</p></div>' : '');
+  wireCal();
+}
+const rowOpen = e => e.src === 'planner' ? 'data-item="' + e.id + '"' : e.link ? 'data-link="' + esc(e.link) + '"' : 'data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
+function wireCal() {
+  wireRows($('calBody'));
+  $('calBody').querySelectorAll('[data-goday]').forEach(b => b.onclick = () => { calDay = b.dataset.goday; calMode = 'day'; viewCalendar(); });
+  $('calBody').querySelectorAll('[data-meal]').forEach(b => b.onclick = e => { e.stopPropagation(); editMeal(b.dataset.mealdate, b.dataset.meal); });
 }
 function legend() {
   const parts = [[COLORS[0], 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
@@ -615,6 +678,219 @@ function editDoc(id) {
     data.docs = data.docs.filter(x => x !== d); window.save(); closeModal(); route();
     try { await client().storage.from(CFG.bucket || 'planner').remove([d.file]); } catch (e) {}
   };
+}
+
+// ---------- Meals, recipes and the shopping list ----------
+// Stored as planner items (so they sync like everything else), using these fields:
+//   recipe: title, notes = ingredients (one per line), location = recipe link, list = meal type
+//   meal:   date, list = slot (Breakfast/Lunch/Dinner/Snack), title = what's for that meal, location = recipe id
+//   shop:   title = item, done = in the cart, list = aisle, notes = amounts and which meals, location = Walmart product link
+const SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+const AISLES = [
+  ['Produce', /lettuce|tomato|onion|garlic|pepper|potato|carrot|celery|banana|apple|berr|grape|lemon|lime|avocado|cilantro|spinach|broccoli|corn|cucumber|fruit|vegetable|salad|mushroom|zucchini|green bean|orange|herb|parsley|jalape/i],
+  ['Meat & seafood', /beef|chicken|pork|turkey|sausage|bacon|ham|steak|shrimp|fish|salmon|tuna|ground|hot dog|pepperoni|meat/i],
+  ['Dairy & eggs', /milk|cheese|butter|egg|yogurt|cream|sour cream|half.and.half|creamer/i],
+  ['Bakery & bread', /bread|bun|tortilla|roll|bagel|muffin|biscuit|croissant|pita/i],
+  ['Frozen', /frozen|ice cream|pizza|fries|tater|waffle/i],
+  ['Pantry', /rice|pasta|spaghetti|noodle|sauce|bean|soup|broth|stock|flour|sugar|oil|vinegar|spice|seasoning|salt|pepper|cereal|oat|peanut butter|jelly|syrup|can|taco shell|chip|cracker|ketchup|mustard|mayo|dressing|honey|pancake mix|salsa|cookie|snack|granola/i],
+  ['Drinks', /water|soda|juice|coffee|tea|gatorade|drink/i],
+  ['Household', /paper|towel|toilet|soap|detergent|trash|foil|wrap|bag|dish|cleaner|wipes|shampoo|toothpaste|diaper|napkin|plate|cup/i]
+];
+// Canned/boxed things are pantry and "garlic bread" is bakery, so those are checked before produce.
+const AISLE_CHECK = ['Frozen', 'Bakery & bread', 'Pantry*', 'Meat & seafood', 'Dairy & eggs', 'Produce', 'Pantry', 'Drinks', 'Household'];
+const PANTRY_FIRST = /peanut butter|cream of|\bcans?\b|canned|jar|packets?|box(ed)?|seasoning|sauce|\bmix\b|diced|crushed|dried|broth/i;
+function aisleOf(text) {
+  for (const a of AISLE_CHECK) {
+    if (a === 'Pantry*') { if (PANTRY_FIRST.test(text)) return 'Pantry'; continue; }
+    if (AISLES.find(x => x[0] === a)[1].test(text)) return a;
+  }
+  return 'Other';
+}
+const AISLE_ORDER = AISLES.map(a => a[0]).concat(['Other']);
+// "2 lb ground beef" → "Ground beef" (amount kept separately).
+function ingredientName(line) {
+  const t = String(line).replace(/\(.*?\)/g, ' ').trim();
+  const name = t.replace(/^[\d\s\/.,½¼¾⅓⅔⅛-]+/, '').replace(/^(cups?|c\.|tbsp|tablespoons?|tsp|teaspoons?|lbs?|pounds?|oz|ounces?|cans?|pkgs?|packages?|packets?|bags?|boxes?|jars?|bunch(es)?|cloves?|heads?|large|small|medium|dozen|slices?|sticks?|bottles?|containers?|pints?|quarts?|gallons?|loaf|loaves)\.?\s+(of\s+)?/i, '').replace(/,.*$/, '').trim();
+  return (name || t).charAt(0).toUpperCase() + (name || t).slice(1);
+}
+const amountOf = line => (String(line).match(/^[\d\s\/.,½¼¾⅓⅔⅛-]+(?:\s*(?:cups?|c\.|tbsp|tablespoons?|tsp|teaspoons?|lbs?|pounds?|oz|ounces?|cans?|pkgs?|packages?|packets?|bags?|boxes?|jars?|bunch(?:es)?|cloves?|heads?|dozen|slices?|sticks?|bottles?|containers?|pints?|quarts?|gallons?|loaf|loaves)\.?)?/i) || [''])[0].trim();
+const walmartUrl = item => item.location && /^https:\/\/(www\.)?walmart\.com\//i.test(item.location) ? item.location : 'https://www.walmart.com/search?q=' + encodeURIComponent(item.title);
+
+const STARTER_RECIPES = [
+  ['Tacos', 'Dinner', '1 lb ground beef\n1 packet taco seasoning\n12 taco shells\n1 head lettuce\n2 tomatoes\n8 oz shredded cheese\nSour cream\nSalsa'],
+  ['Spaghetti & meat sauce', 'Dinner', '1 lb spaghetti\n1 lb ground beef\n1 jar pasta sauce\nParmesan cheese\nGarlic bread'],
+  ['Crockpot chili', 'Dinner', '2 lb ground beef\n2 cans chili beans\n1 can diced tomatoes\n1 onion\n1 packet chili seasoning\nShredded cheese\nCrackers'],
+  ['Sheet-pan chicken & veggies', 'Dinner', '2 lb chicken breasts\n1 lb baby potatoes\n1 bag broccoli\nOlive oil\nItalian seasoning'],
+  ['Chicken & rice', 'Dinner', '2 lb chicken thighs\n2 cups rice\n1 can cream of chicken soup\n1 bag frozen mixed vegetables'],
+  ['Grilled cheese & tomato soup', 'Lunch', '1 loaf bread\n1 pack sliced cheese\nButter\n2 cans tomato soup'],
+  ['Breakfast burritos', 'Breakfast', '1 dozen eggs\n1 lb breakfast sausage\n10 tortillas\n8 oz shredded cheese\nSalsa'],
+  ['Pancakes & bacon', 'Breakfast', '1 box pancake mix\n1 lb bacon\nSyrup\nMilk\nButter'],
+  ['Sandwiches', 'Lunch', '1 loaf bread\n1 lb deli turkey\n1 pack sliced cheese\nLettuce\nChips'],
+  ['Fruit & yogurt', 'Snack', 'Yogurt\nGranola\nBerries\nBananas']
+];
+const recipes = () => data.items.filter(i => i.kind === 'recipe').sort((a, b) => a.title.localeCompare(b.title));
+const mealsOn = d => data.items.filter(i => i.kind === 'meal' && i.date === d).sort((a, b) => SLOTS.indexOf(a.list) - SLOTS.indexOf(b.list));
+const newItem = o => Object.assign({ id: uid(), kind: 'task', title: '', date: null, endDate: null, start: '', end: '', allDay: true, done: false, list: '', priority: 0, notes: '', location: '', repeat: '', color: '', sort: 0 }, o);
+
+// Small summaries used on Today and the calendar.
+function mealsLine(d, compact) {
+  const ms = mealsOn(d); if (!ms.length) return '';
+  return '<div class="mealline">' + ms.map(m => '<button type="button" class="mchip" data-meal="' + esc(m.list) + '" data-mealdate="' + d + '"><i>' + esc(compact ? m.list.charAt(0) : m.list) + '</i>' + esc(m.title) + '</button>').join('') + '</div>';
+}
+function mealsCard(d) {
+  const ms = mealsOn(d);
+  return '<div class="card pad meals-today"><div class="mini-head"><h2>Meals</h2><a class="linkish" href="#meals">Plan the week</a></div>' +
+    SLOTS.map(s => { const m = ms.find(x => x.list === s); return '<button type="button" class="mslot' + (m ? ' set' : '') + '" data-meal="' + s + '" data-mealdate="' + d + '"><span>' + s + '</span><b>' + esc(m ? m.title : '+ Add') + '</b></button>'; }).join('') + '</div>';
+}
+
+// ---------- Meal plan (the week) ----------
+let mealWeek = '';
+function viewMeals(sub) {
+  if (sub === 'recipes') return viewRecipes();
+  if (sub === 'shop') return viewShop();
+  if (!mealWeek) mealWeek = weekStart(today());
+  const days = [0, 1, 2, 3, 4, 5, 6].map(k => addDays(mealWeek, k));
+  const planned = data.items.filter(i => i.kind === 'meal' && i.date >= days[0] && i.date <= days[6]).length;
+  $('view').innerHTML = mealTabs('plan') +
+    '<div class="cal-head"><button type="button" class="ghost small" id="mPrev">‹</button><h2>' + esc(weekTitle(mealWeek)) + '</h2><button type="button" class="ghost small" id="mNext">›</button></div>' +
+    '<div class="row-actions center"><button type="button" id="mShop">Add ingredients to shopping list</button><button type="button" class="ghost small" id="mCopy">Copy last week</button></div>' +
+    '<p class="helper center">' + planned + ' meals planned · tap any slot to fill it</p>' +
+    days.map(d => {
+      const dt = new Date(d + 'T12:00'), ms = mealsOn(d);
+      return '<div class="card pad mealday' + (d === today() ? ' today' : '') + '"><div class="mini-head"><h2>' + dt.toLocaleDateString([], { weekday: 'long' }) + ' <small>' + dt.toLocaleDateString([], { month: 'short', day: 'numeric' }) + '</small></h2></div>' +
+        '<div class="mslots">' + SLOTS.map(s => { const m = ms.find(x => x.list === s); return '<button type="button" class="mslot' + (m ? ' set' : '') + (s === 'Dinner' ? ' main' : '') + '" data-meal="' + s + '" data-mealdate="' + d + '"><span>' + s + '</span><b>' + esc(m ? m.title : '+') + '</b></button>'; }).join('') + '</div></div>';
+    }).join('');
+  $('mPrev').onclick = () => { mealWeek = addDays(mealWeek, -7); viewMeals(); };
+  $('mNext').onclick = () => { mealWeek = addDays(mealWeek, 7); viewMeals(); };
+  $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
+  $('mShop').onclick = () => { const n = addWeekToShopping(days); toast(n ? '✓ Added ' + n + ' items to your shopping list' : 'Those ingredients are already on the list (or the meals have no recipes yet).'); if (n) location.hash = 'meals/shop'; };
+  $('mCopy').onclick = () => {
+    const prev = data.items.filter(i => i.kind === 'meal' && i.date >= addDays(mealWeek, -7) && i.date < mealWeek);
+    if (!prev.length) { toast('Nothing planned last week to copy.'); return; }
+    let n = 0;
+    prev.forEach(m => { const d = addDays(m.date, 7); if (!data.items.some(i => i.kind === 'meal' && i.date === d && i.list === m.list)) { data.items.push(newItem({ kind: 'meal', date: d, list: m.list, title: m.title, location: m.location, notes: m.notes })); n++; } });
+    window.save(); toast('✓ Copied ' + n + ' meals'); viewMeals();
+  };
+}
+const mealTabs = on => '<h1>Meals</h1><div class="toptabs"><a href="#meals"' + (on === 'plan' ? ' class="on"' : '') + '>Meal plan</a><a href="#meals/shop"' + (on === 'shop' ? ' class="on"' : '') + '>Shopping list' + (shopCount() ? ' <small>' + shopCount() + '</small>' : '') + '</a><a href="#meals/recipes"' + (on === 'recipes' ? ' class="on"' : '') + '>Recipes</a></div>';
+const shopCount = () => data.items.filter(i => i.kind === 'shop' && !i.done).length;
+function editMeal(date, slot) {
+  const cur = data.items.find(i => i.kind === 'meal' && i.date === date && i.list === slot);
+  const rs = recipes(), fit = rs.filter(r => !r.list || r.list === slot), other = rs.filter(r => r.list && r.list !== slot);
+  openModal('<h2>' + esc(slot) + ' · ' + esc(fmtDate(date)) + '</h2>' +
+    (rs.length ? '<p class="lbl">From your recipes</p><div class="catchips">' + fit.concat(other).map(r => '<button type="button" class="chipbtn' + (cur && cur.location === r.id ? ' on' : '') + '" data-rec="' + r.id + '">' + esc(r.title) + '</button>').join('') + '</div>' : '<p class="helper">Tip: add recipes (Meals → Recipes) and their ingredients go on the shopping list for you.</p>') +
+    '<p class="lbl">Quick picks</p><div class="catchips">' + ['Leftovers', 'Eat out', 'Takeout', 'Sandwiches', 'Cereal', 'School lunch'].map(x => '<button type="button" class="chipbtn" data-quick="' + x + '">' + x + '</button>').join('') + '</div>' +
+    '<label>Or type it<input id="mlTitle" value="' + esc(cur ? cur.title : '') + '" placeholder="Pot roast"></label>' +
+    '<label>Notes<input id="mlNotes" value="' + esc(cur ? cur.notes : '') + '" placeholder="Thaw meat the night before"></label>' +
+    '<div class="row-actions"><button type="button" id="mlSave">Save</button><button type="button" class="ghost" id="mlCancel">Cancel</button>' + (cur ? '<button type="button" class="danger" id="mlDel">Clear</button>' : '') + '</div>');
+  const put = (title, recipeId) => {
+    if (!title) { toast('Pick or type a meal.'); return; }
+    const m = cur || newItem({ kind: 'meal', date, list: slot });
+    Object.assign(m, { title, location: recipeId || '', notes: $('mlNotes').value.trim() });
+    if (!cur) data.items.push(m);
+    window.save(); closeModal(); route();
+  };
+  document.querySelectorAll('[data-rec]').forEach(b => b.onclick = () => { const r = rs.find(x => x.id === b.dataset.rec); put(r.title, r.id); });
+  document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => put(b.dataset.quick, ''));
+  $('mlSave').onclick = () => { const t = $('mlTitle').value.trim(), r = rs.find(x => x.title.toLowerCase() === t.toLowerCase()); put(t, r ? r.id : ''); };
+  $('mlCancel').onclick = closeModal;
+  if (cur) $('mlDel').onclick = () => { data.items = data.items.filter(i => i !== cur); window.save(); closeModal(); route(); };
+}
+// Every ingredient from the week's recipes goes on the list once; amounts and meal names are noted.
+function addWeekToShopping(days) {
+  let added = 0;
+  const open = () => data.items.filter(i => i.kind === 'shop' && !i.done);
+  data.items.filter(i => i.kind === 'meal' && days.includes(i.date) && i.location).sort((a, b) => a.date.localeCompare(b.date)).forEach(m => {
+    const r = data.items.find(i => i.id === m.location && i.kind === 'recipe'); if (!r) return;
+    const tag = m.title + ' (' + new Date(m.date + 'T12:00').toLocaleDateString([], { weekday: 'short' }) + ')';
+    r.notes.split('\n').map(x => x.trim()).filter(Boolean).forEach(line => {
+      const name = ingredientName(line), amt = amountOf(line);
+      const have = open().find(i => i.title.toLowerCase() === name.toLowerCase());
+      if (have) { if (!have.notes.includes(tag)) have.notes = [have.notes, (amt ? amt + ' · ' : '') + tag].filter(Boolean).join('; '); return; }
+      data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(line), notes: (amt ? amt + ' · ' : '') + tag, location: (S().walmart || {})[name.toLowerCase()] || '' }));
+      added++;
+    });
+  });
+  window.save();
+  return added;
+}
+
+// ---------- Shopping list ----------
+let showGot = false;
+function viewShop() {
+  const items = data.items.filter(i => i.kind === 'shop'), need = items.filter(i => !i.done), got = items.filter(i => i.done);
+  const groups = AISLE_ORDER.map(a => [a, need.filter(i => (i.list || 'Other') === a)]).filter(([, l]) => l.length);
+  const row = i => '<div class="shoprow' + (i.done ? ' got' : '') + '"><button type="button" class="tick' + (i.done ? ' on' : '') + '" data-got="' + i.id + '">' + (i.done ? '✓' : '') + '</button>' +
+    '<div class="who" data-shopedit="' + i.id + '"><b>' + esc(i.title) + '</b>' + (i.notes ? '<span class="sub">' + esc(i.notes) + '</span>' : '') + '</div>' +
+    '<a class="wm" href="' + esc(walmartUrl(i)) + '" target="_blank" rel="noopener" title="Find on Walmart">' + (i.location ? 'Walmart ✓' : 'Walmart') + '</a></div>';
+  $('view').innerHTML = mealTabs('shop') +
+    '<div class="quickbar"><input id="shopAdd" placeholder="Add an item… “paper towels”, “2 gallons milk”"><button type="button" id="shopGo">Add</button></div>' +
+    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><button type="button" class="ghost small" id="shopCopy">Copy list</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
+    '<p class="helper">Tap <b>Walmart</b> to find each item and add it to your cart (pickup or delivery). Check it off here as you go. To always open the exact product you buy, tap an item and paste its Walmart link.</p>' +
+    (groups.length ? groups.map(([a, l]) => '<div class="card pad"><h3>' + esc(a) + '</h3>' + l.map(row).join('') + '</div>').join('') : '<div class="card pad"><p class="helper">Your list is empty. Plan meals, then tap <b>Add ingredients to shopping list</b>, or add items above.</p></div>') +
+    (got.length ? '<button type="button" class="linkish" id="shopGot">' + (showGot ? 'Hide' : 'Show') + ' ' + got.length + ' in the cart</button>' + (showGot ? '<div class="card pad">' + got.map(row).join('') + '</div>' : '') : '');
+  const add = () => {
+    const v = $('shopAdd').value.trim(); if (!v) return;
+    const name = ingredientName(v), amt = amountOf(v);
+    data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(v), notes: amt, location: (S().walmart || {})[name.toLowerCase()] || '' }));
+    window.save(); viewShop(); setTimeout(() => $('shopAdd').focus(), 50);
+  };
+  $('shopGo').onclick = add; $('shopAdd').onkeydown = e => { if (e.key === 'Enter') add(); };
+  $('view').querySelectorAll('[data-got]').forEach(b => b.onclick = () => { const i = data.items.find(x => x.id === b.dataset.got); i.done = !i.done; window.save(); viewShop(); });
+  $('view').querySelectorAll('[data-shopedit]').forEach(b => b.onclick = () => editShop(b.dataset.shopedit));
+  $('shopCopy').onclick = () => {
+    const text = groups.map(([a, l]) => a + ':\n' + l.map(i => '• ' + i.title + (i.notes ? ' (' + i.notes.split(' · ')[0] + ')' : '')).join('\n')).join('\n\n');
+    navigator.clipboard && navigator.clipboard.writeText(text).then(() => toast('Copied. Paste it into a text or note.'), () => toast('Could not copy.'));
+  };
+  if ($('shopClear')) $('shopClear').onclick = () => { data.items = data.items.filter(i => !(i.kind === 'shop' && i.done)); window.save(); viewShop(); };
+  if ($('shopGot')) $('shopGot').onclick = () => { showGot = !showGot; viewShop(); };
+}
+function editShop(id) {
+  const it = data.items.find(i => i.id === id); if (!it) return;
+  openModal('<h2>' + esc(it.title) + '</h2><label>Item<input id="shName" value="' + esc(it.title) + '"></label>' +
+    '<label>Aisle<select id="shAisle">' + AISLE_ORDER.map(a => '<option' + (a === (it.list || 'Other') ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></label>' +
+    '<label>Amount / notes<input id="shNotes" value="' + esc(it.notes) + '"></label>' +
+    '<label>Walmart product link (optional)<input id="shUrl" value="' + esc(it.location) + '" placeholder="https://www.walmart.com/ip/…" autocapitalize="off"></label>' +
+    '<p class="helper">Find the exact product on Walmart, tap Share → Copy, and paste it here. It’s remembered for next time.</p>' +
+    '<div class="row-actions"><button type="button" id="shSave">Save</button><a class="button ghost" href="' + esc(walmartUrl(it)) + '" target="_blank" rel="noopener">Open on Walmart</a><button type="button" class="danger" id="shDel">Remove</button></div>');
+  $('shSave').onclick = () => {
+    const url = $('shUrl').value.trim();
+    if (url && !/^https:\/\/(www\.)?walmart\.com\//i.test(url)) { toast('That isn’t a walmart.com link.'); return; }
+    Object.assign(it, { title: $('shName').value.trim() || it.title, list: $('shAisle').value, notes: $('shNotes').value.trim(), location: url });
+    const w = S().walmart = Object.assign({}, S().walmart); if (url) w[it.title.toLowerCase()] = url; else delete w[it.title.toLowerCase()];
+    window.save(); closeModal(); viewShop();
+  };
+  $('shDel').onclick = () => { data.items = data.items.filter(i => i !== it); window.save(); closeModal(); viewShop(); };
+}
+
+// ---------- Recipe box ----------
+function viewRecipes() {
+  const rs = recipes();
+  $('view').innerHTML = mealTabs('recipes') +
+    '<div class="row-actions"><button type="button" id="rNew">＋ New recipe</button>' + (rs.length ? '' : '<button type="button" class="ghost" id="rStarter">Add 10 family favorites</button>') + '</div>' +
+    (SLOTS.map(s => { const l = rs.filter(r => (r.list || 'Dinner') === s); return l.length ? '<div class="card pad"><h3>' + s + '</h3>' + l.map(r => '<div class="recrow" data-redit="' + r.id + '"><div class="who"><b>' + esc(r.title) + '</b><span class="sub">' + r.notes.split('\n').filter(Boolean).length + ' ingredients' + (r.location ? ' · has link' : '') + '</span></div><span class="chev">›</span></div>').join('') + '</div>' : ''; }).join('') ||
+      '<div class="card pad"><p class="helper">Save your go-to meals with their ingredients. When you plan them, the shopping list fills itself in.</p></div>');
+  $('rNew').onclick = () => editRecipe();
+  if ($('rStarter')) $('rStarter').onclick = () => { STARTER_RECIPES.forEach(([t, l, n]) => data.items.push(newItem({ kind: 'recipe', title: t, list: l, notes: n }))); window.save(); toast('✓ Added 10 recipes. Edit them to match how you cook.'); viewRecipes(); };
+  $('view').querySelectorAll('[data-redit]').forEach(b => b.onclick = () => editRecipe(b.dataset.redit));
+}
+function editRecipe(id) {
+  const r = id ? data.items.find(i => i.id === id) : newItem({ kind: 'recipe', list: 'Dinner' });
+  openModal('<h2>' + (id ? 'Edit recipe' : 'New recipe') + '</h2><label>Name<input id="rcTitle" value="' + esc(r.title) + '" placeholder="Taco night"></label>' +
+    '<label>Usually for<select id="rcType">' + SLOTS.map(s => '<option' + (s === (r.list || 'Dinner') ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></label>' +
+    '<label>Ingredients (one per line)<textarea id="rcIng" rows="8" placeholder="1 lb ground beef\n12 taco shells\nShredded cheese">' + esc(r.notes) + '</textarea></label>' +
+    '<label>Recipe link (optional)<input id="rcLink" value="' + esc(r.location) + '" placeholder="https://…" autocapitalize="off"></label>' +
+    (r.location ? '<p><a href="' + esc(r.location) + '" target="_blank" rel="noopener">Open recipe ›</a></p>' : '') +
+    '<div class="row-actions"><button type="button" id="rcSave">Save</button><button type="button" class="ghost" id="rcCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="rcDel">Delete</button>' : '') + '</div>');
+  $('rcCancel').onclick = closeModal;
+  $('rcSave').onclick = () => {
+    const t = $('rcTitle').value.trim(); if (!t) { toast('Name the recipe.'); return; }
+    const link = $('rcLink').value.trim();
+    Object.assign(r, { title: t, list: $('rcType').value, notes: $('rcIng').value.trim(), location: /^https?:\/\//i.test(link) ? link : '' });
+    if (!id) data.items.push(r);
+    window.save(); closeModal(); route();
+  };
+  if (id) $('rcDel').onclick = () => { if (!confirm('Delete ' + r.title + '?')) return; data.items = data.items.filter(i => i !== r); window.save(); closeModal(); route(); };
 }
 
 // ---------- More: calendars, feed, lists ----------
