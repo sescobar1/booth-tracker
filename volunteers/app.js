@@ -571,7 +571,7 @@ function viewCheckin(id) {
 
 // ---------- Printable sign-in sheet ----------
 const CREDIT_CELL = '<td class="credit">☐ Trip credit<br>☐ Volunteer hours</td>';
-let sheetOpts = { split: false, blanks: 8, phone: true };
+let sheetOpts = { style: 'booster', split: false, blanks: 8, phone: true };
 function viewSheet(id) {
   const ev = event(id);
   if (!ev) { missingEvent(); return; }
@@ -586,15 +586,31 @@ function viewSheet(id) {
       '<table class="signin"><thead><tr><th>#</th><th>Name</th><th>Job / time</th>' + (sheetOpts.phone ? '<th>Phone</th>' : '') + '<th>Time in</th><th>Time out</th><th>Trip credit or hours?</th><th>Signature</th></tr></thead><tbody>' + body + '</tbody></table>' +
       '<p class="sheetfoot">Thank you for supporting the band! Please sign in when you arrive and sign out when you leave.</p></section>';
   };
-  const sheets = sheetOpts.split
+  // The Band Boosters' own layout (matches the Volunteer Sign In Sheet in Google Drive): adults, then students.
+  const booster = () => {
+    const adults = list.filter(x => x.p.type !== 'student'), kids = list.filter(x => x.p.type === 'student');
+    const credit = 'Volunteer Hrs OR Name of Student you are volunteering for';
+    const food = 'Food Item &amp; Drink Item';
+    const rows = (xs, phone) => xs.map((x, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(fullName(x.p)) + '</b></td>' + (phone ? '<td class="ph">' + esc(fmtPhone(x.p.phone)) + '</td>' : '') + '<td></td><td></td></tr>').join('') +
+      Array.from({ length: sheetOpts.blanks }, (_, i) => '<tr class="blankrow"><td>' + (xs.length + i + 1) + '</td><td></td>' + (phone ? '<td></td>' : '') + '<td></td><td></td></tr>').join('');
+    const head = (label, phone) => '<thead><tr><th>#</th><th>Volunteer Name<br><span class="grp">' + label + '</span></th>' + (phone ? '<th>Cell number</th>' : '') + '<th>' + credit + '</th><th>' + food + '<br><span class="perk">You get 1 soda, unlimited volunteer water and 1 food item for free</span></th></tr></thead>';
+    const showPhone = sheetOpts.phone;
+    return '<section class="sheetpage booster"><div class="sheethead"><h1>' + esc(data.settings.org || 'Band Boosters') + ' – Volunteer Sign In Sheet</h1>' +
+      '<p><b>' + esc(ev.name) + '</b> · ' + esc(fmtDate(ev.date, true)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + (ev.location ? ' · ' + esc(ev.location) : '') + '</p></div>' +
+      '<table class="signin boost">' + head('Adults', true && showPhone) + '<tbody>' + rows(adults, showPhone) + '</tbody></table>' +
+      '<table class="signin boost">' + head('Students', false) + '<tbody>' + rows(kids, false) + '</tbody></table></section>';
+  };
+  const sheets = sheetOpts.style === 'booster' ? booster() : sheetOpts.split
     ? table('Adults', list.filter(x => x.p.type !== 'student')) + table('Students', list.filter(x => x.p.type === 'student'))
     : table('', list);
   $('view').innerHTML = '<div class="no-print"><a class="back" href="#event/' + id + '">‹ ' + esc(ev.name) + '</a>' +
-    '<div class="sheet-opts"><label class="check"><input type="checkbox" id="shSplit"' + (sheetOpts.split ? ' checked' : '') + '> Separate adult and student sheets</label>' +
-    '<label class="check"><input type="checkbox" id="shPhone"' + (sheetOpts.phone ? ' checked' : '') + '> Show phone numbers</label>' +
+    '<div class="sheet-opts"><label>Layout <select id="shStyle"><option value="booster"' + (sheetOpts.style === 'booster' ? ' selected' : '') + '>Band Boosters sheet (adults, then students)</option><option value="times"' + (sheetOpts.style === 'times' ? ' selected' : '') + '>Time in / time out sheet</option></select></label>' +
+    (sheetOpts.style === 'booster' ? '' : '<label class="check"><input type="checkbox" id="shSplit"' + (sheetOpts.split ? ' checked' : '') + '> Separate adult and student sheets</label>') +
+    '<label class="check"><input type="checkbox" id="shPhone"' + (sheetOpts.phone ? ' checked' : '') + '> Show cell numbers</label>' +
     '<label>Blank lines for walk-ins <input id="shBlank" type="number" min="0" max="40" value="' + sheetOpts.blanks + '"></label>' +
-    '<button type="button" id="shPrint">🖨 Print</button></div><p class="helper">Prints sideways (landscape). On a phone, Print lets you AirPrint or save as PDF.</p></div>' + sheets;
-  $('shSplit').onchange = e => { sheetOpts.split = e.target.checked; viewSheet(id); };
+    '<button type="button" id="shPrint">🖨 Print</button></div><p class="helper">Blank lines are added to each table for walk-ins. On a phone, Print lets you AirPrint or save as PDF.</p></div>' + sheets;
+  $('shStyle').onchange = e => { sheetOpts.style = e.target.value; viewSheet(id); };
+  if ($('shSplit')) $('shSplit').onchange = e => { sheetOpts.split = e.target.checked; viewSheet(id); };
   $('shPhone').onchange = e => { sheetOpts.phone = e.target.checked; viewSheet(id); };
   $('shBlank').onchange = e => { sheetOpts.blanks = Math.max(0, Math.min(40, Number(e.target.value) || 0)); viewSheet(id); };
   $('shPrint').onclick = () => window.print();
