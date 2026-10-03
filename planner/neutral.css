@@ -494,3 +494,15 @@ table.snaform td:first-child, table.snaform td:nth-child(n+4), table.snaform th:
 table.snaform td:first-child { text-align: center; font-weight: 700; }
 table.snaform tfoot td { border-top: 2px solid var(--ink); border-bottom: 0; }
 @media print { .snaprint { font-size: 11pt; } .snaprint table.snaform { font-size: 10.5pt; } }
+.snareq .sreq { padding: 8px 0; border-top: 1px solid var(--line-2); }
+.snareq .sreq:first-of-type { border-top: 0; }
+.snareq .sreq.done { opacity: .6; }
+.snareq .sreql { margin: 4px 0; font-size: 14px; }
+.snareq .mini-row span:last-child { display: flex; gap: 6px; }
+#slUrl { font-size: 13px; }
+table.countsheet td.box { width: 54px; border: 1px solid var(--ink); height: 26px; }
+table.countsheet tr.cat td { font-weight: 700; padding-top: 10px; border-bottom: 2px solid var(--ink); text-transform: uppercase; font-size: 12px; letter-spacing: .04em; text-align: left !important; }
+table.countsheet td:first-child { text-align: left; font-weight: 400; }
+@media print { table.countsheet { font-size: 9.5pt; } table.countsheet td { padding: 3px 4px; } table.countsheet td.box { height: 20px; } }
+table.countsheet td small { color: var(--muted); white-space: nowrap; } table.countsheet td.box { width: 46px; }
+table.countsheet td:first-child { white-space: normal; font-weight: 400; text-align: left; } table.countsheet td small { white-space: normal; }
