@@ -337,8 +337,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' ? 'more' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -877,17 +877,24 @@ function saveQuick(q) {
 const REMIND_ALLDAY = [['', '9 AM that day'], ['-420', '7 AM that day'], ['-720', 'Noon that day'], ['360', '6 PM the day before'], ['-1', 'No alert']];
 const REMIND_TIMED = [['', '30 min before'], ['0', 'At start time'], ['10', '10 min before'], ['60', '1 hour before'], ['120', '2 hours before'], ['1440', '1 day before'], ['-1', 'No alert']];
 const remindLabel = q => { const v = q.remind == null ? '' : String(q.remind); const r = (q.allDay || !q.start ? REMIND_ALLDAY : REMIND_TIMED).find(x => x[0] === v); return r ? r[1] : ''; };
-function manageQuick() {
+// The Quick adds page (More → Quick adds): add, change, reorder or delete the one-tap events.
+function manageQuick() { closeModal(); location.hash = 'quick'; }
+function viewQuick() {
   const qs = quickEvents(), sug = frequentEvents().filter(f => !qs.some(q => q.title.toLowerCase() === f.title.toLowerCase()));
-  openModal('<h2>⭐ My quick adds</h2><p class="helper">These show at the top of <b>＋ Event</b>. One tap adds it on the date you picked, with the time, place and reminder already set.</p>' +
-    (qs.length ? qs.map((q, n) => '<div class="mini-row qrow"><span><i class="dot" style="background:' + esc(q.color || COLORS[0]) + '"></i><b>' + esc(q.title) + '</b><span class="sub">' + esc([q.allDay || !q.start ? 'All day' : fmtTime(q.start) + (q.end ? '–' + fmtTime(q.end) : ''), q.location, remindLabel(q) ? '🔔 ' + remindLabel(q) : ''].filter(Boolean).join(' · ')) + '</span></span><span><button type="button" class="ghost small" data-qe="' + n + '">Edit</button><button type="button" class="ghost small" data-qx="' + n + '" aria-label="Remove">✕</button></span></div>').join('') : '<p class="helper">None yet.</p>') +
-    '<div class="row-actions"><button type="button" id="qNew">＋ New quick add</button><button type="button" class="ghost" id="qDone">Done</button></div>' +
-    (sug.length ? '<p class="lbl">Suggested from your calendars</p><div class="qfreq">' + sug.map((f, n) => '<button type="button" class="qf" data-qs="' + n + '">＋ ' + esc(f.title) + '<small>' + (f.start ? fmtTime(f.start) : 'all day') + '</small></button>').join('') + '</div>' : ''));
-  $('qDone').onclick = closeModal;
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>Quick adds</h1>' +
+    '<p class="helper">These are the ⭐ buttons at the top of <b>＋ Event</b>. One tap adds the event on the date you picked, with the time, place and reminder already set.</p>' +
+    '<div class="row-actions"><button type="button" id="qNew">＋ New quick add</button></div>' +
+    '<div class="card pad"><h2>My quick adds</h2>' +
+    (qs.length ? qs.map((q, n) => '<div class="qrow"><div class="qinfo"><i class="dot" style="background:' + esc(q.color || COLORS[0]) + '"></i><div><b>⭐ ' + esc(q.title) + '</b><span class="sub">' + esc([q.allDay || !q.start ? 'All day' : fmtTime(q.start) + (q.end ? '–' + fmtTime(q.end) : ''), q.location, q.driver ? '🚗 ' + q.driver : '', remindLabel(q) ? '🔔 ' + remindLabel(q) : ''].filter(Boolean).join(' · ')) + '</span></div></div>' +
+      '<div class="qbtns">' + (n ? '<button type="button" class="ghost small" data-qup="' + n + '" aria-label="Move up">↑</button>' : '') + '<button type="button" class="ghost small" data-qe="' + n + '">Edit</button><button type="button" class="danger small" data-qx="' + n + '">Delete</button></div></div>').join('')
+      : '<p class="helper">No quick adds yet. Tap ＋ New quick add.</p>') + '</div>' +
+    (sug.length ? '<div class="card pad"><h2>Suggested</h2><p class="helper">Things you add often. Tap one to make it a quick add.</p><div class="qfreq">' + sug.map((f, n) => '<button type="button" class="qf" data-qs="' + n + '">＋ ' + esc(f.title) + '<small>' + (f.start ? fmtTime(f.start) : 'all day') + '</small></button>').join('') + '</div></div>' : '') +
+    '<a class="card pad tip" href="#track"><b>Tracker icons</b><span class="sub">💅 ❤️ ⚠️ also show in ＋ Event. Change them in Trackers →</span></a>';
   $('qNew').onclick = () => editQuick(null);
-  $('modalBody').querySelectorAll('[data-qe]').forEach(b => b.onclick = () => editQuick(+b.dataset.qe));
-  $('modalBody').querySelectorAll('[data-qx]').forEach(b => b.onclick = () => { const q = qs[+b.dataset.qx]; if (!confirm('Remove “' + q.title + '” from quick adds?')) return; S().quickEvents = qs.filter(x => x !== q); window.save(); manageQuick(); });
-  $('modalBody').querySelectorAll('[data-qs]').forEach(b => b.onclick = () => { saveQuick(sug[+b.dataset.qs]); toast('⭐ Saved'); manageQuick(); });
+  $('view').querySelectorAll('[data-qe]').forEach(b => b.onclick = () => editQuick(+b.dataset.qe));
+  $('view').querySelectorAll('[data-qx]').forEach(b => b.onclick = () => { const q = qs[+b.dataset.qx]; if (!confirm('Delete the quick add “' + q.title + '”? (Events already on your calendar stay.)')) return; S().quickEvents = qs.filter(x => x !== q); window.save(); viewQuick(); toast('Deleted'); });
+  $('view').querySelectorAll('[data-qup]').forEach(b => b.onclick = () => { const n = +b.dataset.qup, l = qs.slice(); [l[n - 1], l[n]] = [l[n], l[n - 1]]; S().quickEvents = l; window.save(); viewQuick(); });
+  $('view').querySelectorAll('[data-qs]').forEach(b => b.onclick = () => { saveQuick(sug[+b.dataset.qs]); toast('⭐ Added to quick adds'); viewQuick(); });
 }
 function editQuick(n) {
   const q = n == null ? { title: '', allDay: true, start: '', end: '', location: '', color: COLORS[0], driver: '', list: '', remind: null } : quickEvents()[n];
@@ -900,17 +907,19 @@ function editQuick(n) {
     '<div class="grid2"><label>Remind me<select id="qR"></select></label><label>List<select id="qLi"><option value="">—</option>' + S().lists.map(l => '<option' + (l === q.list ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label></div>' +
     '<label>Who’s driving<input id="qD" value="' + esc(q.driver || '') + '"></label>' +
     '<p class="lbl">Color</p><div class="colors">' + COLORS.map(c => '<button type="button" class="cdot' + (c === color ? ' on' : '') + '" data-qc="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
-    '<div class="row-actions"><button type="button" id="qSave">Save</button><button type="button" class="ghost" id="qBack">Back</button></div>');
+    '<div class="row-actions"><button type="button" id="qSave">Save</button><button type="button" class="ghost" id="qBack">Cancel</button>' + (n == null ? '' : '<button type="button" class="danger" id="qDel">Delete</button>') + '</div>');
+  const back = () => { closeModal(); if (location.hash.startsWith('#quick')) viewQuick(); else location.hash = 'quick'; };
+  if ($('qDel')) $('qDel').onclick = () => { if (!confirm('Delete the quick add “' + q.title + '”?')) return; S().quickEvents = quickEvents().filter((x, k) => k !== n); window.save(); back(); };
   const opts = () => { const all = $('qAll').checked, cur = $('qR').value || (q.remind == null ? '' : String(q.remind)); $('qTimes').hidden = all; $('qR').innerHTML = (all ? REMIND_ALLDAY : REMIND_TIMED).map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + l + '</option>').join(''); };
   $('qAll').onchange = opts; opts();
   $('modalBody').querySelectorAll('[data-qc]').forEach(b => b.onclick = () => { color = b.dataset.qc; $('modalBody').querySelectorAll('[data-qc]').forEach(x => x.classList.toggle('on', x === b)); });
-  $('qBack').onclick = manageQuick;
+  $('qBack').onclick = closeModal;
   $('qSave').onclick = () => {
     const title = $('qT').value.trim(); if (!title) { toast('Type what it is.'); return; }
     const all = $('qAll').checked || !$('qS').value;
     const nq = { title, allDay: all, start: all ? '' : $('qS').value, end: all ? '' : $('qE').value, location: $('qL').value.trim(), color, driver: $('qD').value.trim(), list: $('qLi').value, remind: $('qR').value === '' ? null : Number($('qR').value) };
     const list = quickEvents().slice(); if (n == null) list.push(nq); else list[n] = nq;
-    S().quickEvents = list; window.save(); manageQuick();
+    S().quickEvents = list; window.save(); back(); toast('⭐ Saved');
   };
 }
 
@@ -2154,6 +2163,7 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#quick"><b>Quick adds</b><span class="sub">⭐ Add, change or delete your one-tap events →</span></a>' +
     '<a class="card pad tip" href="#gifts"><b>Gifts</b><span class="sub">🎁 Birthdays, anniversaries and gift ideas →</span></a>' +
     '<a class="card pad tip" href="#notes"><b>Notes</b><span class="sub">📝 Sticky notes →</span></a>' +
     '<a class="card pad tip" href="#track"><b>Trackers</b><span class="sub">💅 ❤️ ⚠️ and more →</span></a>' +
