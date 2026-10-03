@@ -771,7 +771,12 @@ function editItem(id, preset) {
   if (!it) return;
   let kind = it.kind;
   const files = id ? data.docs.filter(d => d.itemId === id) : [];
+  const freq = id ? [] : frequentEvents();
   openModal('<h2>' + (id ? 'Edit' : 'New') + '</h2>' +
+    (id ? '' : '<div class="qadd ev-only"><p class="lbl">Quick add <span class="sub">— one tap, on the date below</span></p>' +
+      '<div class="qtrack">' + trackers().map(t => '<button type="button" class="qt" data-qt="' + esc(t.id) + '" title="' + esc(t.name) + '"><span>' + t.icon + '</span><small>' + esc(t.name) + '</small></button>').join('') + '</div>' +
+      (freq.length ? '<div class="qfreq">' + freq.map((f, n) => '<button type="button" class="qf" data-qf="' + n + '"><i class="dot" style="background:' + esc(f.color || COLORS[0]) + '"></i>' + esc(f.title) + '<small>' + (f.start ? fmtTime(f.start) : 'all day') + '</small></button>').join('') + '</div>' : '') +
+      '<p class="lbl or">or fill it in</p></div>') +
     '<div class="segs" id="iKind"><button type="button" class="seg' + (kind === 'event' ? ' on' : '') + '" data-k="event">Event</button><button type="button" class="seg' + (kind === 'task' ? ' on' : '') + '" data-k="task">Task</button></div>' +
     '<label>What<input id="iTitle" value="' + esc(it.title) + '" placeholder="' + (kind === 'task' ? 'Turn in band forms' : 'Dentist') + '" autocapitalize="sentences"></label>' +
     '<div class="grid2"><label><span id="iDateL">' + (kind === 'task' ? 'Due' : 'Date') + '</span><input id="iDate" type="date" value="' + esc(it.date || '') + '"></label><label class="ev-only">Ends (for trips)<input id="iEndDate" type="date" value="' + esc(it.endDate || '') + '"></label></div>' +
@@ -830,7 +835,41 @@ function editItem(id, preset) {
     if (!confirm('Delete “' + it.title + '”' + (it.repeat ? ' (every time it repeats)' : '') + '?')) return;
     data.items = data.items.filter(i => i.id !== id); window.save(); closeModal(); route();
   };
+  // Quick add: a tracker icon or one of the usual events, on whatever date is picked.
+  const qDate = () => $('iDate').value || today();
+  document.querySelectorAll('#modalBody [data-qt]').forEach(b => b.onclick = () => {
+    const t = trackers().find(x => x.id === b.dataset.qt);
+    if (loggedOn(t.id, qDate())) { toast(t.icon + ' Already logged for ' + fmtDate(qDate(), 'rel')); return; }
+    toggleTrack(t.id, qDate()); closeModal(); route();
+  });
+  document.querySelectorAll('#modalBody [data-qf]').forEach(b => b.onclick = () => {
+    const f = freq[+b.dataset.qf], d = qDate();
+    data.items.push(newItem({ kind: 'event', title: f.title, date: d, allDay: !f.start, start: f.start, end: f.end, location: f.location, color: f.color || COLORS[0], driver: f.driver || '' }));
+    window.save(); closeModal(); route();
+    toast('✓ ' + f.title + ' added for ' + fmtDate(d, 'rel') + (f.start ? ' at ' + fmtTime(f.start) : ''));
+  });
   if (!id) setTimeout(() => $('iTitle').focus(), 60);
+}
+// The events that come up most often (in the planner and the connected calendars), with their usual time and place.
+function frequentEvents() {
+  const from = addDays(today(), -180), to = addDays(today(), 60), groups = {};
+  const add = (e, color) => {
+    const title = (e.title || '').trim(); if (!title || title === '(busy)' || title.length > 40) return;
+    const k = title.toLowerCase(), g = groups[k] = groups[k] || { n: 0, list: [] };
+    g.n++; g.list.push({ title, date: e.date, start: e.allDay ? '' : e.start || '', end: e.allDay ? '' : e.end || '', location: e.location || '', color: color || e.color || '', driver: e.driver || '' });
+  };
+  data.items.filter(i => i.kind === 'event' && i.date >= from && i.date <= to).forEach(i => add(i));
+  (S().calendars || []).filter(c => c.on !== false).forEach(c => { const got = cache.get('cal_' + c.id); if (got) calendarOccurrences(got.events, from, to).forEach(e => add(e, c.color)); });
+  const t = today();
+  return Object.values(groups).filter(g => g.n >= 2).sort((a, b) => b.n - a.n).slice(0, 8).map(g => {
+    // Use the latest time it happened (or the next one, if it hasn't happened yet).
+    const past = g.list.filter(x => x.date <= t).sort((a, b) => a.date < b.date ? 1 : -1);
+    const f = past[0] || g.list.sort((a, b) => a.date < b.date ? -1 : 1)[0];
+    // The most common time wins over a one-off change.
+    const times = {}; g.list.forEach(x => { const k = x.start + '|' + x.end; times[k] = (times[k] || 0) + 1; });
+    const [st, en] = Object.entries(times).sort((a, b) => b[1] - a[1])[0][0].split('|');
+    return Object.assign({}, f, { start: st, end: en, location: f.location || (g.list.find(x => x.location) || {}).location || '' });
+  });
 }
 // One-tap links that open Google or Outlook with the event filled in.
 function googleLink(it) {
