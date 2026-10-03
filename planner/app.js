@@ -336,8 +336,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' ? 'today' : tab)));
-  const views = { today: viewToday, brief: viewBrief, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' ? 'today' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -446,6 +446,7 @@ function viewToday() {
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
     '<button type="button" class="tile t-meal" data-tile="meal">' + TILE_ICONS.meal + '<b>Meal</b></button>' +
     '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Write</b></button></div>' +
+    trackButtons(sel) +
     '<div class="row-actions tight"><a class="button ghost small" href="#brief">☀ Morning briefing</a><button type="button" class="ghost small" id="tdTpl">⚡ Use a template</button></div>' +
     (todayRoutines.length ? '<div class="rchips">' + todayRoutines.map(routineChip).join('') + '</div>' : '') +
     (upNext ? '<div class="card upnext" ' + rowOpen(upNext) + ' style="--pc:' + esc(upNext.color || '#b0905a') + '"><span class="eyebrow">Up next · <b id="untilTxt" data-d="' + upNext.date + '" data-t="' + upNext.start + '">' + esc(untilText(upNext.date, upNext.start)) + '</b></span><h2>' + esc(upNext.title) + '</h2><span class="sub">' + esc(fmtDate(upNext.date, 'rel') + ' · ' + fmtTime(upNext.start) + (upNext.end ? '–' + fmtTime(upNext.end) : '') + (upNext.location ? ' · ' + upNext.location : '')) + '</span></div>' : '') +
@@ -469,6 +470,7 @@ function viewToday() {
   });
   $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
   $('tdTpl').onclick = () => useTemplate(sel);
+  wireTrack($('view'), viewToday);
   if ($('addHere')) $('addHere').onclick = () => editItem(null, { kind: 'event', date: sel });
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
   $('quickGo').onclick = go; $('quick').onkeydown = e => { if (e.key === 'Enter') go(); };
@@ -518,12 +520,12 @@ function drawMonth() {
   for (let i = 0; i < first; i++) cells += '<div class="cd blank"></div>';
   for (let d = 1; d <= n; d++) {
     const iso = calMonth + '-' + pad(d), es = onDay(list, iso);
-    cells += '<button type="button" class="cd' + (iso === today() ? ' today' : '') + (iso === calDay ? ' sel' : '') + '" data-day="' + iso + '"><span class="n">' + d + '</span>' +
+    cells += '<button type="button" class="cd' + (iso === today() ? ' today' : '') + (iso === calDay ? ' sel' : '') + '" data-day="' + iso + '"><span class="n">' + d + trackIcons(iso) + '</span>' +
       es.slice(0, 3).map(e => '<span class="pill" style="--pc:' + esc(e.color || '#888') + '">' + esc(e.title) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
   }
   const dayList = onDay(list, calDay);
   $('calBody').innerHTML = '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
-    '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="ghost small" data-goday="' + calDay + '">Open day</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + mealsLine(calDay) + '</div>';
+    '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="ghost small" data-goday="' + calDay + '">Open day</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + mealsLine(calDay) + trackButtons(calDay) + '</div>';
   $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; viewCalendar(); });
   wireCal();
 }
@@ -540,7 +542,7 @@ function drawWeek() {
   let boxes = '';
   for (let k = 0; k < 7; k++) {
     const d = addDays(ws, k), es = onDay(list, d), dt = new Date(d + 'T12:00');
-    boxes += '<div class="pday' + (d === today() ? ' today' : '') + '" style="--tone:' + DAY_TONES[k] + '"><button type="button" class="ptag" data-goday="' + d + '">' + dt.toLocaleDateString([], { weekday: 'long' }) + ' <small>' + dt.getDate() + '</small></button>' +
+    boxes += '<div class="pday' + (d === today() ? ' today' : '') + '" style="--tone:' + DAY_TONES[k] + '"><button type="button" class="ptag" data-goday="' + d + '">' + dt.toLocaleDateString([], { weekday: 'long' }) + ' <small>' + dt.getDate() + '</small></button>' + trackIcons(d) +
       '<div class="pitems">' + es.map(e => '<div class="pev' + (e.done ? ' done' : '') + '" ' + rowOpen(e) + '><i style="background:' + esc(e.color || '#8c7a6b') + '"></i><span>' + esc((e.kind === 'task' ? '' : e.allDay ? '' : fmtTime(e.start) + ' ') + e.title) + '</span></div>').join('') + mealsLine(d, true) + '</div>' +
       '<button type="button" class="padd" data-addday="' + d + '" aria-label="Add">＋</button>' + (d === today() ? '<span class="heart">♥</span>' : '') + '</div>';
   }
@@ -683,6 +685,7 @@ function drawDay() {
       '<div class="ddots">' + dots + '</div></div>' +
       '<div class="wkrow"><span class="todaylbl">' + (d === today() ? 'TODAY' : esc(dt.toLocaleDateString([], { weekday: 'long' }).toUpperCase())) + '</span>' +
       days.map(x => '<button type="button" class="wd' + (x === d ? ' on' : '') + '" data-dday="' + x + '">' + new Date(x + 'T12:00').toLocaleDateString([], { weekday: 'short' }).toUpperCase() + '</button>').join('') + '</div>' +
+      trackButtons(d) +
       (allDay.length ? '<div class="alld">' + allDay.map(e => '<span class="hev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#8c7a6b') + '">' + (e.kind === 'task' ? (e.done ? '✓ ' : '○ ') : '') + esc(e.title) + '</span>').join('') + '</div>' : '') +
       '<div class="hours">' + hours + '</div>' +
       '<div class="pbox2"><span>Evening</span><textarea data-dp="evening" rows="2">' + esc(v.evening || '') + '</textarea></div>' +
@@ -720,6 +723,7 @@ function drawDay() {
 const rowOpen = e => e.src === 'planner' ? 'data-item="' + e.id + '"' : e.link ? 'data-link="' + esc(e.link) + '"' : 'data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
 function wireCal() {
   wireRows($('calBody'));
+  wireTrack($('calBody'), viewCalendar);
   $('calBody').querySelectorAll('[data-goday]').forEach(b => b.onclick = () => { calDay = b.dataset.goday; calMode = 'day'; viewCalendar(); });
   $('calBody').querySelectorAll('[data-meal]').forEach(b => b.onclick = e => { e.stopPropagation(); editMeal(b.dataset.mealdate, b.dataset.meal); });
 }
@@ -902,11 +906,11 @@ function viewFiles() {
     return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fc:' + pastel(topOf(d.folder))[0] + '"' : '') + '>' + esc(((d.fileName || '').match(/\.(\w{1,4})$/) || ['', 'FILE'])[1].toUpperCase()) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([searching ? d.folder.replace(/\//g, ' › ') : '', fileSize(d.size || 0), it ? 'with ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
   };
   $('view').innerHTML = '<h1>Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
-    '<p class="helper">Save photos, PDFs, Word and Excel files, and more. Everything stays private to your account.</p>' +
+    '<p class="helper">Save photos, PDFs, Word and Excel files, and more. Copied a screenshot? Tap <b>📋 Paste</b> (or press Ctrl+V on a computer). You can also drag files onto this page. Everything stays private to your account.</p>' +
     '<input id="fFind" type="search" placeholder="Search all documents" value="' + esc(fileFind) + '">' +
     (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
     '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
-    '<button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
     (subs.length ? '<div class="fgrid">' + subs.map(f => {
       const n = data.docs.filter(d => inTree(d, f)).length, kids = childFolders(f).length, c = pastel(topOf(f));
       return '<button type="button" class="ftile" data-ff="' + esc(f) + '" style="--fc:' + c[0] + ';--fb:' + c[1] + '">' + FOLDER_ICON + '<b>' + esc(leafOf(f)) + '</b><span>' + (n ? n + (n === 1 ? ' file' : ' files') : 'Empty') + (kids ? ' · ' + kids + (kids === 1 ? ' folder' : ' folders') : '') + '</span></button>';
@@ -923,6 +927,7 @@ function viewFiles() {
     viewFiles();
   };
   $('fUp').onchange = up; $('fCam').onchange = up; $('fPics').onchange = up;
+  $('fPaste').onclick = pasteButton;
   $('fNew').onclick = () => {
     const n = (prompt(fileFolder ? 'New folder inside “' + leafOf(fileFolder) + '”:' : 'New folder name:') || '').trim().replace(/\//g, '-');
     if (!n) return;
@@ -934,6 +939,49 @@ function viewFiles() {
   if ($('fMenu')) $('fMenu').onclick = () => folderMenu(fileFolder);
   $('view').querySelectorAll('[data-doc]').forEach(r => r.onclick = e => { if (!e.target.dataset.dedit) openDoc(r.dataset.doc); });
   $('view').querySelectorAll('[data-dedit]').forEach(b => b.onclick = e => { e.stopPropagation(); editDoc(b.dataset.dedit); });
+}
+// Paste a screenshot (Snipping Tool, Print Screen, a copied photo) or drop files onto the Files page to save them here.
+async function saveBlobs(files, how) {
+  if (!files.length) return;
+  if (!signedIn()) { toast('Sign in (More) to save files.'); return; }
+  let ok = 0; toast((how || 'Saving') + ' ' + files.length + (files.length === 1 ? ' file' : ' files') + '…');
+  for (let f of files) {
+    if (!f.name || /^image\.(png|jpe?g|gif|webp)$/i.test(f.name)) {
+      const n = new Date(), ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      f = new File([f], 'Screenshot ' + isoDay(n) + ' ' + pad(n.getHours()) + '.' + pad(n.getMinutes()) + '.' + pad(n.getSeconds()) + '.' + ext, { type: f.type || 'image/png' });
+    }
+    try { await addDoc(f, { folder: fileFolder }); ok++; } catch (err) { toast(f.name + ': ' + err.message); }
+  }
+  if (ok) toast('✓ Saved ' + ok + (ok === 1 ? ' file' : ' files') + (fileFolder ? ' to ' + leafOf(fileFolder) : '') + '. Tap Edit to rename.');
+  if (location.hash.startsWith('#files')) viewFiles();
+}
+document.addEventListener('paste', e => {
+  if (!location.hash.startsWith('#files') || !$('modal').hidden) return;
+  const files = [...(e.clipboardData ? e.clipboardData.files : [])];
+  if (!files.length) return;
+  e.preventDefault(); saveBlobs(files, 'Pasting');
+});
+document.addEventListener('dragover', e => { if (location.hash.startsWith('#files')) { e.preventDefault(); document.body.classList.add('dropping'); } });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dropping'); });
+document.addEventListener('drop', e => {
+  document.body.classList.remove('dropping');
+  if (!location.hash.startsWith('#files')) return;
+  e.preventDefault(); saveBlobs([...e.dataTransfer.files], 'Saving');
+});
+// The Paste button (iPhone/iPad and computers): asks the browser for what's on the clipboard.
+async function pasteButton() {
+  if (navigator.clipboard && navigator.clipboard.read) {
+    try {
+      const items = await navigator.clipboard.read(), files = [];
+      for (const it of items) { const type = it.types.find(t => t.startsWith('image/')) || it.types.find(t => t === 'application/pdf'); if (type) files.push(new File([await it.getType(type)], '', { type })); }
+      if (files.length) { saveBlobs(files, 'Pasting'); return; }
+      toast('There’s no picture on the clipboard. Copy a screenshot first.'); return;
+    } catch (e) { /* fall through to the paste box */ }
+  }
+  openModal('<h2>Paste here</h2><div id="pasteBox" class="pastebox" contenteditable="true" aria-label="Paste area">Press and hold here, then tap <b>Paste</b> (or press Ctrl+V / ⌘V).</div><div class="row-actions"><button type="button" class="ghost" id="pbClose">Cancel</button></div>');
+  $('pbClose').onclick = closeModal;
+  const box = $('pasteBox'); box.focus();
+  box.addEventListener('paste', e => { const files = [...(e.clipboardData ? e.clipboardData.files : [])]; e.preventDefault(); if (!files.length) { toast('That wasn’t a picture or file.'); return; } closeModal(); saveBlobs(files, 'Pasting'); });
 }
 function folderMenu(p) {
   const n = data.docs.filter(d => inTree(d, p)).length, sub = folderList().filter(f => f.startsWith(p + '/')).length;
@@ -1417,10 +1465,105 @@ function editTemplate(id) {
   openModal(''); draw();
 }
 
+// ---------- Trackers (habits and personal logs) ----------
+// Each log is a planner item of kind "track" (list = tracker id, date = the day). Trackers never go to the calendar feed.
+const DEFAULT_TRACKERS = [
+  { id: 'nails', name: 'Nails', icon: '💅', cycle: false },
+  { id: 'us', name: 'Us', icon: '❤️', cycle: false },
+  { id: 'cecilia-period', name: 'Cecilia’s period', icon: '⚠️', cycle: true }
+];
+const TRACK_ICONS = ['💅', '❤️', '⚠️', '🩸', '💊', '💇‍♀️', '🦷', '🏃‍♀️', '💧', '📖', '🙏', '🐶', '🛁', '🧹', '⭐', '😴'];
+const trackers = () => { if (!S().trackers) S().trackers = DEFAULT_TRACKERS.map(t => Object.assign({}, t)); return S().trackers; };
+const logsOf = id => data.items.filter(i => i.kind === 'track' && i.list === id && i.date).sort((a, b) => a.date.localeCompare(b.date));
+const loggedOn = (id, d) => data.items.find(i => i.kind === 'track' && i.list === id && i.date === d);
+const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
+// How often something happens: the average gap between logs (for a cycle, only gaps that look like a cycle).
+function trackStats(t) {
+  const logs = logsOf(t.id), dates = [...new Set(logs.map(l => l.date))], tdy = today();
+  const gaps = dates.slice(1).map((d, k) => daysBetween(dates[k], d)).filter(g => !t.cycle || (g >= 18 && g <= 45));
+  const recent = gaps.slice(-6), avg = recent.length ? Math.round(recent.reduce((s, g) => s + g, 0) / recent.length) : null;
+  const last = dates[dates.length - 1] || null;
+  const month = dates.filter(d => d.startsWith(tdy.slice(0, 7))).length;
+  const next = t.cycle && last && avg ? addDays(last, avg) : null;
+  return { dates, last, since: last ? daysBetween(last, tdy) : null, avg, month, next };
+}
+function toggleTrack(id, d, quiet) {
+  const t = trackers().find(x => x.id === id), have = loggedOn(id, d);
+  if (have) { data.items = data.items.filter(i => i !== have); if (!quiet) toast('Removed ' + t.icon + ' for ' + fmtDate(d, 'rel')); }
+  else { data.items.push(newItem({ kind: 'track', list: id, date: d, title: t.name })); if (!quiet) toast(t.icon + ' Logged for ' + fmtDate(d, 'rel')); }
+  window.save();
+}
+// Little icons for a day on the calendar (and a faint one on a predicted cycle day).
+function trackIcons(d) {
+  const ts = trackers().filter(t => t.show !== false);
+  let out = ts.filter(t => loggedOn(t.id, d)).map(t => '<i class="tk" title="' + esc(t.name) + '">' + t.icon + '</i>').join('');
+  ts.filter(t => t.cycle).forEach(t => { const s = trackStats(t); if (s.next && !loggedOn(t.id, d) && Math.abs(daysBetween(s.next, d)) <= 1 && d >= today()) out += '<i class="tk soon" title="' + esc(t.name) + ' expected">' + t.icon + '</i>'; });
+  return out ? '<span class="tks">' + out + '</span>' : '';
+}
+// One-tap buttons for Today (or any chosen day).
+function trackButtons(d) {
+  const ts = trackers(); if (!ts.length) return '';
+  return '<div class="trackrow"><a class="trackh" href="#track">Track</a>' + ts.map(t => '<button type="button" class="trk' + (loggedOn(t.id, d) ? ' on' : '') + '" data-trk="' + esc(t.id) + '" data-trkd="' + d + '" title="' + esc(t.name) + '"><span>' + t.icon + '</span><small>' + esc(t.name.replace(/’s period$/, '')) + '</small></button>').join('') + '</div>';
+}
+function wireTrack(root, after) {
+  root.querySelectorAll('[data-trk]').forEach(b => b.onclick = e => { e.stopPropagation(); toggleTrack(b.dataset.trk, b.dataset.trkd); b.classList.add('pop'); setTimeout(after || route, 200); });
+}
+function viewTrack() {
+  const ts = trackers(), tdy = today();
+  $('view').innerHTML = '<a class="back" href="#today">‹ Today</a><h1>Trackers</h1><p class="helper">Tap to log today. These stay private in your planner — they never go to Google or your iPhone calendar.</p>' +
+    ts.map(t => {
+      const s = trackStats(t), weeks = [];
+      for (let k = 55; k >= 0; k--) { const d = addDays(tdy, -k); weeks.push('<i class="dot' + (s.dates.includes(d) ? ' on' : '') + (d === tdy ? ' now' : '') + '" title="' + esc(fmtDate(d)) + '"></i>'); }
+      const facts = [s.last ? 'Last time: ' + (s.since === 0 ? 'today' : s.since === 1 ? 'yesterday' : s.since + ' days ago') : 'Not logged yet',
+        s.avg ? (t.cycle ? 'Cycle about ' + s.avg + ' days' : 'About every ' + s.avg + ' days') : '', !t.cycle ? s.month + ' this month' : ''].filter(Boolean);
+      return '<div class="card pad tcard"><div class="mini-head"><h2><span class="ticon">' + t.icon + '</span> ' + esc(t.name) + '</h2><button type="button" class="trk big' + (loggedOn(t.id, tdy) ? ' on' : '') + '" data-trk="' + esc(t.id) + '" data-trkd="' + tdy + '">' + (loggedOn(t.id, tdy) ? '✓ Today' : '+ Today') + '</button></div>' +
+        '<p class="tfacts">' + facts.map(esc).join(' · ') + '</p>' +
+        (t.cycle && s.next ? '<p class="tnext">' + t.icon + ' Next one expected around <b>' + esc(fmtDate(s.next, 'rel')) + '</b>' + (daysBetween(tdy, s.next) > 0 ? ' (in ' + daysBetween(tdy, s.next) + ' days)' : daysBetween(tdy, s.next) === 0 ? ' (today)' : ' (' + -daysBetween(tdy, s.next) + ' days late)') + '</p>' : t.cycle ? '<p class="helper">Log 2 or more start days and it will predict the next one.</p>' : '') +
+        '<div class="dots" title="Last 8 weeks">' + weeks.join('') + '</div>' +
+        '<div class="row-actions"><label class="tother">Log another day<input type="date" data-tday="' + esc(t.id) + '" max="' + tdy + '"></label><button type="button" class="ghost small" data-thist="' + esc(t.id) + '">History</button><button type="button" class="ghost small" data-tedit="' + esc(t.id) + '">Edit</button></div></div>';
+    }).join('') +
+    '<div class="row-actions"><button type="button" id="tNew">＋ New tracker</button></div>';
+  wireTrack($('view'), viewTrack);
+  $('view').querySelectorAll('[data-tday]').forEach(i => i.onchange = () => { if (i.value) { if (!loggedOn(i.dataset.tday, i.value)) toggleTrack(i.dataset.tday, i.value); else toast('Already logged that day.'); viewTrack(); } });
+  $('view').querySelectorAll('[data-thist]').forEach(b => b.onclick = () => trackHistory(b.dataset.thist));
+  $('view').querySelectorAll('[data-tedit]').forEach(b => b.onclick = () => editTracker(b.dataset.tedit));
+  $('tNew').onclick = () => editTracker();
+}
+function trackHistory(id) {
+  const t = trackers().find(x => x.id === id), logs = logsOf(id).reverse();
+  openModal('<h2>' + t.icon + ' ' + esc(t.name) + '</h2>' + (logs.length ? logs.map((l, k) => { const prev = logs[k + 1]; return '<div class="mini-row"><span>' + esc(fmtDate(l.date, 'long')) + (prev ? ' <small class="sub">· ' + daysBetween(prev.date, l.date) + ' days after the one before</small>' : '') + '</span><button type="button" class="linkish" data-hdel="' + l.id + '">Remove</button></div>'; }).join('') : '<p class="helper">Nothing logged yet.</p>') +
+    '<div class="row-actions"><button type="button" id="thClose">Done</button></div>');
+  $('thClose').onclick = () => { closeModal(); route(); };
+  document.querySelectorAll('[data-hdel]').forEach(b => b.onclick = () => { data.items = data.items.filter(i => i.id !== b.dataset.hdel); window.save(); trackHistory(id); });
+}
+function editTracker(id) {
+  const list = trackers(), t = id ? list.find(x => x.id === id) : { id: '', name: '', icon: '⭐', cycle: false, show: true };
+  let icon = t.icon;
+  openModal('<h2>' + (id ? 'Edit tracker' : 'New tracker') + '</h2><label>Name<input id="tkName" value="' + esc(t.name) + '" placeholder="Workout, vitamins, haircut…"></label>' +
+    '<p class="lbl">Icon</p><div class="iconpick">' + TRACK_ICONS.map(x => '<button type="button" class="ipk' + (x === icon ? ' on' : '') + '" data-ipk="' + x + '">' + x + '</button>').join('') + '</div>' +
+    '<label class="check"><input type="checkbox" id="tkCycle"' + (t.cycle ? ' checked' : '') + '> Predict the next one (for a monthly cycle)</label>' +
+    '<label class="check"><input type="checkbox" id="tkShow"' + (t.show !== false ? ' checked' : '') + '> Show the icon on my calendar</label>' +
+    '<div class="row-actions"><button type="button" id="tkSave">Save</button><button type="button" class="ghost" id="tkCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="tkDel">Delete</button>' : '') + '</div>');
+  document.querySelectorAll('[data-ipk]').forEach(b => b.onclick = () => { icon = b.dataset.ipk; document.querySelectorAll('[data-ipk]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('tkCancel').onclick = closeModal;
+  $('tkSave').onclick = () => {
+    const name = $('tkName').value.trim(); if (!name) { toast('Name it.'); return; }
+    Object.assign(t, { name, icon, cycle: $('tkCycle').checked, show: $('tkShow').checked });
+    if (!id) { t.id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + uid().slice(-4); list.push(t); }
+    S().trackers = list.slice(); window.save(); closeModal(); route();
+  };
+  if (id) $('tkDel').onclick = () => {
+    const n = logsOf(id).length;
+    if (!confirm('Delete the ' + t.name + ' tracker' + (n ? ' and its ' + n + ' logged days' : '') + '?')) return;
+    S().trackers = list.filter(x => x.id !== id); data.items = data.items.filter(i => !(i.kind === 'track' && i.list === id)); window.save(); closeModal(); route();
+  };
+}
+
 // ---------- More: calendars, feed, lists ----------
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#track"><b>Trackers</b><span class="sub">💅 ❤️ ⚠️ and more →</span></a>' +
     '<a class="card pad tip" href="#feed"><b>Show my planner in Google, Outlook or iPhone</b><span class="sub">Subscribe →</span></a>' +
     '<div class="card pad"><h2>Also show</h2><label class="check"><input type="checkbox" id="mBand"' + (S().showBand !== false ? ' checked' : '') + '> Band volunteer events (from Band Volunteers)</label>' +
     '<label class="check"><input type="checkbox" id="mBills"' + (S().showBills !== false ? ' checked' : '') + '> Bills and paydays (from Money)</label></div>' +
