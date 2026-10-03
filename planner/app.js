@@ -291,7 +291,13 @@ function entryRow(e) {
   return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, src].filter(Boolean).join(' · ')) + '</span></div></div>';
 }
 function wireRows(root) {
-  root.querySelectorAll('[data-done]').forEach(b => b.onclick = ev => { ev.stopPropagation(); toggleDone(b.dataset.done); });
+  root.querySelectorAll('[data-done]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const it = data.items.find(i => i.id === b.dataset.done);
+    // A little burst when something gets checked off, then the list updates.
+    if (it && !it.done) { b.classList.add('on', 'pop'); b.textContent = '✓'; const row = b.closest('.ev'); if (row) row.classList.add('done', 'fading'); celebrate(b); setTimeout(() => toggleDone(b.dataset.done), 420); }
+    else toggleDone(b.dataset.done);
+  });
   root.querySelectorAll('[data-item]').forEach(r => r.onclick = () => editItem(r.dataset.item));
   root.querySelectorAll('[data-link]').forEach(r => r.onclick = () => { location.href = r.dataset.link; });
   root.querySelectorAll('[data-ext]').forEach(r => r.onclick = () => {
@@ -303,6 +309,19 @@ function wireRows(root) {
     $('xCopy').onclick = () => { closeModal(); editItem(null, { kind: 'event', title: x.t, date: x.d, start: x.s, end: x.e, location: x.l, notes: x.n || '' }); };
   });
 }
+const CHEERS = ['Nice work!', 'Done!', 'One less thing!', 'Look at you go!', 'Checked off!', 'Great job!'];
+function celebrate(el) {
+  const r = el.getBoundingClientRect();
+  for (let k = 0; k < 10; k++) {
+    const s = document.createElement('i'); s.className = 'spark';
+    s.style.left = (r.left + r.width / 2) + 'px'; s.style.top = (r.top + r.height / 2) + 'px';
+    s.style.setProperty('--dx', (Math.cos(k / 10 * 6.28) * (26 + Math.random() * 14)).toFixed(1) + 'px');
+    s.style.setProperty('--dy', (Math.sin(k / 10 * 6.28) * (26 + Math.random() * 14)).toFixed(1) + 'px');
+    s.style.background = ['#b0905a', '#7c9a82', '#c08497', '#5a8a9a', '#c47a5a'][k % 5];
+    document.body.appendChild(s); setTimeout(() => s.remove(), 700);
+  }
+  toast('✓ ' + CHEERS[Math.floor(Math.random() * CHEERS.length)]);
+}
 function toggleDone(id) {
   const it = data.items.find(i => i.id === id); if (!it) return;
   if (it.repeat && !it.done && it.date) {
@@ -310,7 +329,7 @@ function toggleDone(id) {
     const next = itemDates(it, addDays(it.date, 1), addDays(it.date, 400))[0];
     if (next) { it.date = next; window.save(); toast('✓ Done. Next one: ' + fmtDate(next)); route(); return; }
   }
-  it.done = !it.done; window.save(); if (it.done) toast('✓ Done'); route();
+  it.done = !it.done; window.save(); route();
 }
 
 // ---------- Routing ----------
@@ -322,8 +341,10 @@ function route() {
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
 window.render = () => { const y = window.scrollY; route(); window.scrollTo(0, y); if (!render.started && signedIn()) { render.started = true; refreshAll(); } };
-window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
-$('topAdd').onclick = $('fab').onclick = () => {
+window.addEventListener('hashchange', () => { const v = $('view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); route(); window.scrollTo(0, 0); });
+$('topEvent').onclick = () => editItem(null, { kind: 'event', date: location.hash.startsWith('#calendar') ? calDay || today() : todaySel || today() });
+$('topTask').onclick = () => editItem(null, { kind: 'task', date: location.hash.startsWith('#calendar') ? calDay || today() : null });
+$('fab').onclick = () => {
   openModal('<h2>Add</h2><div class="addgrid"><button type="button" data-addk="event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Event<span>on the calendar</span></button><button type="button" data-addk="task"><svg viewBox="0 0 24 24"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12v6.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H15"/></svg>Task<span>to-do</span></button>' +
     '<button type="button" data-addk="note"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Note<span>for today</span></button><button type="button" data-addk="file"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Document<span>upload a file</span></button></div>' +
     '<label>Or just type it<input id="qAdd" placeholder="Dentist friday 3pm · Call Mrs. Abbott tomorrow"></label><p class="helper">Dates and times are picked up from what you type.</p>' +
@@ -372,32 +393,74 @@ function quickAdd(text, openAfter) {
 }
 
 // ---------- Today ----------
+let todaySel = '';
+const TILE_ICONS = {
+  event: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M12 13v5M9.5 15.5h5"/></svg>',
+  task: '<svg viewBox="0 0 24 24"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12v6.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H15"/></svg>',
+  meal: '<svg viewBox="0 0 24 24"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10"/><path d="M17 21V3c-2.2 1-3.5 3.5-3.5 7 0 2 1 3 3.5 3"/></svg>',
+  note: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>'
+};
+// "in 25 min", "in 2 hr 10 min", "now"
+function untilText(date, time) {
+  const mins = Math.round((new Date(date + 'T' + time) - new Date()) / 60000);
+  if (mins <= 0) return 'now';
+  if (mins < 60) return 'in ' + mins + ' min';
+  if (mins < 24 * 60) { const h = Math.floor(mins / 60), m = mins % 60; return 'in ' + h + ' hr' + (m ? ' ' + m + ' min' : ''); }
+  return fmtDate(date, 'rel') + ' at ' + fmtTime(time);
+}
 function viewToday() {
-  const t = today(), week = agenda(addDays(t, -60), addDays(t, 14));
-  const todays = onDay(week, t);
+  const t = today();
+  if (!todaySel) todaySel = t;
+  const ws = weekStart(t), week = agenda(addDays(t, -60), addDays(ws, 13));
+  const sel = todaySel, selList = onDay(week, sel);
   const overdue = data.items.filter(i => i.kind === 'task' && !i.done && i.date && i.date < t).sort((a, b) => a.date.localeCompare(b.date));
   const note = data.items.find(i => i.kind === 'note' && i.date === t);
-  const hr = new Date().getHours();
+  const hr = new Date().getHours(), nowHm = pad(hr) + ':' + pad(new Date().getMinutes());
   const todayTasks = data.items.filter(i => i.kind === 'task' && i.date && (i.date === t || (i.date < t && !i.done)));
   const doneToday = todayTasks.filter(i => i.done).length;
+  const eventsToday = onDay(week, t).filter(e => e.kind !== 'task');
+  // Up next: the next timed event today, else the first one in the coming week.
+  let upNext = eventsToday.find(e => !e.allDay && e.start && (e.end || e.start) > nowHm);
+  if (!upNext) for (let k = 1; k <= 7 && !upNext; k++) upNext = onDay(week, addDays(t, k)).find(e => e.kind !== 'task' && !e.allDay && e.start);
   let next = '';
   for (let k = 1; k <= 7; k++) {
     const d = addDays(t, k), es = onDay(week, d).filter(e => !(e.kind === 'task' && e.done));
     if (es.length) next += '<div class="day">' + esc(fmtDate(d, 'rel')) + '</div>' + es.map(entryRow).join('');
   }
+  const strip = [0, 1, 2, 3, 4, 5, 6].map(k => {
+    const d = addDays(ws, k), n = onDay(week, d).length + mealsOn(d).length, dt = new Date(d + 'T12:00');
+    return '<button type="button" class="sday' + (d === sel ? ' on' : '') + (d === t ? ' now' : '') + '" data-sday="' + d + '"><span>' + dt.toLocaleDateString([], { weekday: 'narrow' }) + '</span><b>' + dt.getDate() + '</b><i>' + '•'.repeat(Math.min(3, n)) + '</i></button>';
+  }).join('');
+  const nextSlot = hr < 10 ? 'Breakfast' : hr < 14 ? 'Lunch' : hr < 20 ? 'Dinner' : 'Snack';
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
     '<div class="hello"><span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
-    '<span class="sub">' + [todays.filter(e => e.kind !== 'task').length, todayTasks.length].map((n, k) => n + (k ? (n === 1 ? ' task' : ' tasks') : (n === 1 ? ' event' : ' events'))).join(' · ') + ' today</span>' +
-    (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks complete<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
-    '<div class="quickbar"><input id="quick" placeholder="Add: “Dentist friday 3pm” or “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
+    '<span class="sub">' + eventsToday.length + (eventsToday.length === 1 ? ' event' : ' events') + ' · ' + todayTasks.length + (todayTasks.length === 1 ? ' task' : ' tasks') + ' today</span>' +
+    (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks complete' + (doneToday && doneToday === todayTasks.length ? ' — all done!' : '') + '<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
+    '<div class="tiles">' +
+    '<button type="button" class="tile t-event" data-tile="event">' + TILE_ICONS.event + '<b>Event</b></button>' +
+    '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
+    '<button type="button" class="tile t-meal" data-tile="meal">' + TILE_ICONS.meal + '<b>Meal</b></button>' +
+    '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Note</b></button></div>' +
+    (upNext ? '<div class="card upnext" ' + rowOpen(upNext) + ' style="--pc:' + esc(upNext.color || '#b0905a') + '"><span class="eyebrow">Up next · <b id="untilTxt" data-d="' + upNext.date + '" data-t="' + upNext.start + '">' + esc(untilText(upNext.date, upNext.start)) + '</b></span><h2>' + esc(upNext.title) + '</h2><span class="sub">' + esc(fmtDate(upNext.date, 'rel') + ' · ' + fmtTime(upNext.start) + (upNext.end ? '–' + fmtTime(upNext.end) : '') + (upNext.location ? ' · ' + upNext.location : '')) + '</span></div>' : '') +
+    '<div class="quickbar"><input id="quick" placeholder="Type it: “Dentist friday 3pm”, “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
     (overdue.length ? '<div class="card pad warnbox"><h2 class="section-title">Past due <small>' + overdue.length + '</small></h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
-    '<div class="card pad"><h2 class="section-title">Today <small>' + esc(new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' + (todays.length ? todays.map(entryRow).join('') : '<p class="helper">Nothing scheduled today.</p>') + '</div>' +
-    mealsCard(t) +
+    '<div class="strip">' + strip + '</div>' +
+    '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
+    (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
+    mealsCard(sel) +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
+  $('view').querySelectorAll('[data-sday]').forEach(b => b.onclick = () => { todaySel = b.dataset.sday; viewToday(); });
+  $('view').querySelectorAll('[data-tile]').forEach(b => b.onclick = () => {
+    const k = b.dataset.tile;
+    if (k === 'event' || k === 'task') editItem(null, { kind: k, date: sel });
+    else if (k === 'meal') editMeal(sel, nextSlot);
+    else { $('dayNote').focus(); $('dayNote').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  });
+  if ($('addHere')) $('addHere').onclick = () => editItem(null, { kind: 'event', date: sel });
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
   $('quickGo').onclick = go; $('quick').onkeydown = e => { if (e.key === 'Enter') go(); };
   $('dayNote').onchange = e => {
@@ -407,6 +470,8 @@ function viewToday() {
   };
   if (window.plannerSync) window.plannerSync.renderBox();
 }
+// Keep the "Up next" countdown current while Today is open.
+setInterval(() => { const u = $('untilTxt'); if (u) u.textContent = untilText(u.dataset.d, u.dataset.t); }, 30000);
 
 // ---------- Calendar ----------
 let calMonth = '', calDay = '';
@@ -541,7 +606,7 @@ function editItem(id, preset) {
   let kind = it.kind;
   const files = id ? data.docs.filter(d => d.itemId === id) : [];
   openModal('<h2>' + (id ? 'Edit' : 'New') + '</h2>' +
-    '<div class="segs" id="iKind"><button type="button" class="seg' + (kind === 'event' ? ' on' : '') + '" data-k="event">🗓 Event</button><button type="button" class="seg' + (kind === 'task' ? ' on' : '') + '" data-k="task">✅ Task</button></div>' +
+    '<div class="segs" id="iKind"><button type="button" class="seg' + (kind === 'event' ? ' on' : '') + '" data-k="event">Event</button><button type="button" class="seg' + (kind === 'task' ? ' on' : '') + '" data-k="task">Task</button></div>' +
     '<label>What<input id="iTitle" value="' + esc(it.title) + '" placeholder="' + (kind === 'task' ? 'Turn in band forms' : 'Dentist') + '" autocapitalize="sentences"></label>' +
     '<div class="grid2"><label><span id="iDateL">' + (kind === 'task' ? 'Due' : 'Date') + '</span><input id="iDate" type="date" value="' + esc(it.date || '') + '"></label><label class="ev-only">Ends (for trips)<input id="iEndDate" type="date" value="' + esc(it.endDate || '') + '"></label></div>' +
     '<label class="check ev-only"><input type="checkbox" id="iAllDay"' + (it.allDay ? ' checked' : '') + '> All day</label>' +
