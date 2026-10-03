@@ -224,3 +224,4 @@ h2.food-head small { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .card.event .what { flex: 1; }
 .card-text { align-self: center; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 12px; background: var(--navy); color: #fff; font-size: 1.25rem; line-height: 1.1; cursor: pointer; }
 .card-text small { font-size: .7rem; font-weight: 700; }
+@media (max-width: 420px) { .dir-row { grid-template-columns: 1fr 1fr; } .dir-row label:last-child { grid-column: 1 / -1; } }

@@ -824,7 +824,7 @@ function findMore(evId, tplId) {
 // The students on a game, grouped by school, in an email to that school's band director
 // (RHS → Sarah Abbott, RJHS → Scott Johnson; set under More → Band directors).
 const DIRECTOR_TEXT = 'Hi {director},\n\nHere are the {school} band students signed up to volunteer in the concession stand for {event} on {date}{time}:\n\n{students}\n\nCould you please remind them to arrive on time, wear closed-toe shoes, tie back long hair, and sign in on the volunteer sign-in sheet when they get there? Thank you so much for your help!\n\nShaana Escobar\nVolunteer Coordinator, Russellville Band Boosters\nvolunteerRSDbandboosters@gmail.com · 479-747-9972';
-if (!data.settings.directors) data.settings.directors = { RHS: { name: 'Sarah Abbott', email: 'Sarah.abbott@rsdk12.net' }, RJHS: { name: 'Scott Johnson', email: 'Scott.johnson@rsdk12.net' }, RMS: { name: '', email: '' } };
+if (!data.settings.directors) data.settings.directors = { RHS: { name: 'Sarah Abbott', greeting: 'Mrs. Abbott', email: 'Sarah.abbott@rsdk12.net' }, RJHS: { name: 'Scott Johnson', greeting: 'Mr. Johnson', email: 'Scott.johnson@rsdk12.net' }, RMS: { name: '', email: '' } };
 if (!data.settings.directorText) data.settings.directorText = DIRECTOR_TEXT;
 function directorGroups(evId) {
   const groups = {};
@@ -839,7 +839,7 @@ function fillDirector(text, ev, g, dir) {
   const starts = g.slots.map(x => x.s.start || (jobOf(x.s) || {}).start || ev.start).filter(Boolean).sort();
   const names = g.slots.map(x => fullName(x.p)).sort((a, b) => a.split(' ').pop().localeCompare(b.split(' ').pop()));
   return String(text || DIRECTOR_TEXT)
-    .replace(/\{director\}/g, (dir.name || 'there').split(' ')[0])
+    .replace(/\{director\}/g, dir.greeting || (dir.name || 'there').split(' ')[0])
     .replace(/\{school\}/g, g.school).replace(/\{event\}/g, ev.name).replace(/\{date\}/g, fmtDate(ev.date, true))
     .replace(/\{time\}/g, starts[0] ? ' at ' + fmtTime(starts[0]) : '').replace(/\{count\}/g, String(names.length))
     .replace(/\{students\}/g, names.map((n, i) => (i + 1) + '. ' + n).join('\n'))
@@ -1108,7 +1108,7 @@ function sendReminders() {
 function fillDirector(text, d, s) {
   const time = t => { if (!t) return ''; let [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + String(m).padStart(2, '0') + ' ' + ap; };
   const day = x => { const [y, m, dd] = String(x).split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); };
-  const first = (d.name || 'there').split(' ')[0];
+  const first = d.greeting || (d.name || 'there').split(' ')[0];
   return String(text || 'Hi {director},\\n\\nHere are the {school} students volunteering tomorrow at {event}:\\n\\n{students}\\n\\nThank you!')
     .replace(/\{director\}/g, first).replace(/\{school\}/g, d.school).replace(/\{event\}/g, d.event)
     .replace(/\{date\}/g, day(d.date)).replace(/\{time\}/g, d.start ? ' at ' + time(d.start) : '')
@@ -1683,7 +1683,7 @@ function viewMore() {
     '<label>What donors should write in the Cash App note<textarea id="mDonate" rows="3">' + esc(data.settings.donateInfo || '') + '</textarea></label>' +
     '<p class="helper">The sign-up page shows a 💵 Donate button for the season and for each game, with a ready-to-copy note like “Band Boosters – RHS vs. Lake Hamilton 10/9 – your name”.</p></div>' +
     '<div class="card pad"><h2>🎓 Band directors</h2><p class="helper">Student volunteers\' reminders go to their school\'s band director.</p>' +
-    ['RHS', 'RJHS', 'RMS'].map(k => { const d = (data.settings.directors || {})[k] || {}; return '<div class="grid2"><label>' + k + ' director<input data-dname="' + k + '" value="' + esc(d.name || '') + '" placeholder="Name"></label><label>Email<input type="email" data-demail="' + k + '" value="' + esc(d.email || '') + '"></label></div>'; }).join('') +
+    ['RHS', 'RJHS', 'RMS'].map(k => { const d = (data.settings.directors || {})[k] || {}; return '<div class="grid3 dir-row"><label>' + k + ' director<input data-dname="' + k + '" value="' + esc(d.name || '') + '" placeholder="Name"></label><label>Call them<input data-dgreet="' + k + '" value="' + esc(d.greeting || '') + '" placeholder="Mrs. Abbott"></label><label>Email<input type="email" data-demail="' + k + '" value="' + esc(d.email || '') + '"></label></div>'; }).join('') +
     '<label>Email to directors. Fill-ins: {director} {school} {event} {date} {time} {students} {count}<textarea id="mDirText" rows="7">' + esc(data.settings.directorText || '') + '</textarea></label></div>' +
     docCard() +
     '<div class="card pad"><h2>✉️ Reminder email wording</h2><p class="helper">Sent the day before, once reminder emails are turned on above. Fill-ins: {first} {event} {date} {arrive} {when} {day} {job} {item} {dropoff} {stillneed} {from}</p>' +
@@ -1717,9 +1717,9 @@ function viewMore() {
   $('mDonate').onchange = e => { data.settings.donateInfo = e.target.value.trim(); window.save(); };
   $('mEmail').onchange = e => { data.settings.emailText = e.target.value.trim(); window.save(); };
   $('mDirText').onchange = e => { data.settings.directorText = e.target.value.trim(); window.save(); };
-  document.querySelectorAll('[data-dname],[data-demail]').forEach(inp => inp.onchange = () => {
-    const k = inp.dataset.dname || inp.dataset.demail, dirs = data.settings.directors = Object.assign({}, data.settings.directors);
-    dirs[k] = Object.assign({}, dirs[k], inp.dataset.dname ? { name: inp.value.trim() } : { email: inp.value.trim() });
+  document.querySelectorAll('[data-dname],[data-demail],[data-dgreet]').forEach(inp => inp.onchange = () => {
+    const k = inp.dataset.dname || inp.dataset.demail || inp.dataset.dgreet, dirs = data.settings.directors = Object.assign({}, data.settings.directors);
+    dirs[k] = Object.assign({}, dirs[k], inp.dataset.dname ? { name: inp.value.trim() } : inp.dataset.dgreet ? { greeting: inp.value.trim() } : { email: inp.value.trim() });
     window.save();
   });
   $('mFoodEmail').onchange = e => { data.settings.foodText = e.target.value.trim(); window.save(); };
