@@ -1479,6 +1479,6 @@ function firstSort() {
   const n = autoSortAll(); data.settings.autoSorted = true; window.save();
   if (n) toast('✨ Sorted ' + n + ' entries into categories by name.');
 }
-firstSort();
+if (!(CFG.sync && CFG.sync.url)) firstSort();
 runRecurring();
 route();
