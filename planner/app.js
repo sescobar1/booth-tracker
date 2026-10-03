@@ -927,6 +927,19 @@ const childFolders = p => folderList().filter(f => parentOf(f) === p).sort((a, b
 const inTree = (doc, p) => doc.folder === p || (doc.folder || '').startsWith(p + '/');
 const topOf = p => p.split('/')[0];
 // Keep the list tidy: every parent of a folder exists, no duplicates, parents before children.
+// Nicknames, so searching "CC" or "Cece" also finds Cecilia (and the other way round).
+const NICKNAMES = { Cecilia: ['CC', 'Cece'] };
+const nicknames = () => Object.assign({}, NICKNAMES, S().nicknames || {});
+function matchesName(text, q) {
+  const t = String(text || '').toLowerCase(); q = q.toLowerCase().trim();
+  if (t.includes(q)) return true;
+  const word = w => new RegExp('(^|[^a-z])' + w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(t);
+  return Object.entries(nicknames()).some(([name, nicks]) => {
+    const all = [name].concat(nicks);
+    if (!all.some(n => n.toLowerCase() === q || (q.length >= 3 && n.toLowerCase().startsWith(q)))) return false;
+    return all.some(word);
+  });
+}
 function setFolders(list) {
   const out = [];
   list.forEach(f => { const parts = f.split('/').map(x => x.trim()).filter(Boolean); for (let k = 1; k <= parts.length; k++) { const p = parts.slice(0, k).join('/'); if (!out.includes(p)) out.push(p); } });
@@ -935,7 +948,7 @@ function setFolders(list) {
 function viewFiles() {
   if (fileFolder && !folderList().includes(fileFolder)) fileFolder = '';
   const q = fileFind.toLowerCase(), searching = !!q;
-  const here = searching ? data.docs.filter(d => (d.title + ' ' + d.fileName + ' ' + d.note + ' ' + d.folder).toLowerCase().includes(q))
+  const here = searching ? data.docs.filter(d => matchesName(d.title + ' ' + d.fileName + ' ' + d.note + ' ' + d.folder, q))
     : data.docs.filter(d => (d.folder || '') === fileFolder || (!fileFolder && d.folder && !folderList().includes(d.folder)));
   here.sort((a, b) => b.id.localeCompare(a.id));
   const subs = searching ? [] : childFolders(fileFolder);
@@ -1628,7 +1641,7 @@ function healthPanel(who) {
   const wPts = g.filter(x => x.weight).map(x => [x.date, +x.weight]).reverse(), hPts = g.filter(x => inches(x.height) != null).map(x => [x.date, inches(x.height)]).reverse();
   const infoRows = [['Doctor', iv.doctor], ['Doctor’s phone', iv.phone], ['Allergies', iv.allergies], ['Medications', iv.meds], ['Conditions', iv.conditions], ['Blood type', iv.blood], ['Insurance', iv.insurance], ['Other', iv.other]].filter(r => r[1]);
   return '<div class="health">' +
-    '<div class="card pad hcard"><div class="mini-head"><h2>' + esc(who) + '’s health record</h2><button type="button" class="ghost small" data-hinfo="' + esc(who) + '">Edit info</button></div>' +
+    '<div class="card pad hcard"><div class="mini-head"><h2>' + esc(who) + '’s health record' + (nicknames()[who] ? ' <small class="nick">' + esc(nicknames()[who].join(' · ')) + '</small>' : '') + '</h2><button type="button" class="ghost small" data-hinfo="' + esc(who) + '">Edit info</button></div>' +
       (infoRows.length ? '<dl class="hinfo">' + infoRows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + (k === 'Doctor’s phone' ? '<a href="tel:' + esc(String(v).replace(/[^\d+]/g, '')) + '">' + esc(v) + '</a>' : esc(v)) + '</dd>').join('') + '</dl>' : '<p class="helper">Add her doctor, allergies, medications and insurance so it’s all in one place.</p>') + '</div>' +
     (ct ? '<div class="card pad hcard"><div class="mini-head"><h2>' + ct.icon + ' Period</h2><button type="button" class="trk big' + (loggedOn(ct.id, tdy) ? ' on' : '') + '" data-trk="' + esc(ct.id) + '" data-trkd="' + tdy + '">' + (loggedOn(ct.id, tdy) ? '✓ Started today' : '+ Started today') + '</button></div>' +
       (cs.next ? '<p class="tnext">Next one expected around <b>' + esc(fmtDate(cs.next, 'rel')) + '</b>' + (daysBetween(tdy, cs.next) > 0 ? ' (in ' + daysBetween(tdy, cs.next) + ' days)' : daysBetween(tdy, cs.next) === 0 ? ' (today)' : ' (' + -daysBetween(tdy, cs.next) + ' days late)') + (cs.avg ? ' · cycle about ' + cs.avg + ' days' : '') + '</p>' : '<p class="helper">Log two or more start days to see a prediction.</p>') +
