@@ -17,9 +17,9 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 
 const DEFAULT_LISTS = ['Home', 'Band', 'Booth', 'Work', 'Kids', 'Errands'];
 const DEFAULT_FOLDERS = ['Band', 'Booth', 'Home', 'School', 'Medical', 'Taxes', 'Work', 'Other'];
-const COLORS = ['#3d4a63', '#7c9a82', '#c47a5a', '#b0905a', '#8a6a8f', '#5a8a9a', '#c08497', '#6b7280'];
+const COLORS = ['#8c7a6b', '#7d9b76', '#c99a8e', '#b59f83', '#9a8fa8', '#7f9fa3', '#d1a3a4', '#6e6a66'];
 // Each task list and document folder gets its own muted color (accent, soft background).
-const PASTELS = [['#c08497', '#f6ecef'], ['#7c9a82', '#edf3ee'], ['#3d4a63', '#eceef2'], ['#5a8a9a', '#e9f1f3'], ['#c47a5a', '#f7ede8'], ['#b0905a', '#f3ecdf'], ['#8a6a8f', '#f1ecf2'], ['#6b7280', '#eeeff1']];
+const PASTELS = [['#c99a8e', '#f3e6e1'], ['#7d9b76', '#e7efe4'], ['#8c7a6b', '#ece5de'], ['#7f9fa3', '#e5eeee'], ['#b07e6a', '#efe2db'], ['#b59f83', '#f1eadf'], ['#9a8fa8', '#ebe8ef'], ['#6e6a66', '#ebe9e6']];
 const NAMED = { home: 0, band: 2, booth: 4, work: 3, kids: 1, errands: 5, school: 1, medical: 7, taxes: 5, other: 6 };
 function pastel(name) {
   const k = String(name || '').toLowerCase();
@@ -276,8 +276,8 @@ function agenda(from, to) {
     const got = cache.get('cal_' + c.id); if (!got) return;
     calendarOccurrences(got.events, from, to).forEach(e => out.push(Object.assign(e, { src: 'cal', cal: c.name, color: c.color })));
   });
-  if (S().showBand !== false) { const b = cache.get('band'); if (b) b.rows.filter(e => e.date >= from && e.date <= to).forEach(e => out.push({ src: 'band', date: e.date, endDate: e.date, start: e.start_time || '', end: e.end_time || '', allDay: !e.start_time, title: e.name, location: e.location || '', color: '#b0905a', link: '../volunteers/#event/' + e.id })); }
-  if (S().showBills !== false) { const b = cache.get('bills'); if (b) b.recurring.forEach(r => billDates(r, from, to).forEach(d => out.push({ src: 'bill', date: d, endDate: d, allDay: true, title: r.payee + ' ' + (r.type === 'income' ? '+' : '−') + '$' + Number(r.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }), color: r.type === 'income' ? '#7c9a82' : '#c47a5a', link: '../money/#recurring' }))); }
+  if (S().showBand !== false) { const b = cache.get('band'); if (b) b.rows.filter(e => e.date >= from && e.date <= to).forEach(e => out.push({ src: 'band', date: e.date, endDate: e.date, start: e.start_time || '', end: e.end_time || '', allDay: !e.start_time, title: e.name, location: e.location || '', color: '#b59f83', link: '../volunteers/#event/' + e.id })); }
+  if (S().showBills !== false) { const b = cache.get('bills'); if (b) b.recurring.forEach(r => billDates(r, from, to).forEach(d => out.push({ src: 'bill', date: d, endDate: d, allDay: true, title: r.payee + ' ' + (r.type === 'income' ? '+' : '−') + '$' + Number(r.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }), color: r.type === 'income' ? '#7d9b76' : '#c99a8e', link: '../money/#recurring' }))); }
   return out.sort((a, b) => a.date.localeCompare(b.date) || (a.allDay === b.allDay ? (a.start || '').localeCompare(b.start || '') : a.allDay ? -1 : 1));
 }
 // Entries that touch a day (multi-day events show on each of their days).
@@ -433,7 +433,7 @@ function viewToday() {
   }).join('');
   const nextSlot = hr < 10 ? 'Breakfast' : hr < 14 ? 'Lunch' : hr < 20 ? 'Dinner' : 'Snack';
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="hello"><span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
+    '<div class="hello">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
     '<span class="sub">' + eventsToday.length + (eventsToday.length === 1 ? ' event' : ' events') + ' · ' + todayTasks.length + (todayTasks.length === 1 ? ' task' : ' tasks') + ' today</span>' +
     (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks complete' + (doneToday && doneToday === todayTasks.length ? ' — all done!' : '') + '<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
     '<div class="tiles">' +
@@ -518,16 +518,33 @@ function drawMonth() {
   $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; viewCalendar(); });
   wireCal();
 }
-// The week as seven stacked days (easy to read on a phone), each with its events, tasks and dinner plan.
+// A little vine of leaves, like the top of a paper planner page.
+const VINE = '<svg class="vine" viewBox="0 0 240 40" aria-hidden="true"><path d="M2 8 C 50 34, 90 30, 120 14 S 190 2, 238 20" fill="none" stroke="#6f8f66" stroke-width="1.6"/>' +
+  [[22, 18, -30], [44, 26, 25], [66, 29, -20], [88, 26, 30], [110, 18, -35], [134, 11, 20], [158, 7, -25], [182, 8, 30], [206, 12, -20], [226, 17, 25]].map(([x, y, r], i) =>
+    '<ellipse cx="' + x + '" cy="' + (y + (i % 2 ? 7 : -7)) + '" rx="8" ry="4" transform="rotate(' + r + ' ' + x + ' ' + (y + (i % 2 ? 7 : -7)) + ')" fill="' + (i % 3 ? '#8fb48a' : '#a9c7a2') + '" stroke="#5f7d57" stroke-width=".8"/>').join('') + '</svg>';
+const DAY_TONES = ['#cdbdb0', '#dccbc1', '#ece8e2', '#ece8e2', '#cdbdb0', '#dccbc1', '#dccbc1'];
+// The week laid out like a printed planner page: reminders, seven day boxes and a notes box.
 function drawWeek() {
-  const ws = weekStart(calDay), list = agenda(ws, addDays(ws, 6));
-  let html = '';
+  const ws = weekStart(calDay), we = addDays(ws, 6), list = agenda(ws, we);
+  const reminders = data.items.filter(i => i.kind === 'task' && !i.done && (!i.date || i.date <= we)).sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999')).slice(0, 8);
+  const noteId = 'wnote-' + ws, wn = data.items.find(i => i.id === noteId);
+  let boxes = '';
   for (let k = 0; k < 7; k++) {
     const d = addDays(ws, k), es = onDay(list, d), dt = new Date(d + 'T12:00');
-    html += '<div class="wkday' + (d === today() ? ' today' : '') + '"><button type="button" class="wkdate" data-goday="' + d + '"><span>' + dt.toLocaleDateString([], { weekday: 'short' }) + '</span><b>' + dt.getDate() + '</b></button>' +
-      '<div class="wkitems">' + (es.length ? es.map(e => '<div class="wkev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#9a958c') + '"><span class="t">' + esc(e.kind === 'task' ? (e.done ? '✓' : '○') : e.allDay ? 'All day' : fmtTime(e.start)) + '</span><span class="n' + (e.done ? ' done' : '') + '">' + esc(e.title) + '</span></div>').join('') : '<span class="helper">—</span>') + mealsLine(d, true) + '</div></div>';
+    boxes += '<div class="pday' + (d === today() ? ' today' : '') + '" style="--tone:' + DAY_TONES[k] + '"><button type="button" class="ptag" data-goday="' + d + '">' + dt.toLocaleDateString([], { weekday: 'long' }) + ' <small>' + dt.getDate() + '</small></button>' +
+      '<div class="pitems">' + es.map(e => '<div class="pev' + (e.done ? ' done' : '') + '" ' + rowOpen(e) + '><i style="background:' + esc(e.color || '#8c7a6b') + '"></i><span>' + esc((e.kind === 'task' ? '' : e.allDay ? '' : fmtTime(e.start) + ' ') + e.title) + '</span></div>').join('') + mealsLine(d, true) + '</div>' +
+      '<button type="button" class="padd" data-addday="' + d + '" aria-label="Add">＋</button>' + (d === today() ? '<span class="heart">♥</span>' : '') + '</div>';
   }
-  $('calBody').innerHTML = '<div class="card wk">' + html + '</div>';
+  $('calBody').innerHTML = '<div class="ppage"><div class="phead"><div class="ptitle">' + VINE + '<h1>Weekly<br>Planner</h1></div>' +
+    '<div class="plines"><p><span>Month:</span> ' + esc(new Date(ws + 'T12:00').toLocaleDateString([], { month: 'long' })) + '</p><p><span>Week:</span> ' + esc(weekTitle(ws).replace(/, \d{4}$/, '')) + '</p>' +
+    '<div class="pbox prem"><span class="ptag">Reminders:</span>' + (reminders.length ? reminders.map(i => '<div class="pev" data-item="' + i.id + '"><i></i><span>' + esc(i.title) + (i.date ? ' <small>' + esc(new Date(i.date + 'T12:00').toLocaleDateString([], { weekday: 'short' })) + '</small>' : '') + '</span></div>').join('') : '<p class="helper">Nothing to remember yet.</p>') + '</div></div></div>' +
+    '<div class="pgrid">' + boxes + '<div class="pday pnotes" style="--tone:#cdbdb0"><span class="ptag">Notes:</span><textarea id="weekNote" placeholder="Anything for this week…">' + esc(wn ? wn.notes : '') + '</textarea></div></div></div>';
+  $('weekNote').onchange = e => {
+    let n = data.items.find(i => i.id === noteId);
+    if (!n) { n = { id: noteId, kind: 'note', title: 'Week notes', date: ws, notes: '' }; data.items.push(n); }
+    n.notes = e.target.value; window.save(); toast('Note saved.');
+  };
+  $('calBody').querySelectorAll('[data-addday]').forEach(b => b.onclick = ev => { ev.stopPropagation(); editItem(null, { kind: 'event', date: b.dataset.addday }); });
   wireCal();
 }
 // One day on an hour-by-hour timeline, with all-day items and tasks above it.
@@ -563,8 +580,8 @@ function wireCal() {
 }
 function legend() {
   const parts = [[COLORS[0], 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
-  if (S().showBand !== false && cache.get('band')) parts.push(['#b0905a', 'Band']);
-  if (S().showBills !== false && cache.get('bills')) parts.push(['#c47a5a', 'Bills']);
+  if (S().showBand !== false && cache.get('band')) parts.push(['#b59f83', 'Band']);
+  if (S().showBills !== false && cache.get('bills')) parts.push(['#c99a8e', 'Bills']);
   return '<p class="helper legend">' + parts.map(([c, n]) => '<span><i style="background:' + esc(c) + '"></i>' + esc(n) + '</span>').join('') + '</p>';
 }
 

@@ -1,6 +1,6 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'planner-v9';
-const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'planner.css', 'theme.css', 'db.js', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'planner-v10';
+const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'planner.css', 'theme.css', 'neutral.css', 'db.js', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
