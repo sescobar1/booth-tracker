@@ -169,7 +169,7 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin: 8px 0 10px; }
 .cw { text-align: center; font-size: .75rem; font-weight: 700; color: var(--muted); }
 .cd { min-height: 66px; padding: 3px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--ink); display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 2px; font-weight: 400; overflow: hidden; }
-.cd.empty { background: none; border: 0; }
+.cd.blank { background: none; border: 0; }
 .cd .n { font-size: .78rem; font-weight: 700; text-align: left; }
 .cd.today .n { color: #fff; background: var(--navy); border-radius: 99px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; }
 .cd.sel { border: 2px solid var(--navy); }
