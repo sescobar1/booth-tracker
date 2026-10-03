@@ -2038,7 +2038,10 @@ function ingredientName(line) {
   return (name || t).charAt(0).toUpperCase() + (name || t).slice(1);
 }
 const amountOf = line => (String(line).match(/^[\d\s\/.,½¼¾⅓⅔⅛-]+(?:\s*(?:cups?|c\.|tbsp|tablespoons?|tsp|teaspoons?|lbs?|pounds?|oz|ounces?|cans?|pkgs?|packages?|packets?|bags?|boxes?|jars?|bunch(?:es)?|cloves?|heads?|dozen|slices?|sticks?|bottles?|containers?|pints?|quarts?|gallons?|loaf|loaves)\.?)?/i) || [''])[0].trim();
-const walmartUrl = item => item.location && /^https:\/\/(www\.)?walmart\.com\//i.test(item.location) ? item.location : 'https://www.walmart.com/search?q=' + encodeURIComponent(item.title);
+// A saved product link can be from any store (Walmart, Sam's Club, Target…); without one, search Walmart.
+const STORES = [[/walmart\.com/i, 'Walmart'], [/samsclub\.com/i, 'Sam’s Club'], [/target\.com/i, 'Target'], [/amazon\./i, 'Amazon'], [/kroger\.com/i, 'Kroger'], [/costco\.com/i, 'Costco'], [/aldi\.us/i, 'Aldi'], [/harps/i, 'Harps']];
+const storeOf = url => { if (!url) return 'Walmart'; const s = STORES.find(([re]) => re.test(url)); if (s) return s[1]; try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return 'Store'; } };
+const walmartUrl = item => item.location && /^https:\/\//i.test(item.location) ? item.location : 'https://www.walmart.com/search?q=' + encodeURIComponent(item.title);
 
 const STARTER_RECIPES = [
   ['Tacos', 'Dinner', '1 lb ground beef\n1 packet taco seasoning\n12 taco shells\n1 head lettuce\n2 tomatoes\n8 oz shredded cheese\nSour cream\nSalsa'],
@@ -2354,12 +2357,12 @@ function viewShop() {
   const groups = AISLE_ORDER.map(a => [a, need.filter(i => (i.list || 'Other') === a)]).filter(([, l]) => l.length);
   const row = i => '<div class="shoprow' + (i.done ? ' got' : '') + '"><button type="button" class="tick' + (i.done ? ' on' : '') + '" data-got="' + i.id + '">' + (i.done ? '✓' : '') + '</button>' +
     '<div class="who" data-shopedit="' + i.id + '"><b>' + esc(i.title) + '</b>' + (i.notes ? '<span class="sub">' + esc(i.notes) + '</span>' : '') + '</div>' +
-    '<a class="wm" href="' + esc(walmartUrl(i)) + '" target="_blank" rel="noopener" title="Find on Walmart">' + (i.location ? 'Walmart ✓' : 'Walmart') + '</a></div>';
+    '<a class="wm" href="' + esc(walmartUrl(i)) + '" target="_blank" rel="noopener" title="Open on ' + esc(storeOf(i.location)) + '">' + esc(storeOf(i.location)) + (i.location ? ' ✓' : '') + '</a></div>';
   $('view').innerHTML = mealTabs('shop') +
     '<div class="quickbar"><input id="shopAdd" placeholder="Add an item… “paper towels”, “2 gallons milk”"><button type="button" id="shopGo">Add</button></div>' +
     '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
     '<p class="helper">📤 <b>Send to Salvador</b> texts him the list. For a live list he can check off at the store, sign in to this Planner on his phone with your account (More → Account and sync): changes show up on both phones.</p>' +
-    '<p class="helper">Tap <b>Walmart</b> to find each item and add it to your cart (pickup or delivery). Check it off here as you go. To always open the exact product you buy, tap an item and paste its Walmart link.</p>' +
+    '<p class="helper">Tap the store button (Walmart, or the store you saved for that item) to find each item and add it to your cart (pickup or delivery). Check it off here as you go. To always open the exact product you buy, tap an item and paste its Walmart link.</p>' +
     (groups.length ? groups.map(([a, l]) => '<div class="card pad"><h3>' + esc(a) + '</h3>' + l.map(row).join('') + '</div>').join('') : '<div class="card pad"><p class="helper">Your list is empty. Plan meals, then tap <b>Add ingredients to shopping list</b>, or add items above.</p></div>') +
     (got.length ? '<button type="button" class="linkish" id="shopGot">' + (showGot ? 'Hide' : 'Show') + ' ' + got.length + ' in the cart</button>' + (showGot ? '<div class="card pad">' + got.map(row).join('') + '</div>' : '') : '');
   const add = () => {
@@ -2388,12 +2391,12 @@ function editShop(id) {
   openModal('<h2>' + esc(it.title) + '</h2><label>Item<input id="shName" value="' + esc(it.title) + '"></label>' +
     '<label>Aisle<select id="shAisle">' + AISLE_ORDER.map(a => '<option' + (a === (it.list || 'Other') ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></label>' +
     '<label>Amount / notes<input id="shNotes" value="' + esc(it.notes) + '"></label>' +
-    '<label>Walmart product link (optional)<input id="shUrl" value="' + esc(it.location) + '" placeholder="https://www.walmart.com/ip/…" autocapitalize="off"></label>' +
-    '<p class="helper">Find the exact product on Walmart, tap Share → Copy, and paste it here. It’s remembered for next time.</p>' +
-    '<div class="row-actions"><button type="button" id="shSave">Save</button><a class="button ghost" href="' + esc(walmartUrl(it)) + '" target="_blank" rel="noopener">Open on Walmart</a><button type="button" class="danger" id="shDel">Remove</button></div>');
+    '<label>Product link (optional)<input id="shUrl" value="' + esc(it.location) + '" placeholder="Walmart, Sam’s Club, Target… link" autocapitalize="off"></label>' +
+    '<p class="helper">Find the exact product on any store’s site (Walmart, Sam’s Club, Target…), tap Share → Copy, and paste it here. It’s remembered for next time.</p>' +
+    '<div class="row-actions"><button type="button" id="shSave">Save</button><a class="button ghost" href="' + esc(walmartUrl(it)) + '" target="_blank" rel="noopener">Open on ' + esc(storeOf(it.location)) + '</a><button type="button" class="danger" id="shDel">Remove</button></div>');
   $('shSave').onclick = () => {
     const url = $('shUrl').value.trim();
-    if (url && !/^https:\/\/(www\.)?walmart\.com\//i.test(url)) { toast('That isn’t a walmart.com link.'); return; }
+    if (url && !/^https:\/\/[^\s]+$/i.test(url)) { toast('Paste the whole link, starting with https://'); return; }
     Object.assign(it, { title: $('shName').value.trim() || it.title, list: $('shAisle').value, notes: $('shNotes').value.trim(), location: url });
     const w = S().walmart = Object.assign({}, S().walmart); if (url) w[it.title.toLowerCase()] = url; else delete w[it.title.toLowerCase()];
     window.save(); closeModal(); viewShop();
