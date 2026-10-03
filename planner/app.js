@@ -336,8 +336,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' ? 'today' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' ? 'today' : tab === 'notes' ? 'files' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -957,17 +957,17 @@ function viewFiles() {
     const it = d.itemId && data.items.find(i => i.id === d.itemId);
     return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fc:' + pastel(topOf(d.folder))[0] + '"' : '') + '>' + esc(((d.fileName || '').match(/\.(\w{1,4})$/) || ['', 'FILE'])[1].toUpperCase()) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([searching ? d.folder.replace(/\//g, ' › ') : '', fileSize(d.size || 0), it ? 'with ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
   };
-  $('view').innerHTML = '<h1>Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
+  $('view').innerHTML = notesTabs('files') + '<h1>Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
     '<p class="helper">Save photos, PDFs, Word and Excel files, and more. Copied a screenshot? Tap <b>📋 Paste</b> (or press Ctrl+V on a computer). You can also drag files onto this page. Everything stays private to your account.</p>' +
     '<input id="fFind" type="search" placeholder="Search all documents" value="' + esc(fileFind) + '">' +
     (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
     '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
-    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? (folderNote(fileFolder) ? '' : '<button type="button" class="ghost small" id="fSticky">📝 Sticky note</button>') + '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
-    (!searching && folderNote(fileFolder) ? stickyNote(fileFolder) : '') +
+    '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fSticky">📝 Sticky note</button><button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    (!searching && fileFolder && stickiesIn(fileFolder).length ? '<div class="stickies">' + stickiesIn(fileFolder).map(i => stickyCard(i)).join('') + '</div>' : '') +
     (!searching && /\/Medical$/i.test(fileFolder) ? healthPanel(topOf(fileFolder)) + '<h3 class="filesh">' + esc(topOf(fileFolder)) + '’s medical files</h3>' : '') +
     (subs.length ? '<div class="fgrid">' + subs.map(f => {
       const n = data.docs.filter(d => inTree(d, f)).length, kids = childFolders(f).length, c = pastel(topOf(f));
-      return '<button type="button" class="ftile" data-ff="' + esc(f) + '" style="--fc:' + c[0] + ';--fb:' + c[1] + '">' + FOLDER_ICON + '<b>' + esc(leafOf(f)) + '</b><span>' + (n ? n + (n === 1 ? ' file' : ' files') : 'Empty') + (kids ? ' · ' + kids + (kids === 1 ? ' folder' : ' folders') : '') + '</span></button>';
+      return '<button type="button" class="ftile" data-ff="' + esc(f) + '" style="--fc:' + c[0] + ';--fb:' + c[1] + '">' + FOLDER_ICON + '<b>' + esc(leafOf(f)) + '</b><span>' + (n ? n + (n === 1 ? ' file' : ' files') : 'Empty') + (kids ? ' · ' + kids + (kids === 1 ? ' folder' : ' folders') : '') + (stickiesIn(f).length ? ' · 📝' : '') + '</span></button>';
     }).join('') + '</div>' : '') +
     (here.length ? '<div class="card pad">' + (searching ? '<h3>' + here.length + ' found</h3>' : fileFolder && subs.length ? '<h3>Files in ' + esc(leafOf(fileFolder)) + '</h3>' : !fileFolder ? '<h3>Not in a folder</h3>' : '') + here.map(docRow).join('') + '</div>'
       : (!subs.length ? '<div class="card pad"><p class="helper">' + (searching ? 'Nothing matches.' : 'This folder is empty. Upload a file, or make a folder inside it.') + '</p></div>' : ''));
@@ -991,10 +991,8 @@ function viewFiles() {
     list.splice(at, 0, p); setFolders(list); toast('✓ Folder “' + n + '” made'); viewFiles();
   };
   if ($('fMenu')) $('fMenu').onclick = () => folderMenu(fileFolder);
-  if ($('fSticky')) $('fSticky').onclick = () => editSticky(fileFolder);
-  $('view').querySelectorAll('[data-sticky]').forEach(b => b.onclick = () => editSticky(b.dataset.sticky));
-  $('view').querySelectorAll('.sticky a').forEach(a => a.onclick = e => e.stopPropagation());
-  $('view').querySelectorAll('[data-copy]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); } catch (err) { toast('Couldn’t copy. Press and hold to select it.'); } });
+  if ($('fSticky')) $('fSticky').onclick = () => editSticky(null, fileFolder);
+  wireStickies($('view'), viewFiles);
   if (/\/Medical$/i.test(fileFolder) && !searching) wireHealth($('view'), topOf(fileFolder));
   $('view').querySelectorAll('[data-doc]').forEach(r => r.onclick = e => { if (!e.target.dataset.dedit) openDoc(r.dataset.doc); });
   $('view').querySelectorAll('[data-dedit]').forEach(b => b.onclick = e => { e.stopPropagation(); editDoc(b.dataset.dedit); });
@@ -1042,27 +1040,70 @@ async function pasteButton() {
   const box = $('pasteBox'); box.focus();
   box.addEventListener('paste', e => { const files = [...(e.clipboardData ? e.clipboardData.files : [])]; e.preventDefault(); if (!files.length) { toast('That wasn’t a picture or file.'); return; } closeModal(); saveBlobs(files, 'Pasting'); });
 }
-// A sticky note at the top of a folder, for quick info like an ID number or school email.
-const folderNote = p => p && (S().folderNotes || {})[p] || '';
-function stickyNote(p) {
-  const lines = folderNote(p).split('\n');
-  return '<div class="sticky" data-sticky="' + esc(p) + '" role="button" title="Tap to edit">' + lines.map(l => {
-    const t = l.trim(); if (!t) return '<br>';
-    const val = (/:\s*(.+)$/.exec(t) || [])[1] || t;
-    const em = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(val), ph = /^[\d\s().+-]{7,}$/.test(val) && /\d{7}/.test(val.replace(/\D/g, ''));
-    const pre = esc(t.slice(0, t.length - val.length));
-    const shown = em ? pre + '<a href="mailto:' + esc(val) + '">' + esc(val) + '</a>' : ph ? pre + '<a href="tel:' + esc(val.replace(/[^\d+]/g, '')) + '">' + esc(val) + '</a>' : esc(t);
-    return '<div class="sline"><span>' + shown + '</span><button type="button" class="scopy" data-copy="' + esc(val) + '" title="Copy">⧉</button></div>';
-  }).join('') + '</div>';
+// ---------- Sticky notes ----------
+// A sticky is a planner item (kind 'sticky'): notes = the text, list = its folder ('' = general), color = paper color.
+const STICKY_COLORS = { yellow: '#fbefb4', pink: '#f8dcd8', green: '#e0ecd6', blue: '#d8e7ee', lilac: '#e7def0', peach: '#fbe2cb' };
+const stickiesIn = p => data.items.filter(i => i.kind === 'sticky' && (i.list || '') === p).sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.id.localeCompare(b.id));
+function stickyCard(it, showFolder) {
+  const lines = (it.notes || '').split('\n'), many = lines.filter(l => l.trim()).length > 1;
+  return '<div class="sticky" data-sticky="' + esc(it.id) + '" role="button" title="Tap to edit" style="--sn:' + (STICKY_COLORS[it.color] || STICKY_COLORS.yellow) + '">' +
+    (showFolder && it.list ? '<span class="sfold">' + esc(it.list.replace(/\//g, ' › ')) + '</span>' : '') +
+    lines.map((l, k) => {
+      const t = l.trim(); if (!t) return '<div class="sgap"></div>';
+      const m = /^([^:]{1,25}):\s+(.+)$/.exec(t), val = m ? m[2] : t;
+      const em = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(val), ph = /^[\d\s().+-]{7,}$/.test(val) && /\d{7}/.test(val.replace(/\D/g, ''));
+      const pre = esc(t.slice(0, t.length - val.length));
+      const shown = em ? pre + '<a href="mailto:' + esc(val) + '">' + esc(val) + '</a>' : ph ? pre + '<a href="tel:' + esc(val.replace(/[^\d+]/g, '')) + '">' + esc(val) + '</a>' : esc(t);
+      const copy = em || ph || (!/\s/.test(val) && val.length >= 4 && /\d/.test(val));
+      return '<div class="sline' + (k === 0 && many ? ' stitle' : '') + '"><span>' + shown + '</span>' + (copy ? '<button type="button" class="scopy" data-copy="' + esc(val) + '" title="Copy">⧉</button>' : '') + '</div>';
+    }).join('') + '</div>';
 }
-function editSticky(p) {
-  openModal('<h2>📝 Sticky note</h2><p class="helper">Shows at the top of ' + esc(p.replace(/\//g, ' › ')) + '.</p><textarea id="snText" rows="7" placeholder="Name&#10;ID: 123456&#10;email@school.edu">' + esc(folderNote(p)) + '</textarea>' +
-    '<div class="row-actions"><button type="button" id="snSave">Save</button><button type="button" class="ghost" id="snCancel">Cancel</button>' + (folderNote(p) ? '<button type="button" class="danger" id="snDel">Remove</button>' : '') + '</div>');
-  const put = v => { const fn = Object.assign({}, S().folderNotes || {}); if (v) fn[p] = v; else delete fn[p]; S().folderNotes = fn; window.save(); closeModal(); viewFiles(); };
-  $('snSave').onclick = () => put($('snText').value.trim());
+function wireStickies(root, redraw) {
+  root.querySelectorAll('[data-sticky]').forEach(b => b.onclick = () => editSticky(b.dataset.sticky, null, redraw));
+  root.querySelectorAll('.sticky a').forEach(a => a.onclick = e => e.stopPropagation());
+  root.querySelectorAll('[data-copy]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); } catch (err) { toast('Couldn’t copy. Press and hold to select it.'); } });
+}
+function editSticky(id, folder, redraw) {
+  const it = id ? data.items.find(i => i.id === id) : { notes: '', list: folder || '', color: 'yellow' };
+  if (!it) return;
+  let color = STICKY_COLORS[it.color] ? it.color : 'yellow';
+  openModal('<h2>📝 ' + (id ? 'Sticky note' : 'New sticky note') + '</h2>' +
+    '<textarea id="snText" rows="8" placeholder="First line is the title&#10;ID: 123456&#10;email@school.edu">' + esc(it.notes) + '</textarea>' +
+    '<p class="lbl">Color</p><div class="colors">' + Object.entries(STICKY_COLORS).map(([k, c]) => '<button type="button" class="cdot' + (k === color ? ' on' : '') + '" data-sc="' + k + '" style="background:' + c + '"></button>').join('') + '</div>' +
+    '<label>Folder<select id="snFolder"><option value="">General (no folder)</option>' + folderOptions(it.list).replace('<option value="">— not in a folder —</option>', '') + '</select></label>' +
+    '<div class="row-actions"><button type="button" id="snSave">Save</button><button type="button" class="ghost" id="snCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="snDel">Delete</button>' : '') + '</div>');
+  const done = () => { window.save(); closeModal(); (redraw || route)(); };
+  document.querySelectorAll('#modalBody [data-sc]').forEach(b => b.onclick = () => { color = b.dataset.sc; document.querySelectorAll('#modalBody [data-sc]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('snSave').onclick = () => {
+    const text = $('snText').value.trim(); if (!text) { toast('Type something on it.'); return; }
+    Object.assign(it, { notes: text, title: text.split('\n')[0].slice(0, 80), list: $('snFolder').value, color });
+    if (!id) data.items.push(newItem(Object.assign({ kind: 'sticky', sort: Math.max(0, ...data.items.filter(i => i.kind === 'sticky').map(i => i.sort || 0)) + 1 }, it)));
+    done();
+  };
   $('snCancel').onclick = closeModal;
-  if ($('snDel')) $('snDel').onclick = () => { if (confirm('Remove this sticky note?')) put(''); };
+  if (id) $('snDel').onclick = () => { if (!confirm('Delete this sticky note?')) return; data.items = data.items.filter(i => i !== it); done(); };
   setTimeout(() => $('snText').focus(), 60);
+}
+// Switch between the folders and the board of notes.
+const notesTabs = on => '<div class="segs ntabs"><a class="seg' + (on === 'files' ? ' on' : '') + '" href="#files">📁 Folders</a><a class="seg' + (on === 'notes' ? ' on' : '') + '" href="#notes">📝 Notes</a></div>';
+let noteFind = '';
+function viewNotes() {
+  const q = noteFind.trim(), all = data.items.filter(i => i.kind === 'sticky' && (!q || matchesName(i.notes + ' ' + i.list, q)));
+  const groups = [''].concat(folderList()).concat([...new Set(all.map(i => i.list || ''))].filter(f => f && !folderList().includes(f)));
+  const empty = folderList().filter(f => !f.includes('/') && !stickiesIn(f).length);
+  $('view').innerHTML = notesTabs('notes') + '<h1>Notes</h1>' +
+    '<p class="helper">Sticky notes for quick info: ID numbers, school emails, schedules, codes. Put one in a folder, or keep it here in General. Tap a note to change it.</p>' +
+    '<div class="row-actions"><button type="button" id="nNew">＋ New note</button></div>' +
+    '<input id="nFind" type="search" placeholder="Search notes" value="' + esc(noteFind) + '">' +
+    groups.map(g => { const list = all.filter(i => (i.list || '') === g).sort((a, b) => (a.sort || 0) - (b.sort || 0)); if (!list.length && g) return '';
+      return '<section class="nsec"><div class="mini-head"><h2>' + (g ? '<a href="#files" data-nf="' + esc(g) + '">📁 ' + esc(g.replace(/\//g, ' › ')) + '</a>' : 'General') + '</h2><button type="button" class="ghost small" data-nadd="' + esc(g) + '">＋</button></div>' +
+        (list.length ? '<div class="stickies">' + list.map(i => stickyCard(i)).join('') + '</div>' : '<p class="helper">' + (q ? 'Nothing matches.' : 'No general notes yet.') + '</p>') + '</section>'; }).join('') +
+    (!q && empty.length ? '<div class="card pad"><h3>Add a note to a folder</h3><div class="chips">' + empty.map(f => '<button type="button" class="ghost small" data-nadd="' + esc(f) + '">＋ ' + esc(f) + '</button>').join('') + '</div></div>' : '');
+  $('nNew').onclick = () => editSticky(null, '', viewNotes);
+  $('view').querySelectorAll('[data-nadd]').forEach(b => b.onclick = () => editSticky(null, b.dataset.nadd, viewNotes));
+  $('view').querySelectorAll('[data-nf]').forEach(a => a.onclick = () => { fileFolder = a.dataset.nf; fileFind = ''; });
+  $('nFind').oninput = e => { noteFind = e.target.value; clearTimeout(viewNotes.t); viewNotes.t = setTimeout(() => { viewNotes(); const f = $('nFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
+  wireStickies($('view'), viewNotes);
 }
 function folderMenu(p) {
   const n = data.docs.filter(d => inTree(d, p)).length, sub = folderList().filter(f => f.startsWith(p + '/')).length;
@@ -1081,7 +1122,7 @@ function folderMenu(p) {
     const swap = f => f === p ? np : f.startsWith(p + '/') ? np + f.slice(p.length) : f;
     setFolders(folderList().map(swap));
     data.docs.forEach(d => { if (d.folder) d.folder = swap(d.folder); });
-    const fn = S().folderNotes || {}; if (Object.keys(fn).some(k => swap(k) !== k)) S().folderNotes = Object.fromEntries(Object.entries(fn).map(([k, v]) => [swap(k), v]));
+    data.items.forEach(i => { if (i.kind === 'sticky' && i.list) i.list = swap(i.list); });
     window.save();
     fileFolder = np; closeModal(); viewFiles();
   };
@@ -1089,6 +1130,7 @@ function folderMenu(p) {
     if (!confirm('Delete the folder “' + leafOf(p) + '”' + (sub ? ' and the ' + sub + ' folders inside it' : '') + '? Its files move up, nothing is deleted.')) return;
     const up = parentOf(p);
     data.docs.forEach(d => { if (inTree(d, p)) d.folder = up; });
+    data.items.forEach(i => { if (i.kind === 'sticky' && (i.list === p || (i.list || '').startsWith(p + '/'))) i.list = up; });
     setFolders(folderList().filter(f => f !== p && !f.startsWith(p + '/'))); fileFolder = up; closeModal(); viewFiles();
   };
 }
@@ -1097,7 +1139,7 @@ function folderOptions(sel) {
 }
 function editDoc(id) {
   const d = data.docs.find(x => x.id === id); if (!d) return;
-  const items = data.items.filter(i => i.kind !== 'note').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 80);
+  const items = data.items.filter(i => i.kind !== 'note' && i.kind !== 'sticky').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 80);
   openModal('<h2>Document</h2><label>Name<input id="dTitle" value="' + esc(d.title) + '"></label>' +
     '<label>Folder<select id="dFolder">' + folderOptions(d.folder) + '</select></label>' +
     '<label>Goes with<select id="dItem"><option value="">— nothing —</option>' + items.map(i => '<option value="' + i.id + '"' + (i.id === d.itemId ? ' selected' : '') + '>' + esc(i.title + (i.date ? ' (' + fmtDate(i.date) + ')' : '')) + '</option>').join('') + '</select></label>' +
@@ -1752,6 +1794,7 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#notes"><b>Notes</b><span class="sub">📝 Sticky notes →</span></a>' +
     '<a class="card pad tip" href="#track"><b>Trackers</b><span class="sub">💅 ❤️ ⚠️ and more →</span></a>' +
     '<a class="card pad tip" href="#feed"><b>Show my planner in Google, Outlook or iPhone</b><span class="sub">Subscribe →</span></a>' +
     '<div class="card pad"><h2>Also show</h2><label class="check"><input type="checkbox" id="mBand"' + (S().showBand !== false ? ' checked' : '') + '> Band volunteer events (from Band Volunteers)</label>' +
