@@ -259,3 +259,36 @@ canvas.ink { display: block; width: 100%; height: 260px; cursor: crosshair; }
 .ftile svg { width: 30px; height: 30px; fill: var(--fc); stroke: none; opacity: .85; }
 .ftile b { font-family: 'Patrick Hand', cursive; font-size: 1.25rem; font-weight: 400; line-height: 1.1; }
 .ftile span { font-size: .74rem; color: var(--ink-2); }
+
+/* ---- Trackers ---- */
+.trackrow { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; overflow-x: auto; scrollbar-width: none; }
+.trackrow::-webkit-scrollbar { display: none; }
+.trackh { flex: 0 0 auto; font-family: 'Patrick Hand', cursive; font-size: 1.1rem; color: var(--ink-2); text-decoration: none; margin-right: 2px; }
+.trk { flex: 0 0 auto; flex-direction: column; gap: 0; min-width: 62px; min-height: 0; padding: 6px 8px; border-radius: 16px; background: #fff; border: 1.5px dashed #d8cec4; color: var(--ink-2); box-shadow: none; font-weight: 400; }
+.trk span { font-size: 1.35rem; line-height: 1.2; filter: grayscale(.85); opacity: .6; transition: transform .2s, filter .2s, opacity .2s; }
+.trk small { font-size: .66rem; }
+.trk.on { background: var(--blush); border: 1.5px solid #cdb5a8; color: var(--ink); }
+.trk.on span { filter: none; opacity: 1; transform: scale(1.12); }
+.trk.pop span { animation: pop .4s cubic-bezier(.3, 1.6, .5, 1); }
+.trk.big { flex-direction: row; min-width: 0; padding: 6px 14px; border-style: solid; font-size: .85rem; }
+.tks { display: inline-flex; gap: 1px; margin-left: 3px; vertical-align: middle; }
+.tk { font-style: normal; font-size: .7rem; line-height: 1; }
+.tk.soon { opacity: .35; }
+.ptag .tks, .pday > .tks { position: absolute; top: 12px; right: 10px; }
+.cd .n { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.tcard h2 { display: flex; align-items: center; gap: 6px; }
+.ticon { font-size: 1.5rem; }
+.tfacts { margin: 4px 0; color: var(--ink-2); font-size: .9rem; }
+.tnext { margin: 6px 0; padding: 8px 12px; border-radius: 12px; background: var(--blush); font-size: .92rem; }
+.dots { display: grid; grid-template-columns: repeat(28, 1fr); gap: 3px; margin: 10px 0 4px; }
+.dots .dot { aspect-ratio: 1; border-radius: 50%; background: #ece5dd; }
+.dots .dot.on { background: var(--sage); }
+.dots .dot.now { box-shadow: 0 0 0 1.5px var(--ink-2); }
+.tother { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: .8rem; }
+.tother input { width: auto; margin: 0; padding: 5px 8px; }
+.iconpick { display: flex; flex-wrap: wrap; gap: 6px; }
+.ipk { width: 42px; height: 42px; min-height: 0; padding: 0; border-radius: 12px; background: #fff; border: 1px solid var(--line); font-size: 1.3rem; box-shadow: none; }
+.ipk.on { background: var(--blush); border-color: #cdb5a8; }
+.dots { grid-template-columns: repeat(28, minmax(0, 1fr)); gap: 2px; }
+.pastebox { min-height: 140px; padding: 18px; border: 2px dashed #cdbdb0; border-radius: 18px; background: var(--paper); color: var(--ink-2); font-family: 'Patrick Hand', cursive; font-size: 1.15rem; text-align: center; display: flex; align-items: center; justify-content: center; }
+body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; border-radius: 22px; }
