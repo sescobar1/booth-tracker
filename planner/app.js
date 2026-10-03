@@ -873,37 +873,102 @@ async function openDoc(id) {
   if (error) { if (w) w.close(); toast('Could not open: ' + error.message); return; }
   if (w) w.location = r.signedUrl; else location.href = r.signedUrl;
 }
+// Folders are paths like "Cecilia/School/Report cards"; settings.folders lists every folder (parents before children).
+// A document's folder is the path it lives in ('' = not in a folder).
 let fileFolder = '', fileFind = '';
+const FOLDER_ICON = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4.5l2 2.5H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const folderList = () => S().folders || [];
+const parentOf = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+const leafOf = p => p.slice(p.lastIndexOf('/') + 1);
+const childFolders = p => folderList().filter(f => parentOf(f) === p).sort((a, b) => folderList().indexOf(a) - folderList().indexOf(b));
+const inTree = (doc, p) => doc.folder === p || (doc.folder || '').startsWith(p + '/');
+const topOf = p => p.split('/')[0];
+// Keep the list tidy: every parent of a folder exists, no duplicates, parents before children.
+function setFolders(list) {
+  const out = [];
+  list.forEach(f => { const parts = f.split('/').map(x => x.trim()).filter(Boolean); for (let k = 1; k <= parts.length; k++) { const p = parts.slice(0, k).join('/'); if (!out.includes(p)) out.push(p); } });
+  S().folders = out; window.save();
+}
 function viewFiles() {
-  const folders = S().folders, q = fileFind.toLowerCase();
-  const list = data.docs.filter(d => (!fileFolder || d.folder === fileFolder) && (!q || (d.title + ' ' + d.fileName + ' ' + d.note).toLowerCase().includes(q))).sort((a, b) => b.id.localeCompare(a.id));
-  const count = f => data.docs.filter(d => d.folder === f).length;
+  if (fileFolder && !folderList().includes(fileFolder)) fileFolder = '';
+  const q = fileFind.toLowerCase(), searching = !!q;
+  const here = searching ? data.docs.filter(d => (d.title + ' ' + d.fileName + ' ' + d.note + ' ' + d.folder).toLowerCase().includes(q))
+    : data.docs.filter(d => (d.folder || '') === fileFolder || (!fileFolder && d.folder && !folderList().includes(d.folder)));
+  here.sort((a, b) => b.id.localeCompare(a.id));
+  const subs = searching ? [] : childFolders(fileFolder);
+  const crumbs = [['', 'All folders']].concat(fileFolder ? fileFolder.split('/').map((x, k, a) => [a.slice(0, k + 1).join('/'), x]) : []);
+  const docRow = d => {
+    const it = d.itemId && data.items.find(i => i.id === d.itemId);
+    return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fc:' + pastel(topOf(d.folder))[0] + '"' : '') + '>' + esc(((d.fileName || '').match(/\.(\w{1,4})$/) || ['', 'FILE'])[1].toUpperCase()) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([searching ? d.folder.replace(/\//g, ' › ') : '', fileSize(d.size || 0), it ? 'with ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
+  };
   $('view').innerHTML = '<h1>Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
-    '<div class="row-actions"><label class="button file">Upload<input type="file" id="fUp" multiple hidden></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label></div>' +
-    '<input id="fFind" type="search" placeholder="Search documents" value="' + esc(fileFind) + '">' +
-    '<div class="chips scrollx"><button type="button" class="chipbtn' + (!fileFolder ? ' on' : '') + '" data-ff="">All <b>' + data.docs.length + '</b></button>' + folders.map(f => '<button type="button" class="chipbtn' + (fileFolder === f ? ' on' : '') + '" data-ff="' + esc(f) + '"' + chipStyle(f) + '>' + chipDot(f) + esc(f) + (count(f) ? ' <b>' + count(f) + '</b>' : '') + '</button>').join('') + '</div>' +
-    '<div class="card pad">' + (list.map(d => {
-      const it = d.itemId && data.items.find(i => i.id === d.itemId);
-      return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fc:' + pastel(d.folder)[0] + '"' : '') + '>' + esc(((d.fileName || '').match(/\.(\w{1,4})$/) || ['', 'FILE'])[1].toUpperCase()) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([d.folder, fileSize(d.size || 0), it ? 'with ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
-    }).join('') || '<p class="helper">No documents' + (fileFolder || q ? ' here' : ' yet') + '. Upload permission slips, receipts, schedules, forms…</p>') + '</div>';
-  $('view').querySelectorAll('[data-ff]').forEach(b => b.onclick = () => { fileFolder = b.dataset.ff; viewFiles(); });
+    '<p class="helper">Save photos, PDFs, Word and Excel files, and more. Everything stays private to your account.</p>' +
+    '<input id="fFind" type="search" placeholder="Search all documents" value="' + esc(fileFind) + '">' +
+    (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
+    '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
+    '<button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    (subs.length ? '<div class="fgrid">' + subs.map(f => {
+      const n = data.docs.filter(d => inTree(d, f)).length, kids = childFolders(f).length, c = pastel(topOf(f));
+      return '<button type="button" class="ftile" data-ff="' + esc(f) + '" style="--fc:' + c[0] + ';--fb:' + c[1] + '">' + FOLDER_ICON + '<b>' + esc(leafOf(f)) + '</b><span>' + (n ? n + (n === 1 ? ' file' : ' files') : 'Empty') + (kids ? ' · ' + kids + (kids === 1 ? ' folder' : ' folders') : '') + '</span></button>';
+    }).join('') + '</div>' : '') +
+    (here.length ? '<div class="card pad">' + (searching ? '<h3>' + here.length + ' found</h3>' : fileFolder && subs.length ? '<h3>Files in ' + esc(leafOf(fileFolder)) + '</h3>' : !fileFolder ? '<h3>Not in a folder</h3>' : '') + here.map(docRow).join('') + '</div>'
+      : (!subs.length ? '<div class="card pad"><p class="helper">' + (searching ? 'Nothing matches.' : 'This folder is empty. Upload a file, or make a folder inside it.') + '</p></div>' : ''));
+  $('view').querySelectorAll('[data-ff]').forEach(b => b.onclick = () => { fileFolder = b.dataset.ff; viewFiles(); window.scrollTo(0, 0); });
   $('fFind').oninput = e => { fileFind = e.target.value; clearTimeout(viewFiles.t); viewFiles.t = setTimeout(() => { viewFiles(); const f = $('fFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   const up = async e => {
     const fs = [...e.target.files]; if (!fs.length) return;
     let ok = 0; toast('Uploading ' + fs.length + '…');
     for (const f of fs) { try { await addDoc(f, { folder: fileFolder }); ok++; } catch (err) { toast(f.name + ': ' + err.message); } }
-    if (ok) toast('✓ Uploaded ' + ok + (ok === 1 ? ' file' : ' files') + (fileFolder ? ' to ' + fileFolder : '') + '.');
+    if (ok) toast('✓ Uploaded ' + ok + (ok === 1 ? ' file' : ' files') + (fileFolder ? ' to ' + leafOf(fileFolder) : '') + '.');
     viewFiles();
   };
-  $('fUp').onchange = up; $('fCam').onchange = up;
+  $('fUp').onchange = up; $('fCam').onchange = up; $('fPics').onchange = up;
+  $('fNew').onclick = () => {
+    const n = (prompt(fileFolder ? 'New folder inside “' + leafOf(fileFolder) + '”:' : 'New folder name:') || '').trim().replace(/\//g, '-');
+    if (!n) return;
+    const p = fileFolder ? fileFolder + '/' + n : n;
+    if (folderList().includes(p)) { toast('That folder already exists.'); return; }
+    const list = folderList().slice(), at = fileFolder ? Math.max(...list.map((f, k) => f === fileFolder || f.startsWith(fileFolder + '/') ? k : -1)) + 1 : list.length;
+    list.splice(at, 0, p); setFolders(list); toast('✓ Folder “' + n + '” made'); viewFiles();
+  };
+  if ($('fMenu')) $('fMenu').onclick = () => folderMenu(fileFolder);
   $('view').querySelectorAll('[data-doc]').forEach(r => r.onclick = e => { if (!e.target.dataset.dedit) openDoc(r.dataset.doc); });
   $('view').querySelectorAll('[data-dedit]').forEach(b => b.onclick = e => { e.stopPropagation(); editDoc(b.dataset.dedit); });
+}
+function folderMenu(p) {
+  const n = data.docs.filter(d => inTree(d, p)).length, sub = folderList().filter(f => f.startsWith(p + '/')).length;
+  const moveTo = folderList().filter(f => f !== p && !f.startsWith(p + '/') && f !== parentOf(p));
+  openModal('<h2>' + esc(leafOf(p)) + '</h2><p class="helper">' + esc(p.replace(/\//g, ' › ')) + ' · ' + n + (n === 1 ? ' file' : ' files') + (sub ? ' · ' + sub + ' folders inside' : '') + '</p>' +
+    '<label>Rename<input id="fmName" value="' + esc(leafOf(p)) + '"></label>' +
+    '<label>Move into<select id="fmMove"><option value="__keep">— keep where it is —</option>' + (parentOf(p) ? '<option value="">Top level</option>' : '') + moveTo.map(f => '<option value="' + esc(f) + '">' + esc(f.replace(/\//g, ' › ')) + '</option>').join('') + '</select></label>' +
+    '<div class="row-actions"><button type="button" id="fmSave">Save</button><button type="button" class="ghost" id="fmCancel">Cancel</button><button type="button" class="danger" id="fmDel">Delete folder</button></div>' +
+    '<p class="helper">Deleting a folder keeps its files: they move up to ' + esc(parentOf(p) ? leafOf(parentOf(p)) : 'the top level') + '.</p>');
+  $('fmCancel').onclick = closeModal;
+  $('fmSave').onclick = () => {
+    const name = $('fmName').value.trim().replace(/\//g, '-'), mv = $('fmMove').value;
+    if (!name) { toast('Give it a name.'); return; }
+    const np = (mv === '__keep' ? parentOf(p) : mv) ? (mv === '__keep' ? parentOf(p) : mv) + '/' + name : name;
+    if (np !== p && folderList().includes(np)) { toast('There’s already a folder there with that name.'); return; }
+    const swap = f => f === p ? np : f.startsWith(p + '/') ? np + f.slice(p.length) : f;
+    setFolders(folderList().map(swap));
+    data.docs.forEach(d => { if (d.folder) d.folder = swap(d.folder); }); window.save();
+    fileFolder = np; closeModal(); viewFiles();
+  };
+  $('fmDel').onclick = () => {
+    if (!confirm('Delete the folder “' + leafOf(p) + '”' + (sub ? ' and the ' + sub + ' folders inside it' : '') + '? Its files move up, nothing is deleted.')) return;
+    const up = parentOf(p);
+    data.docs.forEach(d => { if (inTree(d, p)) d.folder = up; });
+    setFolders(folderList().filter(f => f !== p && !f.startsWith(p + '/'))); fileFolder = up; closeModal(); viewFiles();
+  };
+}
+function folderOptions(sel) {
+  return '<option value="">— not in a folder —</option>' + folderList().map(f => '<option value="' + esc(f) + '"' + (f === sel ? ' selected' : '') + '>' + '  '.repeat(f.split('/').length - 1) + (f.includes('/') ? '└ ' : '') + esc(leafOf(f)) + '</option>').join('');
 }
 function editDoc(id) {
   const d = data.docs.find(x => x.id === id); if (!d) return;
   const items = data.items.filter(i => i.kind !== 'note').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 80);
   openModal('<h2>Document</h2><label>Name<input id="dTitle" value="' + esc(d.title) + '"></label>' +
-    '<label>Folder<select id="dFolder"><option value="">—</option>' + S().folders.map(f => '<option' + (f === d.folder ? ' selected' : '') + '>' + esc(f) + '</option>').join('') + '</select></label>' +
+    '<label>Folder<select id="dFolder">' + folderOptions(d.folder) + '</select></label>' +
     '<label>Goes with<select id="dItem"><option value="">— nothing —</option>' + items.map(i => '<option value="' + i.id + '"' + (i.id === d.itemId ? ' selected' : '') + '>' + esc(i.title + (i.date ? ' (' + fmtDate(i.date) + ')' : '')) + '</option>').join('') + '</select></label>' +
     '<label>Note<textarea id="dNote" rows="2">' + esc(d.note) + '</textarea></label><p class="helper">' + esc(d.fileName) + ' · ' + fileSize(d.size || 0) + '</p>' +
     '<div class="row-actions"><button type="button" id="dSave">Save</button><button type="button" class="ghost" id="dOpen">Open</button><button type="button" class="danger" id="dDel">Delete</button></div>');
@@ -1360,7 +1425,7 @@ function viewMore() {
     '<div class="card pad"><h2>Also show</h2><label class="check"><input type="checkbox" id="mBand"' + (S().showBand !== false ? ' checked' : '') + '> Band volunteer events (from Band Volunteers)</label>' +
     '<label class="check"><input type="checkbox" id="mBills"' + (S().showBills !== false ? ' checked' : '') + '> Bills and paydays (from Money)</label></div>' +
     '<div class="card pad"><h2>Task lists</h2><textarea id="mLists" rows="5">' + esc(S().lists.join('\n')) + '</textarea>' +
-    '<h3>Document folders</h3><textarea id="mFolders" rows="5">' + esc(S().folders.join('\n')) + '</textarea><p class="helper">One per line.</p></div>' +
+    '<h3>Document folders</h3><textarea id="mFolders" rows="6">' + esc(S().folders.join('\n')) + '</textarea><p class="helper">One per line. Use / for a folder inside a folder, like Cecilia/School. (Easier: Files → ＋ New folder.)</p></div>' +
     '<div class="card pad"><h2>Account and sync</h2><div data-syncbox></div></div>' +
     '<div class="card pad"><h2>Your other apps</h2><div class="row-actions"><a class="button ghost" href="../money/">Money</a><a class="button ghost" href="../volunteers/">Band Volunteers</a><a class="button ghost" href="../">Booth Tracker</a></div></div>' +
     '<div class="card pad"><h2>Back up</h2><button type="button" class="ghost" id="mBackup">Download backup</button></div>';
@@ -1368,7 +1433,7 @@ function viewMore() {
   $('mBand').onchange = e => { S().showBand = e.target.checked; window.save(); if (e.target.checked) loadBand(); };
   $('mBills').onchange = e => { S().showBills = e.target.checked; window.save(); if (e.target.checked) loadBills(); };
   $('mLists').onchange = e => { S().lists = lines(e.target.value); window.save(); toast('Saved.'); };
-  $('mFolders').onchange = e => { S().folders = lines(e.target.value); window.save(); toast('Saved.'); };
+  $('mFolders').onchange = e => { setFolders(lines(e.target.value)); toast('Saved.'); };
   $('mBackup').onclick = () => download('planner-backup-' + today() + '.json', JSON.stringify(data, null, 1), 'application/json');
   if (window.plannerSync) window.plannerSync.renderBox();
 }

@@ -249,3 +249,13 @@ canvas.ink { display: block; width: 100%; height: 260px; cursor: crosshair; }
 .tstep input, .tstep select { margin: 0; flex: 1 1 110px; min-width: 0; padding: 8px; font-size: .9rem; }
 .tstep [data-f="title"] { flex: 2 1 160px; }
 .tstep [data-f="type"] { flex: 0 1 96px; }
+
+/* ---- Folders ---- */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 2px 4px; font-family: 'Patrick Hand', cursive; font-size: 1.15rem; }
+.crumbs span { color: var(--muted); }
+.crumbs .linkish { font-family: inherit; font-size: inherit; color: var(--ink-2); }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 10px 0 12px; }
+.ftile { flex-direction: column; align-items: flex-start; gap: 4px; min-height: 104px; padding: 14px; border-radius: 22px; background: var(--fb); color: var(--ink); border: 0; box-shadow: var(--shadow); text-align: left; font-weight: 400; }
+.ftile svg { width: 30px; height: 30px; fill: var(--fc); stroke: none; opacity: .85; }
+.ftile b { font-family: 'Patrick Hand', cursive; font-size: 1.25rem; font-weight: 400; line-height: 1.1; }
+.ftile span { font-size: .74rem; color: var(--ink-2); }
