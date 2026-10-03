@@ -809,8 +809,25 @@ let pendingAdd = null;
 function quickAdd() {
   const q = new URLSearchParams(location.hash.replace(/^#add\??/, ''));
   pendingAdd = { type: /^(in|dep|pay)/i.test(q.get('type') || '') ? 'income' : 'expense', amt: toNum(q.get('amt') || q.get('amount')), payee: (q.get('payee') || q.get('where') || '').trim(), category: (q.get('cat') || q.get('category') || '').trim(), note: (q.get('note') || '').trim() };
+  if (q.get('say')) Object.assign(pendingAdd, parseSpoken(q.get('say'), pendingAdd.type));
   history.replaceState(null, '', location.pathname + '#register');
   finishQuickAdd();
+}
+// What she says to Siri: "$12.50 at Sonic", "12 dollars and 50 cents for gas", "deposit 5398 ATU paycheck".
+function parseSpoken(said, type) {
+  let t = ' ' + String(said || '').replace(/[“”"]/g, ' ') + ' ';
+  let amt = 0;
+  const dc = t.match(/(\d[\d,]*)\s*dollars?\s*(?:and\s*)?(\d{1,2})\s*cents?/i);
+  if (dc) { amt = toNum(dc[1]) + Number(dc[2]) / 100; t = t.replace(dc[0], ' '); }
+  else {
+    const m = t.match(/\$?\s?(\d[\d,]*(?:\.\d{1,2})?)/);
+    if (m) { amt = toNum(m[1]); t = t.replace(m[0], ' '); }
+  }
+  if (/\b(deposit|deposited|paycheck|income|got paid|payroll|refund|received|sold)\b/i.test(t)) type = 'income';
+  let payee = t.replace(/\s+/g, '  ').replace(/(?<=\s)(add|added|an?|the|my|i|expense|spent|spend|paid|pay|for|at|to|on|from|in|dollars?|bucks|cents?|and|deposit|deposited|income|got|received)(?=\s)/gi, ' ')
+    .replace(/[^\w&'’ .-]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^[.\-\s]+|[.\-\s]+$/g, '');
+  payee = payee.replace(/\b[a-z]/g, c => c.toUpperCase());
+  return { amt: Math.round(amt * 100) / 100, payee: payee || (type === 'income' ? 'Deposit' : ''), type, note: 'Siri: “' + String(said).trim() + '”' };
 }
 // Runs once the account has loaded (a phone that just opened the app may still be syncing).
 function finishQuickAdd() {
@@ -827,19 +844,20 @@ function finishQuickAdd() {
 function viewSiri() {
   const base = location.origin + location.pathname;
   $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🎙 Add with Siri</h1>' +
-    '<p class="helper">Make this Shortcut once on your iPhone. Then say <b>“Hey Siri, add expense”</b>. Siri asks how much and where, and it goes into your register.</p>' +
-    '<div class="card pad"><ol class="steps">' +
-    '<li>Open the <b>Shortcuts</b> app → tap <b>+</b>.</li>' +
-    '<li>Add action <b>Ask for Input</b>. Set Input Type to <b>Number</b>, Prompt: <i>How much?</i></li>' +
-    '<li>Add another <b>Ask for Input</b>. Type <b>Text</b>, Prompt: <i>Where?</i></li>' +
-    '<li>Add action <b>Text</b> and paste this line:<div class="linkbox"><code id="siriUrl">' + esc(base) + '#add?type=expense&amp;amt=</code></div>Right after <i>amt=</i>, tap <b>Provided Input</b> (the number). Then type <code>&amp;payee=</code> and pick the second <b>Provided Input</b> (the place).</li>' +
-    '<li>Add action <b>Open URLs</b> (it uses the Text from step 4).</li>' +
-    '<li>Tap the name at the top and call it <b>Add expense</b>. Done!</li></ol>' +
+    '<p class="helper">Say <b>“Hey Siri, add expense”</b>. Siri asks <i>What did you spend?</i> and you say something like <b>“$12.50 at Sonic”</b>. It\'s saved right away, with the category filled in.</p>' +
+    '<div class="card pad"><h2>Make the Shortcut (once)</h2><ol class="steps">' +
+    '<li>Open <b>Shortcuts</b> → tap <b>+</b>.</li>' +
+    '<li>Search <b>Ask for Input</b> and tap it. Tap <i>Prompt</i> and type <b>What did you spend?</b></li>' +
+    '<li>Search <b>URL Encode</b> and tap it (it goes under the first one by itself).</li>' +
+    '<li>Search <b>Text</b> and tap it. In its box, paste this line:<div class="linkbox"><code>' + esc(base) + '#add?say=</code></div>' +
+    'Then, with the cursor at the end, tap <b>URL Encoded Text</b> in the bar just above the keyboard. It drops in as a blue bubble.</li>' +
+    '<li>Search <b>Open URLs</b> and tap it.</li>' +
+    '<li>Tap the name at the top → <b>Rename</b> → <b>Add expense</b>.</li></ol>' +
     '<div class="row-actions"><button type="button" class="ghost small" id="siriCopy">Copy the line</button></div>' +
-    '<p class="helper">For money in, make a second one called <b>Add deposit</b> with <code>type=income</code>.</p>' +
-    '<p class="helper">Siri opens Safari, so <b>sign in once in Safari</b> too (same email and password). The entry syncs to the app.</p></div>' +
-    '<div class="card pad"><h2>Try it</h2><p class="helper">This link adds a $1.00 test you can delete after:</p><a class="button ghost" href="#add?type=expense&amt=1&payee=Siri%20test">Add a $1 test</a></div>';
-  $('siriCopy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(base + '#add?type=expense&amt=').then(() => toast('Copied.'), () => toast('Press and hold the line to copy it.')); };
+    '<p class="helper">Say it any way: “$12.50 at Sonic”, “47 dollars Walmart”, “gas 34”, “deposit 5398 ATU paycheck”. Words like deposit or paycheck make it money in.</p>' +
+    '<p class="helper">Siri opens Safari, so <b>sign in once in Safari</b> too (same email and password).</p></div>' +
+    '<div class="card pad"><h2>Try it</h2><p class="helper">This adds a $1.00 test you can delete after:</p><a class="button ghost" href="#add?say=%241%20Siri%20test">Add a $1 test</a></div>';
+  $('siriCopy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(base + '#add?say=').then(() => toast('Copied.'), () => toast('Press and hold the line to copy it.')); };
 }
 
 // ---------- Accounts ----------
@@ -1226,7 +1244,7 @@ function autoCategory(payee, desc, type) {
   const hit = mem[String(payee || '').trim().toLowerCase()];
   if (hit && hit.category) return hit.category;
   const text = (payee || '') + ' ' + (desc || '');
-  if (type === 'income') return /payroll|direct dep|salary/i.test(text) ? 'Paycheck' : /transfer|xfer/i.test(text) ? 'Transfer' : /ebay|etsy|mercari|poshmark|booth|y'?\s?all?ternative/i.test(text) ? 'Side income' : '';
+  if (type === 'income') return /payroll|paycheck|direct dep|salary/i.test(text) ? 'Paycheck' : /transfer|xfer/i.test(text) ? 'Transfer' : /ebay|etsy|mercari|poshmark|booth|y'?\s?all?ternative/i.test(text) ? 'Side income' : '';
   const r = CATEGORY_RULES.find(([re]) => re.test(text));
   return r ? r[1] : '';
 }
