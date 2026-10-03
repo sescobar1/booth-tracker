@@ -1,5 +1,5 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'money-v4';
+const CACHE = 'money-v5';
 const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'money.css', 'db.js', 'config.js', 'vendor/supabase.js', 'vendor/xlsx.mini.min.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
