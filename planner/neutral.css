@@ -509,3 +509,33 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .spick { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin: 4px 0; }
 .spick a { color: inherit; }
 .pickupbox { background: var(--sage-soft); border-radius: 12px; padding: 8px 12px; font-size: 14px; margin: 8px 0; }
+/* Medicines */
+.medrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line, #e6e0d8); }
+.medrow:first-of-type { border-top: 0; }
+.medrow > span { flex: 1; min-width: 0; }
+.medrow.on b { text-decoration: line-through; opacity: .6; }
+.medinfo.off { opacity: .6; }
+.medweek { display: flex; gap: 6px; margin-top: 8px; }
+.medweek span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--soft, #f1ece5); color: var(--muted, #7a736b); }
+.medweek span.some { background: #f3dcae; color: #6b4f12; }
+.medweek span.all { background: #b9d3b1; color: #2f4a2a; }
+.warnc { color: #b0573f; font-size: 14px; margin: 4px 0; }
+#mdTimes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+#mdTimes .mdt { width: auto; }
+/* Car care */
+.carmiles { display: flex; align-items: flex-end; gap: 10px; margin: 6px 0 10px; }
+.carmiles label { flex: 0 1 160px; }
+.svcrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; margin: 4px 0; background: var(--soft, #f6f2ec); }
+.svcrow > div { flex: 1; min-width: 0; }
+.svcrow small { display: block; color: var(--muted, #7a736b); }
+.svcrow.soon { background: #fbefd4; }
+.svcrow.over { background: #f6dcd5; }
+.svcrow.over small { color: #9b4330; }
+.svcset { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.svcset label.check { flex: 1; margin: 0; }
+.svcset input[type=number] { width: 70px; padding: 6px; }
+/* Grocery spending */
+.grocbox .over { color: #b0573f; font-weight: 600; }
+.grocbox .cprog { height: 8px; border-radius: 4px; background: var(--soft, #eee6dc); margin-top: 6px; overflow: hidden; }
+.grocbox .cprog i { display: block; height: 100%; background: #7d9b76; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .svcrow.soon { background: #4a3d22; } :root:not([data-theme="light"]) .svcrow.over { background: #4f2c26; } :root:not([data-theme="light"]) .medweek span.all { background: #3c5a37; color: #dfeedb; } :root:not([data-theme="light"]) .medweek span.some { background: #5a4a26; color: #f5e3b8; } }
