@@ -312,3 +312,15 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .hvisit .sub { display: block; }
 .hvisit .notes { margin: 6px 0 0; }
 .filesh { margin: 18px 4px 4px; }
+
+/* Quick add in the New event box: tracker icons and the usual events. */
+.qadd { margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px dashed var(--line, #e4dcd3); }
+.qadd .lbl .sub { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .75; }
+.qadd .lbl.or { margin-top: 10px; }
+.qtrack, .qfreq { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.qt { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 68px; padding: 8px 10px; border-radius: 14px; background: #f6efe8; border: 1px solid #e8ddd2; color: inherit; box-shadow: none; }
+.qt span { font-size: 24px; line-height: 1; }
+.qt small { font-size: 11px; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qf { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #fff; border: 1px solid #e8ddd2; color: inherit; font-size: 14px; box-shadow: none; }
+.qf small { opacity: .65; font-size: 11px; }
+.qt:active, .qf:active { transform: scale(.95); }
