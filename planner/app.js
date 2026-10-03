@@ -1358,7 +1358,22 @@ function fzParse(line) {
   t = t.replace(/\s+/g, ' ').trim();
   return { name: t.charAt(0).toUpperCase() + t.slice(1), qty: Math.max(1, Math.min(999, qty)), size };
 }
-let fzOn = 'all', fzFind = '', fzShowUsed = false;
+let fzOn = 'all', fzFind = '', fzShowUsed = false, fzWhereSel = '';
+// Common things for each place, for one-tap adding.
+const FZ_STAPLES = {
+  pantry: ['Canned green beans', 'Canned corn', 'Rice', 'Spaghetti', 'Pasta sauce', 'Mac & cheese', 'Chicken broth', 'Peanut butter', 'Cereal', 'Oatmeal', 'Flour', 'Sugar', 'Ramen', 'Chips', 'Crackers', 'Coffee', 'Canned tomatoes', 'Taco seasoning'],
+  kitchen: ['Frozen pizza', 'Chicken nuggets', 'French fries', 'Mixed veggies', 'Peas', 'Corn', 'Waffles', 'Ice cream', 'Tater tots', 'Broccoli'],
+  drink: ['Ice', 'Popsicles', 'Freeze pops', 'Lemonade concentrate', 'Juice'],
+  deep: ['Ground beef', 'Chicken breasts', 'Chicken thighs', 'Pork chops', 'Roast', 'Sausage', 'Bacon', 'Brisket', 'Steaks', 'Fish', 'Shrimp', 'Whole turkey']
+};
+// What to suggest: things you've had in that place before (newest first), then the staples, leaving out what's already there.
+function fzSuggest(where) {
+  const have = new Set(fzItems().filter(i => !i.done && (i.priority || 0) > 0 && i.list === where).map(i => i.title.toLowerCase()));
+  const past = [...new Set(fzItems().filter(i => i.list === where).sort((a, b) => (b.endDate || b.date || '').localeCompare(a.endDate || a.date || '')).map(i => i.title))];
+  const out = [], seen = new Set();
+  past.concat(FZ_STAPLES[where] || []).forEach((t, k) => { const key = t.toLowerCase(); if (have.has(key) || seen.has(key)) return; seen.add(key); out.push({ title: t, again: k < past.length }); });
+  return out.slice(0, 14);
+}
 const fzItems = () => data.items.filter(i => i.kind === 'freezer');
 const fzAge = it => Math.max(0, daysBetween(it.date || today(), today()));
 const fzOld = it => fzAge(it) > fzCat(it.location)[2] * 30 * 0.8;
@@ -1378,7 +1393,8 @@ function viewFreezer() {
   const groups = {}; shown.forEach(i => { const k = fzCat(i.location)[0]; (groups[k] = groups[k] || []).push(i); });
   $('view').innerHTML = mealTabs('freezer') +
     '<div class="fztabs">' + [{ id: 'all', name: 'Everything', icon: '🏠' }].concat(fz).map(f => '<button type="button" class="fztab' + (fzOn === f.id ? ' on' : '') + '" data-fzon="' + f.id + '"><span>' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + count(f.id) + ' items</small></button>').join('') + '</div>' +
-    '<div class="quickbar fzbar"><input id="fzAdd" placeholder="Add: “4 cans corn”, “2 lb ground beef”, “Pizza x2”"><select id="fzWhere" aria-label="Which freezer">' + fz.map(f => '<option value="' + f.id + '"' + ((fzOn === 'all' ? 'pantry' : fzOn) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select><button type="button" id="fzGo">Add</button></div>' +
+    '<div class="quickbar fzbar"><input id="fzAdd" placeholder="Add: “4 cans corn”, “2 lb ground beef”, “Pizza x2”"><select id="fzWhere" aria-label="Which freezer">' + fz.map(f => '<option value="' + f.id + '"' + ((fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') + '</select><button type="button" id="fzGo">Add</button></div>' +
+    fzSuggestList(fzWhereSel || (fzOn === 'all' ? 'pantry' : fzOn)) +
     '<div class="row-actions tight fztools"><button type="button" class="ghost small" id="fzUp">📷 Upload a list</button><input id="fzFind" type="search" placeholder="Search food on hand" value="' + esc(fzFind) + '"></div>' +
     (soon.length && !q ? '<div class="card pad fzsoon"><h2>⏰ Use these soon</h2>' + soon.slice(0, 6).map(row).join('') + '</div>' : '') +
     (shown.length ? Object.keys(groups).sort((a, b) => catOrder(a) - catOrder(b)).map(k => '<div class="card pad"><h3>' + fzCat(k)[1] + ' ' + esc(k) + ' <small>' + groups[k].reduce((n, i) => n + (i.priority || 1), 0) + '</small></h3>' + groups[k].sort((a, b) => a.title.localeCompare(b.title)).map(row).join('') + '</div>').join('')
@@ -1386,7 +1402,7 @@ function viewFreezer() {
     (used.length ? '<button type="button" class="linkish" id="fzUsedT">' + (fzShowUsed ? 'Hide' : 'Show') + ' recently used (' + used.length + ')</button>' + (fzShowUsed ? '<div class="card pad">' + used.map(i => '<div class="fzrow used"><span class="fzname"><span>' + fzCat(i.location)[1] + ' ' + esc(i.title) + '</span><small>Used up ' + esc(fmtDate(i.endDate || today(), 'rel')) + ' · ' + esc(fzName(i.list).name) + '</small></span><span class="fzqty"><button type="button" class="ghost small" data-fzshop="' + i.id + '">🛒 Buy again</button><button type="button" class="ghost small" data-fzback="' + i.id + '">↩ Put back</button></span></div>').join('') + '</div>' : '') : '') +
     '<p class="helper">Tap the box when you use one. ＋ and − change how many. Tap a name to edit it or move it somewhere else. Pantry things down to their last one say “low” with a 🛒 button. Things kept past their best-quality time show under “Use these soon”.</p>';
   const v = $('view'), find = id => data.items.find(i => i.id === id), redraw = () => { const y = window.scrollY; viewFreezer(); window.scrollTo(0, y); };
-  v.querySelectorAll('[data-fzon]').forEach(b => b.onclick = () => { fzOn = b.dataset.fzon; viewFreezer(); });
+  v.querySelectorAll('[data-fzon]').forEach(b => b.onclick = () => { fzOn = b.dataset.fzon; fzWhereSel = ''; viewFreezer(); });
   const add = () => {
     const val = $('fzAdd').value.trim(); if (!val) return;
     const p = fzParse(val); if (!p.name) return;
@@ -1398,6 +1414,14 @@ function viewFreezer() {
   $('fzGo').onclick = add; $('fzAdd').onkeydown = e => { if (e.key === 'Enter') add(); };
   $('fzFind').oninput = e => { fzFind = e.target.value; clearTimeout(viewFreezer.t); viewFreezer.t = setTimeout(() => { viewFreezer(); const f = $('fzFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   $('fzUp').onclick = freezerImport;
+  const wireSug = () => v.querySelectorAll('[data-fzsug]').forEach(b => b.onclick = () => {
+    const where = $('fzWhere').value, t = b.dataset.fzsug, same = have.find(i => i.list === where && i.title.toLowerCase() === t.toLowerCase());
+    if (same) same.priority = (same.priority || 1) + 1;
+    else data.items.push(newItem({ kind: 'freezer', title: t, list: where, priority: 1, notes: '', location: fzGuess(t, where), date: today(), allDay: true }));
+    window.save(); toast('✓ Added ' + t + ' to the ' + fzName(where).name.toLowerCase() + ' · tap ＋ for more'); redraw();
+  });
+  wireSug();
+  $('fzWhere').onchange = () => { fzWhereSel = $('fzWhere').value; $('fzSug').outerHTML = fzSuggestList($('fzWhere').value); wireSug(); };
   v.querySelectorAll('[data-fzuse],[data-fzminus]').forEach(b => b.onclick = () => {
     const it = find(b.dataset.fzuse || b.dataset.fzminus); if (!it) return;
     it.priority = Math.max(0, (it.priority || 1) - 1);
@@ -1412,6 +1436,10 @@ function viewFreezer() {
   v.querySelectorAll('[data-fzback]').forEach(b => b.onclick = () => { const it = find(b.dataset.fzback); it.done = false; it.endDate = null; it.priority = 1; window.save(); redraw(); toast('↩ Put back'); });
   v.querySelectorAll('[data-fzshop]').forEach(b => b.onclick = () => { const it = find(b.dataset.fzshop); if (data.items.some(x => x.kind === 'shop' && !x.done && x.title.toLowerCase() === it.title.toLowerCase())) { toast(it.title + ' is already on your shopping list'); return; }
     data.items.push(newItem({ kind: 'shop', title: it.title, list: it.list === 'pantry' ? aisleOf(it.title) : 'Frozen', notes: it.notes || '', location: (S().walmart || {})[it.title.toLowerCase()] || '' })); window.save(); toast('🛒 ' + it.title + ' added to your shopping list'); });
+}
+function fzSuggestList(where) {
+  const sug = fzSuggest(where);
+  return '<div id="fzSug" class="fzsug">' + (sug.length ? '<span class="lbl">Quick add to ' + esc(fzName(where).name.toLowerCase()) + '</span>' + sug.map(x => '<button type="button" class="qf' + (x.again ? ' star' : '') + '" data-fzsug="' + esc(x.title) + '">' + (x.again ? '↺ ' : '＋ ') + esc(x.title) + '</button>').join('') : '') + '</div>';
 }
 function editFreezerItem(id) {
   const it = data.items.find(i => i.id === id); if (!it) return;
