@@ -446,3 +446,16 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .fzsug { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
 .fzsug .lbl { width: 100%; margin: 0 0 2px; }
 .fzsug .qf { padding: 6px 12px; font-size: 13px; }
+/* Meal ideas from what's on hand */
+.ideas .idea { padding: 10px 0; border-top: 1px solid var(--line-2); }
+.ideas .idea:first-of-type { border-top: 0; }
+.ideat { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ideat .chip { font-size: 11px; background: #fdecea; color: #a1554b; }
+.ihave { margin: 4px 0 0; font-size: 13px; color: #4f6b49; }
+.ihave small { color: var(--muted); }
+.ineed { margin: 2px 0 6px; font-size: 13px; color: var(--muted); }
+.ineed.ok { color: #4f6b49; font-weight: 600; }
+.daypick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.daypick small { color: var(--muted); }
+.idea-chip small { color: var(--muted); }
+.idea-chip.soon { border-color: #ecc9c0; }
