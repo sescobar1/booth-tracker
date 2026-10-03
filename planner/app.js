@@ -17,9 +17,9 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 
 const DEFAULT_LISTS = ['Home', 'Band', 'Booth', 'Work', 'Kids', 'Errands'];
 const DEFAULT_FOLDERS = ['Band', 'Booth', 'Home', 'School', 'Medical', 'Taxes', 'Work', 'Other'];
-const COLORS = ['#9b7bff', '#ff7eb6', '#4aa8ff', '#2fbf8f', '#ff9f68', '#f5b82e', '#e5487d', '#4cc4c4'];
-// Each task list and document folder gets its own candy color (accent, light background).
-const PASTELS = [['#ff7eb6', '#ffe3ef'], ['#2fbf8f', '#d9f7ea'], ['#9b7bff', '#ece5ff'], ['#4aa8ff', '#dcefff'], ['#ff9f68', '#ffe9da'], ['#f5b82e', '#fff4c7'], ['#4cc4c4', '#d8f5f5'], ['#e5487d', '#ffdbe7']];
+const COLORS = ['#3d4a63', '#7c9a82', '#c47a5a', '#b0905a', '#8a6a8f', '#5a8a9a', '#c08497', '#6b7280'];
+// Each task list and document folder gets its own muted color (accent, soft background).
+const PASTELS = [['#c08497', '#f6ecef'], ['#7c9a82', '#edf3ee'], ['#3d4a63', '#eceef2'], ['#5a8a9a', '#e9f1f3'], ['#c47a5a', '#f7ede8'], ['#b0905a', '#f3ecdf'], ['#8a6a8f', '#f1ecf2'], ['#6b7280', '#eeeff1']];
 const NAMED = { home: 0, band: 2, booth: 4, work: 3, kids: 1, errands: 5, school: 1, medical: 7, taxes: 5, other: 6 };
 function pastel(name) {
   const k = String(name || '').toLowerCase();
@@ -28,6 +28,7 @@ function pastel(name) {
   return PASTELS[h % PASTELS.length];
 }
 const chipStyle = name => name ? ' style="--cc:' + pastel(name)[0] + ';--cbg:' + pastel(name)[1] + '"' : '';
+const chipDot = name => name ? '<span class="sw"></span>' : '';
 
 function blank() {
   return { items: [], docs: [], settings: { lists: DEFAULT_LISTS.slice(), folders: DEFAULT_FOLDERS.slice(), calendars: [], showBand: true, showBills: true } };
@@ -256,8 +257,8 @@ function agenda(from, to) {
     const got = cache.get('cal_' + c.id); if (!got) return;
     calendarOccurrences(got.events, from, to).forEach(e => out.push(Object.assign(e, { src: 'cal', cal: c.name, color: c.color })));
   });
-  if (S().showBand !== false) { const b = cache.get('band'); if (b) b.rows.filter(e => e.date >= from && e.date <= to).forEach(e => out.push({ src: 'band', date: e.date, endDate: e.date, start: e.start_time || '', end: e.end_time || '', allDay: !e.start_time, title: '🎺 ' + e.name, location: e.location || '', color: '#e0a526', link: '../volunteers/#event/' + e.id })); }
-  if (S().showBills !== false) { const b = cache.get('bills'); if (b) b.recurring.forEach(r => billDates(r, from, to).forEach(d => out.push({ src: 'bill', date: d, endDate: d, allDay: true, title: (r.type === 'income' ? '💵 ' : '🧾 ') + r.payee + ' ' + (r.type === 'income' ? '+' : '−') + '$' + Number(r.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }), color: r.type === 'income' ? '#1d7a46' : '#c4513b', link: '../money/#recurring' }))); }
+  if (S().showBand !== false) { const b = cache.get('band'); if (b) b.rows.filter(e => e.date >= from && e.date <= to).forEach(e => out.push({ src: 'band', date: e.date, endDate: e.date, start: e.start_time || '', end: e.end_time || '', allDay: !e.start_time, title: e.name, location: e.location || '', color: '#b0905a', link: '../volunteers/#event/' + e.id })); }
+  if (S().showBills !== false) { const b = cache.get('bills'); if (b) b.recurring.forEach(r => billDates(r, from, to).forEach(d => out.push({ src: 'bill', date: d, endDate: d, allDay: true, title: r.payee + ' ' + (r.type === 'income' ? '+' : '−') + '$' + Number(r.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }), color: r.type === 'income' ? '#7c9a82' : '#c47a5a', link: '../money/#recurring' }))); }
   return out.sort((a, b) => a.date.localeCompare(b.date) || (a.allDay === b.allDay ? (a.start || '').localeCompare(b.start || '') : a.allDay ? -1 : 1));
 }
 // Entries that touch a day (multi-day events show on each of their days).
@@ -268,7 +269,7 @@ function entryRow(e) {
   const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.kind === 'task' ? (e.list || 'Task') : '';
   const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '"' + (e.listName ? ' style="--lc:' + pastel(e.listName)[0] + '"' : '') + '>' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
   const open = e.src === 'planner' ? ' data-item="' + e.id + '"' : e.link ? ' data-link="' + esc(e.link) + '"' : ' data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
-  return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '❗ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, src].filter(Boolean).join(' · ')) + '</span></div></div>';
+  return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, src].filter(Boolean).join(' · ')) + '</span></div></div>';
 }
 function wireRows(root) {
   root.querySelectorAll('[data-done]').forEach(b => b.onclick = ev => { ev.stopPropagation(); toggleDone(b.dataset.done); });
@@ -277,7 +278,7 @@ function wireRows(root) {
   root.querySelectorAll('[data-ext]').forEach(r => r.onclick = () => {
     const x = JSON.parse(r.dataset.ext);
     openModal('<h2>' + esc(x.t) + '</h2><p><b>' + esc(fmtDate(x.d, 'long')) + '</b>' + (x.s ? ' · ' + fmtTime(x.s) + (x.e ? '–' + fmtTime(x.e) : '') : '') + '</p>' +
-      (x.l ? '<p>📍 ' + esc(x.l) + '</p>' : '') + (x.n ? '<p class="notes">' + esc(x.n) + '</p>' : '') + '<p class="helper">From your ' + esc(x.c) + ' calendar. Change it there; it updates here.</p>' +
+      (x.l ? '<p>' + esc(x.l) + '</p>' : '') + (x.n ? '<p class="notes">' + esc(x.n) + '</p>' : '') + '<p class="helper">From your ' + esc(x.c) + ' calendar. Change it there; it updates here.</p>' +
       '<div class="row-actions"><button type="button" class="ghost" id="xCopy">Copy into planner</button><button type="button" id="xClose">Close</button></div>');
     $('xClose').onclick = closeModal;
     $('xCopy').onclick = () => { closeModal(); editItem(null, { kind: 'event', title: x.t, date: x.d, start: x.s, end: x.e, location: x.l, notes: x.n || '' }); };
@@ -300,11 +301,12 @@ function route() {
   const views = { today: viewToday, calendar: viewCalendar, tasks: viewTasks, files: viewFiles, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
-window.render = () => { const y = window.scrollY; route(); window.scrollTo(0, y); if (!render.started) { render.started = true; refreshAll(); } };
+// Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
+window.render = () => { const y = window.scrollY; route(); window.scrollTo(0, y); if (!render.started && signedIn()) { render.started = true; refreshAll(); } };
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
 $('topAdd').onclick = $('fab').onclick = () => {
-  openModal('<h2>Add</h2><div class="addgrid"><button type="button" class="t1" data-addk="event">🗓 Event<span>on the calendar</span></button><button type="button" class="t2" data-addk="task">✅ Task<span>to-do</span></button>' +
-    '<button type="button" class="t3" data-addk="note">📝 Note<span>for today</span></button><button type="button" class="t4" data-addk="file">📎 Document<span>upload a file</span></button></div>' +
+  openModal('<h2>Add</h2><div class="addgrid"><button type="button" data-addk="event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Event<span>on the calendar</span></button><button type="button" data-addk="task"><svg viewBox="0 0 24 24"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12v6.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H15"/></svg>Task<span>to-do</span></button>' +
+    '<button type="button" data-addk="note"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Note<span>for today</span></button><button type="button" data-addk="file"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Document<span>upload a file</span></button></div>' +
     '<label>Or just type it<input id="qAdd" placeholder="Dentist friday 3pm · Call Mrs. Abbott tomorrow"></label><p class="helper">Dates and times are picked up from what you type.</p>' +
     '<div class="row-actions"><button type="button" id="qGo">Add</button><button type="button" class="ghost" id="addX">Cancel</button></div>');
   $('addX').onclick = closeModal;
@@ -365,14 +367,15 @@ function viewToday() {
     if (es.length) next += '<div class="day">' + esc(fmtDate(d, 'rel')) + '</div>' + es.map(entryRow).join('');
   }
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="hello"><span class="sticker">' + (hr < 12 ? '🌸' : hr < 17 ? '🌻' : '🌙') + '</span><span>' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana ✨</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
-    (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks done' + (doneToday === todayTasks.length ? ' 🎉' : '') + '<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
+    '<div class="hello"><span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
+    '<span class="sub">' + [todays.filter(e => e.kind !== 'task').length, todayTasks.length].map((n, k) => n + (k ? (n === 1 ? ' task' : ' tasks') : (n === 1 ? ' event' : ' events'))).join(' · ') + ' today</span>' +
+    (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks complete<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
     '<div class="quickbar"><input id="quick" placeholder="Add: “Dentist friday 3pm” or “Call Mrs. Abbott”"><button type="button" id="quickGo">Add</button></div>' +
-    (overdue.length ? '<div class="card pad warnbox"><h2>⏰ Past due (' + overdue.length + ')</h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
-    '<div class="card pad t-today"><h2>☀️ Today</h2>' + (todays.length ? todays.map(entryRow).join('') : '<p class="helper">Nothing scheduled. Enjoy it! 🎉</p>') + '</div>' +
-    '<div class="card pad sticky"><h2>📝 Notes for today</h2><textarea id="dayNote" rows="4" placeholder="Anything to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
-    '<div class="card pad t-next"><h2>🗓 Next 7 days</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
-    (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars">🔗 <b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
+    (overdue.length ? '<div class="card pad warnbox"><h2 class="section-title">Past due <small>' + overdue.length + '</small></h2>' + overdue.map(i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, allDay: true, endDate: i.date, title: i.title + ' · ' + fmtDate(i.date), list: i.list, priority: i.priority })).join('') + '</div>' : '') +
+    '<div class="card pad"><h2 class="section-title">Today <small>' + esc(new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' + (todays.length ? todays.map(entryRow).join('') : '<p class="helper">Nothing scheduled today.</p>') + '</div>' +
+    '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
+    '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
+    (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
   $('quickGo').onclick = go; $('quick').onkeydown = e => { if (e.key === 'Enter') go(); };
@@ -392,15 +395,15 @@ function viewCalendar() {
   const [y, m] = calMonth.split('-').map(Number), n = lastDay(y, m), first = new Date(y, m - 1, 1).getDay();
   const list = agenda(calMonth + '-01', calMonth + '-' + pad(n));
   let cells = '';
-  for (let i = 0; i < first; i++) cells += '<div class="cd empty"></div>';
+  for (let i = 0; i < first; i++) cells += '<div class="cd blank"></div>';
   for (let d = 1; d <= n; d++) {
     const iso = calMonth + '-' + pad(d), es = onDay(list, iso);
     cells += '<button type="button" class="cd' + (iso === today() ? ' today' : '') + (iso === calDay ? ' sel' : '') + '" data-day="' + iso + '"><span class="n">' + d + '</span>' +
-      es.slice(0, 3).map(e => '<span class="pill" style="background:' + esc(e.color || '#888') + '">' + esc(e.title.replace(/^[🎺🧾💵] /u, '')) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
+      es.slice(0, 3).map(e => '<span class="pill" style="--pc:' + esc(e.color || '#888') + '">' + esc(e.title.replace(/^[🎺🧾💵] /u, '')) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
   }
   const dayList = onDay(list, calDay);
   $('view').innerHTML = '<div class="cal-head"><button type="button" class="ghost small" id="cPrev">‹</button><h2>' + esc(monthName(calMonth)) + '</h2><button type="button" class="ghost small" id="cNext">›</button></div>' +
-    '<div class="row-actions center"><button type="button" class="ghost small" id="cToday">Today</button>' + (S().calendars.length ? '<button type="button" class="ghost small" id="cRefresh">↻ Refresh calendars</button>' : '<a class="button ghost small" href="#calendars">🔗 Connect Google / Outlook</a>') + '</div>' +
+    '<div class="row-actions center"><button type="button" class="ghost small" id="cToday">Today</button>' + (S().calendars.length ? '<button type="button" class="ghost small" id="cRefresh">Refresh</button>' : '<a class="button ghost small" href="#calendars">Connect Google or Outlook</a>') + '</div>' +
     '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
     '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="small" id="cAdd">＋ Add</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + '</div>' + legend();
   $('cPrev').onclick = () => { calMonth = isoDay(new Date(y, m - 2, 1)).slice(0, 7); viewCalendar(); };
@@ -413,8 +416,8 @@ function viewCalendar() {
 }
 function legend() {
   const parts = [[COLORS[0], 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
-  if (S().showBand !== false && cache.get('band')) parts.push(['#e0a526', 'Band']);
-  if (S().showBills !== false && cache.get('bills')) parts.push(['#c4513b', 'Bills']);
+  if (S().showBand !== false && cache.get('band')) parts.push(['#b0905a', 'Band']);
+  if (S().showBills !== false && cache.get('bills')) parts.push(['#c47a5a', 'Bills']);
   return '<p class="helper legend">' + parts.map(([c, n]) => '<span><i style="background:' + esc(c) + '"></i>' + esc(n) + '</span>').join('') + '</p>';
 }
 
@@ -428,12 +431,12 @@ function viewTasks() {
   const done = tasks.filter(i => i.done && match(i));
   const count = f => tasks.filter(i => !i.done && (f === 'today' ? i.date && i.date <= t : f === 'upcoming' ? i.date && i.date > t : f === 'someday' ? !i.date : i.list === f)).length;
   const fixed = { open: ['#9b7bff', '#ece5ff'], today: ['#f5b82e', '#fff4c7'], upcoming: ['#4aa8ff', '#dcefff'], someday: ['#4cc4c4', '#d8f5f5'] };
-  const chip = (k, l) => '<button type="button" class="chipbtn' + (taskFilter === k ? ' on' : '') + '" data-tf="' + esc(k) + '"' + (fixed[k] ? ' style="--cc:' + fixed[k][0] + ';--cbg:' + fixed[k][1] + '"' : chipStyle(k)) + '>' + esc(l) + (k !== 'open' && count(k) ? ' <b>' + count(k) + '</b>' : '') + '</button>';
+  const chip = (k, l) => '<button type="button" class="chipbtn' + (taskFilter === k ? ' on' : '') + '" data-tf="' + esc(k) + '"' + (fixed[k] ? '' : chipStyle(k)) + '>' + (fixed[k] ? '' : chipDot(k)) + esc(l) + (k !== 'open' && count(k) ? ' <b>' + count(k) + '</b>' : '') + '</button>';
   const row = i => entryRow({ src: 'planner', id: i.id, kind: 'task', listName: i.list, date: i.date, endDate: i.date, allDay: true, done: i.done, title: i.title, list: [i.list, i.date ? (i.date < t && !i.done ? '⚠ ' : '') + fmtDate(i.date, 'rel') : '', REPEATS[i.repeat] && i.repeat ? '🔁' : ''].filter(Boolean).join(' · '), priority: i.priority });
-  $('view').innerHTML = '<h1>✅ Tasks</h1>' +
+  $('view').innerHTML = '<h1>Tasks</h1>' +
     '<div class="quickbar"><input id="quick" placeholder="Add a task… “Turn in band forms friday”"><button type="button" id="quickGo">Add</button></div>' +
     '<div class="chips scrollx">' + chip('open', 'All') + chip('today', 'Today') + chip('upcoming', 'Upcoming') + chip('someday', 'Someday') + lists.map(l => chip(l, l)).join('') + '</div>' +
-    '<div class="card pad">' + (open.map(row).join('') || '<p class="helper">Nothing to do here. 🎉</p>') + '</div>' +
+    '<div class="card pad">' + (open.map(row).join('') || '<p class="helper">All clear.</p>') + '</div>' +
     (done.length ? '<button type="button" class="linkish" id="tShowDone">' + (showDone ? 'Hide' : 'Show') + ' ' + done.length + ' done</button>' + (showDone ? '<div class="card pad">' + done.map(row).join('') + '<div class="row-actions"><button type="button" class="ghost small" id="tClear">Delete done tasks</button></div></div>' : '') : '');
   wireRows($('view'));
   $('view').querySelectorAll('[data-tf]').forEach(b => b.onclick = () => { taskFilter = b.dataset.tf; viewTasks(); });
@@ -468,7 +471,7 @@ function editItem(id, preset) {
     '<p class="lbl ev-only">Color</p><div class="colors ev-only">' + COLORS.map(c => '<button type="button" class="cdot' + ((it.color || COLORS[0]) === c ? ' on' : '') + '" data-color="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
     '<label>Notes<textarea id="iNotes" rows="3">' + esc(it.notes) + '</textarea></label>' +
     '<p class="lbl">Documents</p><div id="iFiles">' + files.map(d => '<div class="mini-row"><a href="#" data-open="' + d.id + '">📎 ' + esc(d.title || d.fileName) + '</a></div>').join('') + '</div>' +
-    '<label class="button ghost small file">📎 Attach a file<input type="file" id="iFile" hidden></label><p class="helper" id="iFileNote"></p>' +
+    '<label class="button ghost small file">Attach a file<input type="file" id="iFile" hidden></label><p class="helper" id="iFileNote"></p>' +
     (id && kind === 'event' ? '<p class="lbl">Put it on another calendar</p><div class="row-actions"><a class="button ghost small" target="_blank" rel="noopener" href="' + esc(googleLink(it)) + '">Google</a><a class="button ghost small" target="_blank" rel="noopener" href="' + esc(outlookLink(it)) + '">Outlook</a><button type="button" class="ghost small" id="iIcs">iPhone / .ics</button></div>' : '') +
     '<div class="row-actions"><button type="button" id="iSave">Save</button><button type="button" class="ghost" id="iCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="iDel">Delete</button>' : '') + '</div>');
   let color = it.color || COLORS[0], pending = null;
@@ -557,14 +560,13 @@ function viewFiles() {
   const folders = S().folders, q = fileFind.toLowerCase();
   const list = data.docs.filter(d => (!fileFolder || d.folder === fileFolder) && (!q || (d.title + ' ' + d.fileName + ' ' + d.note).toLowerCase().includes(q))).sort((a, b) => b.id.localeCompare(a.id));
   const count = f => data.docs.filter(d => d.folder === f).length;
-  const icon = n => /\.pdf$/i.test(n) ? '📄' : /\.(jpe?g|png|heic|gif|webp)$/i.test(n) ? '🖼' : /\.(docx?|pages|txt)$/i.test(n) ? '📝' : /\.(xlsx?|csv|numbers)$/i.test(n) ? '📊' : '📎';
-  $('view').innerHTML = '<h1>📁 Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
-    '<div class="row-actions"><label class="button file">⬆ Upload<input type="file" id="fUp" multiple hidden></label><label class="button ghost file">📷 Photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label></div>' +
+  $('view').innerHTML = '<h1>Documents</h1>' + (signedIn() ? '' : '<p class="chip warn">Sign in (More) to upload and open documents.</p>') +
+    '<div class="row-actions"><label class="button file">Upload<input type="file" id="fUp" multiple hidden></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label></div>' +
     '<input id="fFind" type="search" placeholder="Search documents" value="' + esc(fileFind) + '">' +
-    '<div class="chips scrollx"><button type="button" class="chipbtn' + (!fileFolder ? ' on' : '') + '" data-ff="">All <b>' + data.docs.length + '</b></button>' + folders.map(f => '<button type="button" class="chipbtn' + (fileFolder === f ? ' on' : '') + '" data-ff="' + esc(f) + '"' + chipStyle(f) + '>' + esc(f) + (count(f) ? ' <b>' + count(f) + '</b>' : '') + '</button>').join('') + '</div>' +
+    '<div class="chips scrollx"><button type="button" class="chipbtn' + (!fileFolder ? ' on' : '') + '" data-ff="">All <b>' + data.docs.length + '</b></button>' + folders.map(f => '<button type="button" class="chipbtn' + (fileFolder === f ? ' on' : '') + '" data-ff="' + esc(f) + '"' + chipStyle(f) + '>' + chipDot(f) + esc(f) + (count(f) ? ' <b>' + count(f) + '</b>' : '') + '</button>').join('') + '</div>' +
     '<div class="card pad">' + (list.map(d => {
       const it = d.itemId && data.items.find(i => i.id === d.itemId);
-      return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fbg:' + pastel(d.folder)[1] + '"' : '') + '>' + icon(d.fileName) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([d.folder, fileSize(d.size || 0), it ? '🗓 ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
+      return '<div class="doc" data-doc="' + d.id + '"><span class="dicon"' + (d.folder ? ' style="--fc:' + pastel(d.folder)[0] + '"' : '') + '>' + esc(((d.fileName || '').match(/\.(\w{1,4})$/) || ['', 'FILE'])[1].toUpperCase()) + '</span><div class="who"><b>' + esc(d.title || d.fileName) + '</b><span class="sub">' + esc([d.folder, fileSize(d.size || 0), it ? 'with ' + it.title : ''].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="linkish" data-dedit="' + d.id + '">Edit</button></div>';
     }).join('') || '<p class="helper">No documents' + (fileFolder || q ? ' here' : ' yet') + '. Upload permission slips, receipts, schedules, forms…</p>') + '</div>';
   $('view').querySelectorAll('[data-ff]').forEach(b => b.onclick = () => { fileFolder = b.dataset.ff; viewFiles(); });
   $('fFind').oninput = e => { fileFind = e.target.value; clearTimeout(viewFiles.t); viewFiles.t = setTimeout(() => { viewFiles(); const f = $('fFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
@@ -599,14 +601,14 @@ function editDoc(id) {
 // ---------- More: calendars, feed, lists ----------
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
-    '<a class="card pad tip" href="#calendars">🔗 <b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
-    '<a class="card pad tip" href="#feed">📲 <b>Show my planner in Google / Outlook / iPhone</b><span class="sub">Subscribe →</span></a>' +
-    '<div class="card pad"><h2>Also show</h2><label class="check"><input type="checkbox" id="mBand"' + (S().showBand !== false ? ' checked' : '') + '> 🎺 Band volunteer events (from Band Volunteers)</label>' +
-    '<label class="check"><input type="checkbox" id="mBills"' + (S().showBills !== false ? ' checked' : '') + '> 🧾 Bills and paydays (from Money)</label></div>' +
+    '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#feed"><b>Show my planner in Google, Outlook or iPhone</b><span class="sub">Subscribe →</span></a>' +
+    '<div class="card pad"><h2>Also show</h2><label class="check"><input type="checkbox" id="mBand"' + (S().showBand !== false ? ' checked' : '') + '> Band volunteer events (from Band Volunteers)</label>' +
+    '<label class="check"><input type="checkbox" id="mBills"' + (S().showBills !== false ? ' checked' : '') + '> Bills and paydays (from Money)</label></div>' +
     '<div class="card pad"><h2>Task lists</h2><textarea id="mLists" rows="5">' + esc(S().lists.join('\n')) + '</textarea>' +
     '<h3>Document folders</h3><textarea id="mFolders" rows="5">' + esc(S().folders.join('\n')) + '</textarea><p class="helper">One per line.</p></div>' +
     '<div class="card pad"><h2>Account and sync</h2><div data-syncbox></div></div>' +
-    '<div class="card pad"><h2>Your other apps</h2><div class="row-actions"><a class="button ghost" href="../money/">💵 Money</a><a class="button ghost" href="../volunteers/">🎺 Band Volunteers</a><a class="button ghost" href="../">🧺 Booth Tracker</a></div></div>' +
+    '<div class="card pad"><h2>Your other apps</h2><div class="row-actions"><a class="button ghost" href="../money/">Money</a><a class="button ghost" href="../volunteers/">Band Volunteers</a><a class="button ghost" href="../">Booth Tracker</a></div></div>' +
     '<div class="card pad"><h2>Back up</h2><button type="button" class="ghost" id="mBackup">Download backup</button></div>';
   const lines = v => v.split('\n').map(x => x.trim()).filter(Boolean);
   $('mBand').onchange = e => { S().showBand = e.target.checked; window.save(); if (e.target.checked) loadBand(); };
@@ -618,7 +620,7 @@ function viewMore() {
 }
 function viewCalendars() {
   const cals = S().calendars;
-  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🔗 Your calendars</h1>' +
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>Your calendars</h1>' +
     '<p class="helper">Paste each calendar\'s private iCal link. The planner checks them when you open it (and every 30 minutes). To change an event from Google or Outlook, change it there.</p>' +
     (cals.map(c => { const got = cache.get('cal_' + c.id); return '<div class="card pad calrow"><div class="mini-row"><span><i class="dot" style="background:' + esc(c.color) + '"></i><b>' + esc(c.name) + '</b><span class="sub">' + (got ? got.events.length + ' events · checked ' + new Date(got.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : c.lastError ? '⚠ ' + esc(c.lastError) : 'not loaded yet') + '</span></span>' +
       '<label class="switch"><input type="checkbox" data-con="' + c.id + '"' + (c.on !== false ? ' checked' : '') + '> show</label></div>' +
@@ -663,7 +665,7 @@ function viewFeed() {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago';
   const url = (CFG.sync && CFG.sync.url) + '/functions/v1/planner-feed?t=' + S().feedToken + '&tz=' + encodeURIComponent(tz);
   const webcal = url.replace(/^https:/, 'webcal:');
-  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>📲 Your planner in other calendars</h1>' +
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>Share your planner</h1>' +
     '<p class="helper">Subscribe once, and everything you add here (events, and tasks with a due date) shows up in that calendar too. Google refreshes it every few hours; iPhone and Outlook more often.</p>' +
     '<div class="card pad"><h2>Your planner\'s link</h2><div class="linkbox"><code id="feedUrl">' + esc(url) + '</code></div><div class="row-actions"><button type="button" class="ghost small" id="feedCopy">Copy link</button><a class="button ghost small" href="' + esc(webcal) + '">Subscribe on this iPhone</a></div>' +
     '<p class="helper">Keep this link private. <button type="button" class="linkish" id="feedNew">Make a new link</button> (the old one stops working).</p></div>' +
