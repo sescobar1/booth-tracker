@@ -141,3 +141,6 @@ p.lbl { font-size: .85rem; color: var(--muted); margin: 8px 0 2px; }
 table.cmp tr.tot td { font-weight: 700; border-top: 2px solid var(--line); }
 .safe .mini-row > span:first-child .sub { display: block; }
 table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
+.catchips .chipbtn.extra { display: none; }
+.catchips.all .chipbtn.extra { display: inline-flex; }
+.chipbtn.more { border-style: dashed; }

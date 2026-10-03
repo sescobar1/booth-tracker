@@ -262,7 +262,8 @@ function editTx(id, type, preset) {
     '<label>Payee<input id="tPayee" list="payees" value="' + esc(t.payee) + '" placeholder="Walmart" autocapitalize="words"></label><datalist id="payees">' + payees.map(p => '<option value="' + esc(p) + '">').join('') + '</datalist>' +
     '<div class="grid2"><label>Category<input id="tCat" list="cats" value="' + esc(t.category) + '" placeholder="Groceries"></label><label>Date<input id="tDate" type="date" value="' + esc(t.date) + '"></label></div>' +
     '<datalist id="cats">' + data.settings.categories.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
-    '<div class="catchips" id="tChips">' + topCategories(10).map(c => '<button type="button" class="chipbtn" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>' +
+    '<div class="catchips" id="tChips">' + topCategories(99).map((c, i) => '<button type="button" class="chipbtn' + (i >= 10 && c !== t.category ? ' extra' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('') +
+    '<button type="button" class="chipbtn more" id="tMoreCats">More ▾</button></div>' +
     '<div class="grid2"><label>Check #<input id="tCheck" inputmode="numeric" value="' + esc(t.checkNum) + '"></label>' +
     (data.accounts.length > 1 ? '<label>Account<select id="tAcc">' + data.accounts.map(a => '<option value="' + a.id + '"' + (a.id === t.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select></label>' : '<span></span>') + '</div>' +
     (t.bankAmount != null && t.bankAmount !== '' ? '<p class="helper">🏦 The bank shows ' + money(t.bankAmount) + '.' + (Math.abs(bankAmt(t) - Number(t.amount)) >= 0.005 ? ' Your register has it rounded.' : '') + '</p>' : '') +
@@ -283,6 +284,7 @@ function editTx(id, type, preset) {
   const markChip = () => $('tChips').querySelectorAll('[data-cat]').forEach(b => b.classList.toggle('on', b.dataset.cat === $('tCat').value));
   $('tChips').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { $('tCat').value = b.dataset.cat; markChip(); });
   $('tCat').oninput = markChip; markChip();
+  $('tMoreCats').onclick = () => { $('tChips').classList.add('all'); $('tMoreCats').remove(); };
   $('tKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('tKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); });
   $('tPayee').onchange = () => {
     const m = mem[$('tPayee').value.trim().toLowerCase()];
