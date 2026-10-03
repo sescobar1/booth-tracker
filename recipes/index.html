@@ -41,6 +41,27 @@
     .rc .txt { padding: 10px 13px 13px; }
     .rc b { display: block; font-size: 1.05rem; line-height: 1.3; }
     .rc small { color: var(--muted); }
+    .folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(46%, 170px), 1fr)); gap: 12px; margin: 0 0 22px; }
+    .folder { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; font-weight: 400; text-align: left; position: relative; overflow: hidden; }
+    .folder::before { content: ''; position: absolute; left: 14px; top: -1px; width: 44px; height: 6px; border-radius: 0 0 6px 6px; background: var(--accent); opacity: .7; }
+    .folder .fi { font-size: 1.9rem; line-height: 1.2; }
+    .folder b { font-size: 1rem; line-height: 1.25; }
+    .folder small { color: var(--muted); font-size: 13px; }
+    .folder.add { border-style: dashed; background: transparent; box-shadow: none; cursor: pointer; }
+    .folder.add::before { display: none; }
+    .chips.wrap { flex-wrap: wrap; overflow: visible; }
+    a.chip { text-decoration: none; }
+    .fdlg { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); padding: 16px; display: flex; align-items: center; justify-content: center; }
+    .fform { width: min(460px, 100%); max-height: 90vh; overflow: auto; margin: 0; }
+    .fform h2 { margin: 0 0 4px; }
+    .ficons { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ficon { width: 44px; height: 44px; padding: 0; justify-content: center; font-size: 1.4rem; background: var(--bg); border: 2px solid transparent; }
+    .ficon.on { border-color: var(--accent); background: var(--accent-soft); }
+    .picklist { max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 4px 10px; }
+    .pick { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 500; font-size: 16px; margin: 0; padding: 9px 0; border-top: 1px solid var(--line); }
+    .pick:first-child { border-top: 0; }
+    .pick input { width: 20px; height: 20px; flex: none; }
+    .pick small { color: var(--muted); margin-left: auto; font-weight: 400; }
     .sect { margin: 8px 0 26px; scroll-margin-top: 12px; }
     .secth { font-family: Pacifico, Georgia, serif; font-weight: 400; color: var(--accent); font-size: 1.5rem; margin: 6px 0 10px; border-bottom: 2px dotted var(--line); padding-bottom: 4px; }
     .secth small { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; color: var(--muted); }
@@ -126,28 +147,98 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const photoUrl = p => P.url + '/storage/v1/object/public/' + BUCKET + '/' + p.split('/').map(encodeURIComponent).join('/');
   const lines = s => String(s || '').split('\n').map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean);
-  let user = null, book = { title: 'Family Recipes', recipes: [] }, share = null, cat = 'All', q = '';
+  let user = null, book = { title: 'Family Recipes', folders: [], recipes: [] }, share = null, cat = 'All', q = '';
   function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); }
 
   async function load() {
     if (token) {
       const { data, error } = await sb.rpc('family_recipes_book', { p_token: token });
       if (error || !data) { app.innerHTML = '<div class="empty"><h1>🍽</h1><p>This recipe link doesn’t work. Ask for a new one.</p></div>'; return false; }
-      book = data; return true;
+      book = data; book.folders = book.folders || []; return true;
     }
     const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
     if (error) { toast(error.message); return false; }
     share = sh;
-    book = { title: (sh && sh.title) || 'Family Recipes', recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, added: r.created_at })) };
+    book = { title: (sh && sh.title) || 'Family Recipes', folders: (sh && sh.folders) || [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at })) };
     book.recipes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     return true;
   }
   const shareLink = () => share ? location.origin + location.pathname + '?t=' + share.token : '';
   const owner = () => !token && user;
 
+  // ---- Folders: Shaana's own groups ("Grandma’s recipes", "Christmas"…). A recipe can be in several. ----
+  const FOLDER_ICONS = ['📁', '⭐', '👵', '👴', '🎄', '🦃', '🎂', '👧', '👦', '⏱', '🎉', '💛', '🌮', '🍝', '🥘', '🧁', '🏈', '🙏', '🌱', '❄️'];
+  const inFolder = (r, f) => (r.folders || []).includes(f.id);
+  async function saveFolders(list) {
+    const { error } = await sb.from('family_recipe_share').update({ folders: list }).eq('owner', user.id);
+    if (error) { toast(error.message); return false; }
+    book.folders = share.folders = list; return true;
+  }
+  function folderForm(f, done) {
+    const isNew = !f; f = f || { id: 'f' + Math.random().toString(36).slice(2, 9), name: '', icon: '📁' };
+    let icon = f.icon;
+    const box = document.createElement('div'); box.className = 'fdlg';
+    box.innerHTML = '<form class="card fform"><h2>' + (isNew ? 'New folder' : 'Edit folder') + '</h2><label for="fN">Folder name</label><input id="fN" value="' + esc(f.name) + '" placeholder="Grandma’s recipes" required>' +
+      '<label>Picture</label><div class="ficons">' + FOLDER_ICONS.map(i => '<button type="button" class="ficon' + (i === icon ? ' on' : '') + '" data-i="' + i + '">' + i + '</button>').join('') + '</div>' +
+      '<div class="actions"><button>Save</button><button type="button" class="ghost" id="fX">Cancel</button>' + (isNew ? '' : '<button type="button" class="danger" id="fDel">Delete folder</button>') + '</div>' + (isNew ? '' : '<p class="hint">Deleting a folder keeps its recipes; they just leave the folder.</p>') + '</form>';
+    document.body.appendChild(box);
+    const close = () => box.remove();
+    box.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { icon = b.dataset.i; box.querySelectorAll('.ficon').forEach(x => x.classList.toggle('on', x === b)); });
+    box.querySelector('#fX').onclick = close;
+    box.onclick = e => { if (e.target === box) close(); };
+    box.querySelector('form').onsubmit = async e => {
+      e.preventDefault();
+      const name = box.querySelector('#fN').value.trim(); if (!name) return;
+      const list = book.folders.filter(x => x.id !== f.id);
+      const at = book.folders.findIndex(x => x.id === f.id), item = { id: f.id, name, icon };
+      if (at >= 0) list.splice(at, 0, item); else list.push(item);
+      if (await saveFolders(list)) { close(); toast(isNew ? '📁 Folder made' : 'Saved'); done && done(item); }
+    };
+    if (!isNew) box.querySelector('#fDel').onclick = async () => {
+      if (!confirm('Delete the folder “' + f.name + '”? The recipes stay in your book.')) return;
+      const users = book.recipes.filter(r => inFolder(r, f));
+      for (const r of users) await sb.from('family_recipes').update({ folders: r.folders.filter(x => x !== f.id) }).eq('id', r.id);
+      if (await saveFolders(book.folders.filter(x => x.id !== f.id))) { close(); await load(); location.hash = ''; list(); toast('Folder deleted'); }
+    };
+    setTimeout(() => box.querySelector('#fN').focus(), 50);
+  }
+  function folderView(f) {
+    document.title = f.name + ' · ' + book.title;
+    const rs = book.recipes.filter(r => inFolder(r, f));
+    app.innerHTML = '<a class="back" href="#">‹ All recipes</a><h1 class="rtitle">' + f.icon + ' ' + esc(f.name) + '</h1><p class="meta">' + rs.length + ' recipe' + (rs.length === 1 ? '' : 's') + '</p>' +
+      (owner() ? '<div class="actions noprint"><a class="btn" href="#new/' + f.id + '">＋ Add a recipe here</a><button type="button" class="ghost" id="fPick">☑️ Choose recipes for this folder</button><button type="button" class="ghost" id="fEdit">✏️ Rename</button></div>' : '') +
+      (rs.length ? '<div class="grid">' + rs.map(recipeCard).join('') + '</div>' : '<p class="empty">Nothing in this folder yet.' + (owner() ? ' Tap <b>Choose recipes</b> to put some in.' : '') + '</p>');
+    window.scrollTo(0, 0);
+    if (owner()) {
+      $('fEdit').onclick = () => folderForm(f, () => folderView(book.folders.find(x => x.id === f.id)));
+      $('fPick').onclick = () => pickRecipes(f);
+    }
+  }
+  // Check off which recipes belong in a folder, all at once.
+  function pickRecipes(f) {
+    const box = document.createElement('div'); box.className = 'fdlg';
+    box.innerHTML = '<form class="card fform"><h2>' + f.icon + ' ' + esc(f.name) + '</h2><p class="hint">Check the recipes that go in this folder.</p><div class="picklist">' +
+      (book.recipes.length ? book.recipes.map(r => '<label class="pick"><input type="checkbox" value="' + r.id + '"' + (inFolder(r, f) ? ' checked' : '') + '> ' + esc(r.title) + ' <small>' + esc(sectionOf(r)) + '</small></label>').join('') : '<p class="hint">Add some recipes first.</p>') +
+      '</div><div class="actions"><button>Save</button><button type="button" class="ghost" id="pX">Cancel</button></div></form>';
+    document.body.appendChild(box);
+    box.querySelector('#pX').onclick = () => box.remove();
+    box.querySelector('form').onsubmit = async e => {
+      e.preventDefault();
+      const want = new Set([...box.querySelectorAll('input:checked')].map(i => i.value));
+      for (const r of book.recipes) {
+        const has = inFolder(r, f); if (has === want.has(r.id)) continue;
+        const folders = has ? r.folders.filter(x => x !== f.id) : (r.folders || []).concat(f.id);
+        const { error } = await sb.from('family_recipes').update({ folders }).eq('id', r.id); if (error) return toast(error.message);
+      }
+      box.remove(); await load(); folderView(f); toast('✓ Folder updated');
+    };
+  }
+  const recipeCard = r => '<a class="rc" href="#' + r.id + '"><div class="pic"' + (r.photos && r.photos[0] ? ' style="background-image:url(\'' + esc(photoUrl(r.photos[0].path)) + '\')">' : '>' + (ICON[sectionOf(r)] || '🍽')) + '</div><div class="txt"><b>' + esc(r.title) + '</b><small>' + esc([r.from ? 'From ' + r.from : '', r.servings ? 'Serves ' + r.servings.replace(/^serves\s*/i, '') : ''].filter(Boolean).join(' · ')) + '</small></div></a>';
+
   function route() {
     const id = decodeURIComponent(location.hash.slice(1));
-    if (id === 'new') return owner() ? edit(null) : list();
+    if (id === 'new' || id.startsWith('new/')) return owner() ? edit(null, id.slice(4)) : list();
+    if (id.startsWith('folder/')) { const f = book.folders.find(x => x.id === id.slice(7)); return f ? folderView(f) : list(); }
     if (id.startsWith('edit/')) return owner() ? edit(id.slice(5)) : list();
     const r = book.recipes.find(x => x.id === id);
     r ? show(r) : list();
@@ -157,19 +248,23 @@
     document.title = book.title;
     const rs = book.recipes.filter(r => (cat === 'All' || sectionOf(r) === cat) && (!q || (r.title + ' ' + r.from + ' ' + r.ingredients + ' ' + sectionOf(r) + ' ' + r.notes).toLowerCase().includes(q.toLowerCase())));
     const cats = CATS.filter(c => book.recipes.some(r => sectionOf(r) === c));
-    const card = r => '<a class="rc" href="#' + r.id + '"><div class="pic"' + (r.photos && r.photos[0] ? ' style="background-image:url(\'' + esc(photoUrl(r.photos[0].path)) + '\')">' : '>' + (ICON[sectionOf(r)] || '🍽')) + '</div><div class="txt"><b>' + esc(r.title) + '</b><small>' + esc([r.from ? 'From ' + r.from : '', r.servings ? 'Serves ' + r.servings.replace(/^serves\s*/i, '') : ''].filter(Boolean).join(' · ')) + '</small></div></a>';
+    const card = recipeCard;
+    const folders = book.folders.filter(f => owner() || book.recipes.some(r => inFolder(r, f)));
+    const folderRow = folders.length || owner() ? '<h2 class="secth">📁 Folders</h2><div class="folders">' + folders.map(f => { const n = book.recipes.filter(r => inFolder(r, f)).length; return '<a class="folder" href="#folder/' + f.id + '"><span class="fi">' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + n + ' recipe' + (n === 1 ? '' : 's') + '</small></a>'; }).join('') + (owner() ? '<button type="button" class="folder add noprint" id="fNew"><span class="fi">＋</span><b>New folder</b><small>Grandma’s, Christmas…</small></button>' : '') + '</div>' : '';
     // Like a cookbook: one section after another, unless searching or one section is picked.
     const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="grid">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="grid">' + rs.map(card).join('') + '</div>';
     app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
       (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see the recipes and photos (they can’t change anything).</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
       (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' +
+        (!q && cat === 'All' ? folderRow : '') +
         (cats.length > 1 ? '<div class="chips">' + ['All'].concat(cats).map(c => '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + (ICON[c] ? ICON[c] + ' ' : '') + esc(c) + '</button>').join('') + '</div>' : '') +
         body
-        : '<div class="empty"><p style="font-size:3rem;margin:0">📸</p><p>' + (owner() ? 'No recipes yet. Tap <b>＋ Add a recipe</b> and take a picture of a recipe card, a cookbook page or the finished dish.' : 'No recipes yet. Check back soon!') + '</p></div>') +
+        : (owner() ? folderRow : '') + '<div class="empty"><p style="font-size:3rem;margin:0">📸</p><p>' + (owner() ? 'No recipes yet. Tap <b>＋ Add a recipe</b> and take a picture of a recipe card, a cookbook page or the finished dish.' : 'No recipes yet. Check back soon!') + '</p></div>') +
       (owner() ? '<a class="btn fab" href="#new">＋ Add a recipe</a>' : '') +
       '<footer>Made with love by the Escobar family 💛' + (owner() ? ' · <button type="button" class="small ghost" id="out">Sign out</button>' : '') + '</footer>';
     if ($('q')) $('q').oninput = e => { q = e.target.value; const pos = e.target.selectionStart; list(); $('q').focus(); $('q').setSelectionRange(pos, pos); };
     app.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { cat = b.dataset.cat; list(); });
+    if ($('fNew')) $('fNew').onclick = () => folderForm(null, () => list());
     if (owner()) {
       $('shCopy').onclick = async () => { try { await navigator.clipboard.writeText(shareLink()); toast('Link copied'); } catch (e) { prompt('Copy this link:', shareLink()); } };
       $('shShare').onclick = async () => { const text = 'Here’s our family recipe book 🍽💛 ' + shareLink(); if (navigator.share) { try { await navigator.share({ title: book.title, text: 'Here’s our family recipe book 🍽💛', url: shareLink() }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text); };
@@ -183,6 +278,7 @@
     const ing = lines(r.ingredients), steps = lines(r.steps);
     app.innerHTML = '<a class="back" href="#">‹ All recipes</a>' +
       '<h1 class="rtitle">' + esc(r.title) + '</h1><p class="meta">' + esc([r.from ? 'From ' + r.from : '', ICON[sectionOf(r)] + ' ' + sectionOf(r)].filter(Boolean).join(' · ')) + '</p>' +
+      (book.folders.some(f => inFolder(r, f)) ? '<div class="chips noprint">' + book.folders.filter(f => inFolder(r, f)).map(f => '<a class="chip" href="#folder/' + f.id + '">' + f.icon + ' ' + esc(f.name) + '</a>').join('') + '</div>' : '') +
       ([['Serves', r.servings], ['Prep', r.prep], ['Cook', r.cook], ['Oven', r.temp]].some(x => x[1]) ? '<div class="facts">' + [['Serves', r.servings], ['Prep', r.prep], ['Cook', r.cook], ['Oven', r.temp]].filter(x => x[1]).map(([k, v]) => '<span><b>' + k + '</b>' + esc(v) + '</span>').join('') + '</div>' : '') +
       ((r.photos || []).length ? '<div class="gallery">' + r.photos.map((p, k) => '<img src="' + esc(photoUrl(p.path)) + '" alt="' + esc(r.title) + ' photo ' + (k + 1) + '" data-zoom="' + k + '" loading="lazy">').join('') + '</div>' + (r.photos.length > 1 ? '<p class="hint noprint">Swipe for more photos · tap one to see it big</p>' : '<p class="hint noprint">Tap the photo to see it big</p>') : '') +
       (ing.length || steps.length || r.notes ? '<div class="cols">' +
@@ -274,7 +370,7 @@
     return out;
   }
 
-  function edit(id) {
+  function edit(id, inFolderId) {
     const r = id ? book.recipes.find(x => x.id === id) : null;
     if (id && !r) return list();
     // Each photo is either saved ({path}) or new ({file, preview}).
@@ -289,6 +385,7 @@
       '<p class="hint" style="margin-top:14px">Tap <b>✨ Type it out for me</b> above and the recipe fills itself in from the photos. Check it over and fix anything it misread.</p>' +
       '<label for="eI">Ingredients (one per line)</label><textarea id="eI" rows="6" placeholder="2 cups flour&#10;1 tsp salt">' + esc(r ? r.ingredients : '') + '</textarea>' +
       '<label for="eS">Directions (one step per line)</label><textarea id="eS" rows="6">' + esc(r ? r.steps : '') + '</textarea>' +
+      '<label>Folders</label><div class="chips wrap" id="eFolders"></div>' +
       '<label for="eN">Notes / memories</label><textarea id="eN" rows="3" placeholder="We make this every Christmas Eve…">' + esc(r ? r.notes : '') + '</textarea>' +
       '<div class="actions"><button type="button" id="save">Save recipe</button>' + (r ? '<button type="button" class="danger" id="del">Delete</button>' : '') + '</div></div>';
     window.scrollTo(0, 0);
@@ -298,6 +395,13 @@
       $('thumbs').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const [p] = pics.splice(+b.dataset.x, 1); if (p.path) removed.push(p.path); draw(); });
       $('thumbs').querySelectorAll('[data-l]').forEach(b => b.onclick = () => { const k = +b.dataset.l; [pics[k - 1], pics[k]] = [pics[k], pics[k - 1]]; draw(); });
     };
+    let chosen = new Set(r ? r.folders || [] : inFolderId ? [inFolderId] : []);
+    const drawFolders = () => {
+      $('eFolders').innerHTML = book.folders.map(f => '<button type="button" class="chip' + (chosen.has(f.id) ? ' on' : '') + '" data-f="' + f.id + '">' + (chosen.has(f.id) ? '✓ ' : '') + f.icon + ' ' + esc(f.name) + '</button>').join('') + '<button type="button" class="chip" id="eFNew">＋ New folder</button>';
+      $('eFolders').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { chosen.has(b.dataset.f) ? chosen.delete(b.dataset.f) : chosen.add(b.dataset.f); drawFolders(); });
+      $('eFNew').onclick = () => folderForm(null, f => { chosen.add(f.id); drawFolders(); });
+    };
+    drawFolders();
     const typed = () => ['eI', 'eS'].some(k => $(k).value.trim());
     const add = files => { [...files].forEach(f => pics.push({ file: f, preview: URL.createObjectURL(f) })); draw(); if (!r && !typed() && pics.length) readPhotos(); };
     const readPhotos = async () => {
@@ -335,7 +439,7 @@
           p.path = path; out.push({ path, w, h });
         }
         btn.textContent = 'Saving…';
-        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), photos: out, updated_at: new Date().toISOString() };
+        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), folders: book.folders.map(f => f.id).filter(x => chosen.has(x)), photos: out, updated_at: new Date().toISOString() };
         const res = r ? await sb.from('family_recipes').update(row).eq('id', r.id).select().single() : await sb.from('family_recipes').insert(row).select().single();
         if (res.error) throw res.error;
         if (removed.length) await sb.storage.from(BUCKET).remove(removed);
