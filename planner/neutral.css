@@ -359,3 +359,15 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .dsdot { width: 26px; height: 26px; min-height: 0; padding: 0; border-radius: 6px 6px 10px 6px; border: 1px solid rgba(60, 50, 20, .15); box-shadow: 0 1px 3px rgba(60, 50, 20, .12); }
 .dsdot:active { transform: scale(.9); }
 .sdate { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px 4px; text-decoration: none; }
+/* Gifts */
+.giftcard { display: block; text-decoration: none; color: inherit; }
+.giftcard .mini-row { padding: 6px 0; }
+.gift .stickies { margin: 10px 2px; }
+.gsteps { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.gstep { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--line-2); color: var(--muted); }
+.gstep.on { background: var(--sage-soft); color: #4f6b49; }
+.guide .gline { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.guide .gline b { font-family: 'Patrick Hand', cursive; font-weight: 400; font-size: 1.05rem; color: var(--ink-2); }
+.starters { columns: 2; column-gap: 20px; padding-left: 18px; margin: 6px 0; }
+.starters li { margin: 4px 0; break-inside: avoid; }
+@media (max-width: 480px) { .starters { columns: 1; } .guide .gline { grid-template-columns: 1fr; gap: 2px; } }

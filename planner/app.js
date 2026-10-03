@@ -222,6 +222,7 @@ async function refreshAll(force) {
     for (const c of cals) await refreshCalendar(c, true);
     if (S().showBand !== false) await loadBand();
     if (S().showBills !== false) await loadBills();
+    giftCheck();
   } finally { refreshing = false; }
   route();
 }
@@ -336,8 +337,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' ? 'today' : tab === 'notes' ? 'files' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -455,7 +456,7 @@ function viewToday() {
     '<div class="strip">' + strip + '</div>' +
     '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
     (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
-    mealsCard(sel) +
+    mealsCard(sel) + giftCard() +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
@@ -966,6 +967,7 @@ function viewFiles() {
     (searching ? '' : '<nav class="crumbs">' + crumbs.map(([p, n], k) => k === crumbs.length - 1 ? '<b>' + esc(n) + '</b>' : '<button type="button" class="linkish" data-ff="' + esc(p) + '">' + esc(n) + '</button><span>›</span>').join('') + '</nav>') +
     '<div class="row-actions"><label class="button file">Add files' + (fileFolder ? ' here' : '') + '<input type="file" id="fUp" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.pages,.numbers,.key,.rtf,image/*,application/pdf"></label><label class="button ghost file">Photos<input type="file" id="fPics" multiple hidden accept="image/*"></label><label class="button ghost file">Take a photo<input type="file" id="fCam" accept="image/*" capture="environment" hidden></label>' +
     '<button type="button" class="ghost" id="fPaste">📋 Paste</button><button type="button" class="ghost" id="fNew">＋ New folder' + (fileFolder ? ' inside' : '') + '</button>' + '<button type="button" class="ghost small" id="fSticky">📝 Sticky note</button>' + (fileFolder ? '<button type="button" class="ghost small" id="fMenu">⋯ This folder</button>' : '') + '</div>' +
+    (!searching && /^Gift ideas/.test(fileFolder) ? '<a class="card pad tip" href="#gifts"><b>🎁 Gift planner</b><span class="sub">Who’s coming up, reminders and the buying guide →</span></a>' : '') +
     (!searching && stickiesIn(fileFolder).length ? '<div class="stickies">' + stickiesIn(fileFolder).map(i => stickyCard(i)).join('') + '</div>' : '') +
     (!searching && /\/Medical$/i.test(fileFolder) ? healthPanel(topOf(fileFolder)) + '<h3 class="filesh">' + esc(topOf(fileFolder)) + '’s medical files</h3>' : '') +
     (subs.length ? '<div class="fgrid">' + subs.map(f => {
@@ -1042,6 +1044,104 @@ async function pasteButton() {
   $('pbClose').onclick = closeModal;
   const box = $('pasteBox'); box.focus();
   box.addEventListener('paste', e => { const files = [...(e.clipboardData ? e.clipboardData.files : [])]; e.preventDefault(); if (!files.length) { toast('That wasn’t a picture or file.'); return; } closeModal(); saveBlobs(files, 'Pasting'); });
+}
+// ---------- Gifts: birthdays and anniversaries ----------
+// Found on every calendar by name ("Mia’s birthday", "Birthday - Dad", "Our anniversary"). Each person gets a folder under Gift ideas,
+// and gift reminders become tasks (so they also ring on the phone through the planner feed).
+const FAMILY = ['Cecilia', 'Salvador', 'Shaana', 'Elisha'];
+function occasionOf(e) {
+  if (e.kind === 'task' || e.src === 'bill' || e.src === 'band') return null;
+  const t = e.title || '', anniv = /anniversary/i.test(t), bday = /\b(birthday|bday|b-day)\b|🎂/i.test(t);
+  if (!anniv && !bday) return null;
+  let n = t.replace(/[\u{1F300}-\u{1FAFF}☀-➿️]/gu, ' ').replace(/[’']s\b/gi, '')
+    .replace(/\b(happy|birthday|bday|b-day|anniversary|wedding|party|celebration|dinner|lunch|day|of|the|for|to|and)\b/gi, m => /^and$/i.test(m) ? '&' : ' ')
+    .replace(/\b\d+(st|nd|rd|th)?\b/gi, ' ').replace(/[()\-–—:!.,#|/]/g, ' ').replace(/\s*&\s*$|^\s*&\s*/g, '').replace(/\s+/g, ' ').trim();
+  n = n.replace(/^(our|my|us)\b\s*/i, '').trim();
+  if (!n) { if (!anniv) return null; n = ''; }
+  if (n.length > 30) return null;
+  n = n.replace(/\b\w/g, c => c.toUpperCase());
+  const full = Object.entries(nicknames()).find(([name, nicks]) => nicks.some(x => x.toLowerCase() === n.toLowerCase())); if (full) n = full[0];
+  return { type: anniv ? 'anniversary' : 'birthday', name: n, date: e.date, title: t,
+    folder: n || 'Anniversary', label: anniv ? (n ? n + '’s anniversary' : 'your anniversary') : n + '’s birthday', icon: anniv ? '💍' : '🎂' };
+}
+function occasions(from, to) {
+  const seen = new Set();
+  return agenda(from, to).map(occasionOf).filter(o => { if (!o) return false; const k = o.folder.toLowerCase() + o.date; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+const giftSlug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function giftCheck() {
+  const t = today(); let changed = false;
+  // A Gift ideas folder for the family and for everyone with a birthday or anniversary in the next year.
+  const people = [...new Set(FAMILY.concat(occasions(t, addDays(t, 366)).map(o => o.folder)))];
+  const want = ['Gift ideas'].concat(people.map(n => 'Gift ideas/' + n)).filter(f => !folderList().some(x => x.toLowerCase() === f.toLowerCase()));
+  if (want.length) { setFolders(folderList().concat(want)); changed = true; }
+  if (S().giftReminders !== false) {
+    const made = Object.assign({}, S().giftMade || {}), lead = S().giftLead || 14;
+    occasions(addDays(t, 1), addDays(t, 60)).forEach(o => {
+      const key = giftSlug(o.folder) + '-' + o.date;
+      [['buy', '🎁 Buy a gift for ' + o.label, addDays(o.date, -lead), 2], ['wrap', '🎀 Wrap it + get a card for ' + o.label, addDays(o.date, -2), 0]].forEach(([k, title, due, pri]) => {
+        const id = 'gift-' + k + '-' + key;
+        if (made[id] || data.items.some(i => i.id === id)) return;
+        data.items.push(newItem({ id, kind: 'task', title, date: due < t ? t : due, list: 'Gifts', priority: pri,
+          notes: o.icon + ' ' + o.label + ' is ' + fmtDate(o.date) + '.\nIdeas: Files → Gift ideas → ' + o.folder + '\nBuying guide: Today → More → Gifts' }));
+        made[id] = o.date; changed = true;
+      });
+    });
+    Object.keys(made).forEach(k => { if (made[k] < addDays(t, -60)) delete made[k]; });
+    S().giftMade = made;
+    if (changed && !S().lists.includes('Gifts')) S().lists = S().lists.concat('Gifts');
+  }
+  if (changed) window.save();
+}
+const giftIdeas = folder => stickiesIn('Gift ideas/' + folder).concat(data.docs.filter(d => d.folder === 'Gift ideas/' + folder));
+function giftCard() {
+  const t = today(), soon = occasions(t, addDays(t, 21));
+  if (!soon.length) return '';
+  return '<a class="card pad giftcard" href="#gifts"><h2>🎁 Coming up</h2>' + soon.slice(0, 4).map(o => { const n = daysBetween(t, o.date), ideas = giftIdeas(o.folder).length;
+    return '<div class="mini-row"><span>' + o.icon + ' <b>' + esc(o.label.charAt(0).toUpperCase() + o.label.slice(1)) + '</b></span><span class="sub">' + (n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days') + (ideas ? ' · ' + ideas + (ideas === 1 ? ' idea' : ' ideas') : ' · no ideas yet') + '</span></div>'; }).join('') + '</a>';
+}
+const GIFT_GUIDE = [
+  ['3 weeks before', 'Think: what have they mentioned wanting? What are they into right now? Jot ideas on a sticky note in their Gift ideas folder.'],
+  ['2 weeks before', 'Pick one and set a budget. Order online now so shipping isn’t a worry (Walmart pickup works for last-minute).'],
+  ['1 week before', 'Grab a card, gift bag or wrapping paper. Plan the day: dinner, cake, who’s coming.'],
+  ['2 days before', 'Wrap it, sign the card, and put it somewhere you won’t forget.']
+];
+const GIFT_STARTERS = ['Something they said they wanted', 'An experience: tickets, a class, a day out', 'Personalized: name, photo, initials', 'Their hobby: band, sports, crafts, books', 'Treats: favorite snacks, candy, coffee', 'Practical upgrade: something they use every day', 'Time together: a planned outing with you', 'Gift card to their favorite place'];
+function viewGifts() {
+  const t = today(), list = occasions(t, addDays(t, 120)), lead = S().giftLead || 14;
+  const taskFor = (k, o) => data.items.find(i => i.id === 'gift-' + k + '-' + giftSlug(o.folder) + '-' + o.date);
+  $('view').innerHTML = '<a class="back" href="#today">‹ Today</a><h1>Gifts</h1>' +
+    '<p class="helper">Birthdays and anniversaries are picked up from all your calendars. Each person has a folder in <b>Files → Gift ideas</b> for ideas, links and photos.</p>' +
+    '<div class="row-actions"><button type="button" id="gAdd">＋ Add a birthday or anniversary</button><a class="button ghost" href="#files" id="gFolder">📁 Gift ideas folder</a></div>' +
+    '<h3 class="filesh">Coming up</h3>' +
+    (list.length ? list.map((o, k) => {
+      const n = daysBetween(t, o.date), ideas = giftIdeas(o.folder), buy = taskFor('buy', o), wrap = taskFor('wrap', o);
+      const first = ideas.find(i => i.kind === 'sticky');
+      const q = first ? (first.notes || '').split('\n')[0] : 'gift ideas';
+      return '<div class="card pad gift"><div class="mini-head"><h2>' + o.icon + ' ' + esc(o.label.charAt(0).toUpperCase() + o.label.slice(1)) + '</h2><span class="chip">' + (n === 0 ? 'Today!' : n === 1 ? 'Tomorrow' : 'in ' + n + ' days') + '</span></div>' +
+        '<p class="sub">' + esc(fmtDate(o.date, 'long')) + '</p>' +
+        '<div class="gsteps">' + [['💡', 'Ideas', ideas.length > 0], ['🎁', 'Bought', buy && buy.done], ['🎀', 'Wrapped', wrap && wrap.done]].map(([i, l, on]) => '<span class="gstep' + (on ? ' on' : '') + '">' + i + ' ' + l + (on ? ' ✓' : '') + '</span>').join('') + '</div>' +
+        (ideas.length ? '<div class="stickies">' + ideas.filter(i => i.kind === 'sticky').map(i => stickyCard(i)).join('') + '</div>' + (ideas.some(i => i.kind !== 'sticky') ? '<p class="helper">+ ' + ideas.filter(i => i.kind !== 'sticky').length + ' saved files in the folder</p>' : '') : '<p class="helper">No ideas yet.</p>') +
+        '<div class="row-actions"><button type="button" class="small" data-gidea="' + esc(o.folder) + '">💡 Add idea</button>' +
+        (buy ? '<button type="button" class="ghost small" data-gdone="' + buy.id + '">' + (buy.done ? '✓ Bought' : 'Mark bought') + '</button>' : '') +
+        (wrap ? '<button type="button" class="ghost small" data-gdone="' + wrap.id + '">' + (wrap.done ? '✓ Wrapped' : 'Mark wrapped') + '</button>' : '') +
+        '<a class="button ghost small" target="_blank" rel="noopener" href="https://www.walmart.com/search?q=' + encodeURIComponent(q) + '">🛒 Walmart</a>' +
+        '<a class="button ghost small" target="_blank" rel="noopener" href="https://www.amazon.com/s?k=' + encodeURIComponent(q) + '">Amazon</a>' +
+        '<a class="button ghost small" href="#files" data-gf="' + esc(o.folder) + '">📁 Folder</a></div></div>';
+    }).join('') : '<div class="card pad"><p class="helper">No birthdays or anniversaries in the next 4 months. Add one above, or put “Birthday” in the event name on any calendar.</p></div>') +
+    '<div class="card pad guide"><h2>🎁 Present buying guide</h2>' + GIFT_GUIDE.map(([w, d]) => '<div class="gline"><b>' + w + '</b><span>' + d + '</span></div>').join('') +
+      '<h3>Idea starters</h3><ul class="starters">' + GIFT_STARTERS.map(x => '<li>' + x + '</li>').join('') + '</ul></div>' +
+    '<div class="card pad"><h2>Reminders</h2><label class="check"><input type="checkbox" id="gOn"' + (S().giftReminders !== false ? ' checked' : '') + '> Add gift reminders to my tasks</label>' +
+      '<label>Remind me to buy<select id="gLead">' + [[7, '1 week before'], [14, '2 weeks before'], [21, '3 weeks before'], [28, '4 weeks before']].map(([v, l]) => '<option value="' + v + '"' + (v === lead ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+      '<p class="helper">You get two tasks for each one: “Buy a gift” and, 2 days before, “Wrap it + get a card”. They show in Tasks (list: Gifts) and ring on your phone at 9 AM. New reminders use the time you pick here.</p></div>';
+  $('gAdd').onclick = () => editItem(null, { kind: 'event', title: 'Birthday: ', allDay: true, repeat: 'yearly', color: '#d1a3a4' });
+  $('gFolder').onclick = () => { fileFolder = 'Gift ideas'; fileFind = ''; };
+  $('view').querySelectorAll('[data-gf]').forEach(a => a.onclick = () => { fileFolder = 'Gift ideas/' + a.dataset.gf; fileFind = ''; });
+  $('view').querySelectorAll('[data-gidea]').forEach(b => b.onclick = () => editSticky(null, 'Gift ideas/' + b.dataset.gidea, viewGifts, { color: 'pink' }));
+  $('view').querySelectorAll('[data-gdone]').forEach(b => b.onclick = () => { const it = data.items.find(i => i.id === b.dataset.gdone); if (!it) return; it.done = !it.done; window.save(); if (it.done) celebrate(b); viewGifts(); });
+  $('gOn').onchange = e => { S().giftReminders = e.target.checked; window.save(); if (e.target.checked) giftCheck(); viewGifts(); };
+  $('gLead').onchange = e => { S().giftLead = +e.target.value; window.save(); };
+  wireStickies($('view'), viewGifts);
 }
 // ---------- Sticky notes ----------
 // A sticky is a planner item (kind 'sticky'): notes = the text, list = its folder ('' = general), color = paper color.
@@ -1808,6 +1908,7 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#gifts"><b>Gifts</b><span class="sub">🎁 Birthdays, anniversaries and gift ideas →</span></a>' +
     '<a class="card pad tip" href="#notes"><b>Notes</b><span class="sub">📝 Sticky notes →</span></a>' +
     '<a class="card pad tip" href="#track"><b>Trackers</b><span class="sub">💅 ❤️ ⚠️ and more →</span></a>' +
     '<a class="card pad tip" href="#feed"><b>Show my planner in Google, Outlook or iPhone</b><span class="sub">Subscribe →</span></a>' +
