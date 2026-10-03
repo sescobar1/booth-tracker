@@ -182,6 +182,8 @@ function calendarOccurrences(events, from, to) {
 function calendarFeedUrl(url) {
   // Anything typed after ".ics" by accident ("basic.ics4") is dropped.
   const u = String(url || '').trim().replace(/(\.ics)[^?#\/]*$/i, '$1');
+  // Outlook's published "calendar.html" (view in a browser) has a matching "calendar.ics" feed.
+  if (/^https:\/\/outlook\.(office365|office|live)\.com\/owa\/calendar\//i.test(u) && /\/calendar\.html?$/i.test(u)) return u.replace(/\/calendar\.html?$/i, '/calendar.ics');
   try {
     const x = new URL(u.replace(/^webcals?:/i, 'https:'));
     if (/calendar\.google\.com$/i.test(x.hostname) && !/\/ical\//.test(x.pathname)) {
