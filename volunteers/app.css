@@ -220,3 +220,7 @@ h2.food-head small { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .food-row { cursor: default; }
 .ptabs .ptab, .toptabs a { flex: 1 1 0; text-align: center; white-space: nowrap; padding: 10px 6px; }
 @media (max-width: 420px) { .ptabs .ptab, .toptabs a { font-size: .84rem; } }
+.card.event { position: relative; }
+.card.event .what { flex: 1; }
+.card-text { align-self: center; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 12px; background: var(--navy); color: #fff; font-size: 1.25rem; line-height: 1.1; cursor: pointer; }
+.card-text small { font-size: .7rem; font-weight: 700; }
