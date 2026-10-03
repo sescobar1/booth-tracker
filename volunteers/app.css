@@ -211,3 +211,5 @@ h2.food-head small { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .donate-bar span { font-weight: 600; }
 .must { background: #fff4cc; border: 1px solid #f2d27a; border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
 .must p { margin: .4rem 0 0; }
+.tpl-card { display: flex; flex-direction: column; gap: 4px; }
+.tpl-card .row-actions { margin: 6px 0 0; }

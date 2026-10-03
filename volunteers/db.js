@@ -132,11 +132,17 @@
         synced[c.key] = next;
       });
       if (st.data && st.data.data) {
-        const remote = JSON.stringify(st.data.data), mine = JSON.stringify(settingsOf(data));
-        if (synced.settings === undefined || mine === synced.settings) {
-          if (remote !== mine) { data.settings = Object.assign({}, data.settings, st.data.data.settings || {}); if (st.data.data.templates && st.data.data.templates.length) data.templates = st.data.data.templates; changed = true; }
-          synced.settings = remote; // anything only on this device (like a new message) gets sent next
-        }
+        // Settings merge one at a time: whatever changed here since the last sync stays, everything
+        // else takes the cloud's value. The first sync on a device takes the cloud's values.
+        const remote = st.data.data, rs = remote.settings || {}, mine = settingsOf(data);
+        const base = synced.settings ? JSON.parse(synced.settings) : null, bs = (base && base.settings) || {};
+        const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+        const merged = Object.assign({}, mine.settings);
+        Object.keys(rs).forEach(k => { if (!base || same(mine.settings[k], bs[k])) merged[k] = rs[k]; });
+        let templates = mine.templates;
+        if (remote.templates && remote.templates.length && (!base || same(mine.templates, base.templates))) templates = remote.templates;
+        if (!same(merged, mine.settings) || !same(templates, mine.templates)) { data.settings = merged; data.templates = templates; changed = true; }
+        synced.settings = JSON.stringify(remote); // anything only on this device gets sent next
       }
       saveSynced();
       localSave();

@@ -274,15 +274,108 @@ function fillMessage(text, ev, slot, p) {
 // ---------- routing ----------
 function route() {
   const [tab, id] = (location.hash.slice(1) || 'events').split('/');
-  const tabOf = { event: 'events', checkin: 'events', sheet: 'events', import: 'more', sug: 'events' };
+  const tabOf = { event: 'events', checkin: 'events', sheet: 'events', import: 'more', sug: 'events', templates: 'events' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { events: viewEvents, event: viewEvent, checkin: viewCheckin, sheet: viewSheet, people: viewPeople, import: viewImport, more: viewMore, share: viewShare, sug: viewSug };
+  const views = { events: viewEvents, event: viewEvent, checkin: viewCheckin, sheet: viewSheet, people: viewPeople, import: viewImport, more: viewMore, share: viewShare, sug: viewSug, templates: viewTemplates };
   (views[tab] || viewEvents)(id);
   window.scrollTo(0, 0);
 }
 window.render = () => { const y = window.scrollY; const keepImport = location.hash.startsWith('#import') && imp; if (!keepImport) route(); window.scrollTo(0, y); };
 window.addEventListener('hashchange', route);
 $('topShare').onclick = () => { location.hash = 'share'; };
+
+// ---------- Event templates ----------
+// Events the Boosters run every year, without dates: the jobs, how many people each needs, and food
+// lists. Pick one and a date to make the event. Built from the Volunteer Form, past SignUpGenius
+// sign-ups and the student sheets; edit any of them under Events → Templates.
+const S = (role, need, start, end) => ({ role, need, start: start || '', end: end || '', kind: 'shift' });
+const F = (role, need, note) => ({ role, need, start: '', end: '', kind: 'food', note: note || '' });
+const DEFAULT_EVENT_TEMPLATES = [
+  { id: 'tRHS', name: 'RHS football game (Friday)', start: '17:45', end: '21:30', location: 'Cyclone Stadium Concession Stand', notes: 'Arrive by 5:45. Closed-toe shoes; long hair tied back.',
+    jobs: [S('Concession Stand', 24), S('Concession Stand – Students', 9, '18:00', '21:30')] },
+  { id: 'tRJHS', name: 'RJHS football game (Thursday)', start: '16:15', end: '21:30', location: 'Cyclone Stadium Concession Stand', notes: '',
+    jobs: [S('Concession Stand', 16), S('Concession Stand – Students', 12, '16:30', '21:30'), S('RJHS Bus Chaperone', 2, '17:00', '')] },
+  { id: 'tRMS', name: 'RMS / JV football game (Monday)', start: '16:30', end: '21:00', location: 'Cyclone Stadium Concession Stand', notes: '',
+    jobs: [S('Concession Stand', 8), S('Concession Stand – Students', 5, '17:00', '21:00')] },
+  { id: 'tMarch', name: 'Region Marching Contest (concession stand)', start: '16:00', end: '21:30', location: 'Cyclone Stadium Concession Stand', notes: '',
+    jobs: [S('Concession Stand', 18), S('Concession Stand – Students', 10)] },
+  { id: 'tAway', name: 'RHS away game – bus chaperones', start: '', end: '', location: 'RHS Band Room', notes: 'Ride the bus to the game and back. Departure time varies by location.',
+    jobs: [S('Bus Chaperone', 4)] },
+  { id: 'tInvite', name: 'Marching invitational – bus chaperones', start: '', end: '', location: 'RHS Band Room', notes: 'Time TBA. Ride the bus with the band.',
+    jobs: [S('Bus Chaperone', 4)] },
+  { id: 'tParade', name: 'Parade – bus chaperones', start: '', end: '', location: 'RJHS Band Room', notes: 'Homecoming, Veterans Day, or Christmas parade.',
+    jobs: [S('Parade Bus Chaperone', 4)] },
+  { id: 'tAllRegion', name: 'Jr High All Region Band Auditions (Saturday)', start: '08:00', end: '16:00', location: 'RJHS', notes: '',
+    jobs: [S('Concession Stand', 8), S('Hospitality Room', 3), S('Security', 5), S('Tally Room', 4),
+      F('Breakfast pastries or donuts (dozen)', 3, 'Hospitality room'), F('Fruit tray', 1, 'Hospitality room'), F('Lunch (sandwich or wrap tray)', 2, 'Hospitality room'),
+      F('Desserts / cookies (dozen)', 2, 'Hospitality room'), F('Bottled water (case)', 3), F('Soda (12-pack)', 3), F('Chips / snacks (bag)', 4), F('Coffee & creamer', 1, 'Hospitality room')] },
+  { id: 'tClinic', name: 'All Region Clinic – hospitality room', start: '08:00', end: '16:00', location: 'The Center for the Arts', notes: '',
+    jobs: [S('Hospitality Room', 3),
+      F('Breakfast pastries or donuts (dozen)', 2), F('Fruit tray', 1), F('Lunch (sandwich or wrap tray)', 2), F('Desserts / cookies (dozen)', 2),
+      F('Bottled water (case)', 2), F('Soda (12-pack)', 2), F('Chips / snacks (bag)', 3), F('Coffee & creamer', 1)] },
+  { id: 'tXmas', name: 'Band Christmas / holiday party', start: '', end: '', location: '', notes: 'RHS, RJHS, or RMS band party.',
+    jobs: [S('Setup', 3), S('Serve', 3), S('Cleanup', 3),
+      F('Cookies (dozen)', 4), F('Brownies (pan)', 2), F('Chips (bag)', 4), F('Drinks (2-liter or case)', 4), F('Plates, napkins & cups (pack)', 2)] },
+  { id: 'tPicnic', name: 'End-of-year band picnic / celebration', start: '', end: '', location: '', notes: 'RHS picnic or RJHS end-of-the-year celebration.',
+    jobs: [S('Setup', 4), S('Grill / serve', 4), S('Cleanup', 4),
+      F('Side dish (serves 20)', 4), F('Desserts (dozen)', 4), F('Chips (bag)', 4), F('Bottled water (case)', 3), F('Drinks (2-liter or case)', 3), F('Plates, napkins & utensils (pack)', 2)] },
+  { id: 'tLunch', name: 'RHS summer band lunch', start: '11:30', end: '13:00', location: 'RHS Band Rooms', notes: '',
+    jobs: [S('Lunch servers', 3), F('Lunch (tray or pizzas)', 3), F('Bottled water (case)', 3), F('Snacks or dessert (dozen)', 2)] },
+  { id: 'tUniform', name: 'Uniform fitting', start: '12:00', end: '13:30', location: 'RHS Uniform Room', notes: '',
+    jobs: [S('Uniform fitting helpers', 4), F('Bottled water (case)', 1)] },
+  { id: 'tAlter', name: 'Uniform alterations (Tuesday night)', start: '', end: '', location: 'RHS Uniform Room', notes: 'During band practice.',
+    jobs: [S('Sewing / alterations', 3)] },
+  { id: 'tDance', name: 'Sweetheart Dance (RJHS & RHS)', start: '20:00', end: '23:30', location: '', notes: '',
+    jobs: [S('Dance Chaperone', 8), F('Snacks (bag or tray)', 4), F('Bottled water (case)', 3)] },
+  { id: 'tBegin', name: 'Beginning Band Sign Up (RMS)', start: '15:45', end: '19:00', location: 'RMS Band Rooms', notes: '',
+    jobs: [S('Sign-up table helpers', 4)] },
+  { id: 'tMFA', name: 'Music For All Playing Festival', start: '', end: '', location: 'The Center for the Arts', notes: '',
+    jobs: [S('Festival helpers', 6), S('Hospitality Room', 3), F('Lunch (sandwich or wrap tray)', 2), F('Bottled water (case)', 3), F('Snacks (bag)', 3)] },
+  { id: 'tState', name: 'State Band Assessment / State Marching – bus chaperones', start: '', end: '', location: 'RHS Band Room', notes: 'Time TBA.',
+    jobs: [S('Bus Chaperone', 4)] },
+  { id: 'tTrip', name: 'Band trip – chaperones', start: '', end: '', location: '', notes: 'Magic Springs (RMS), Silver Dollar City (RJHS), or Pigeon Forge (RHS).',
+    jobs: [S('Trip Chaperone', 6)] }
+];
+if (!data.settings.eventTemplates) data.settings.eventTemplates = JSON.parse(JSON.stringify(DEFAULT_EVENT_TEMPLATES));
+
+function viewTemplates() {
+  const list = data.settings.eventTemplates || [];
+  const sum = t => {
+    const shifts = t.jobs.filter(j => j.kind !== 'food'), food = t.jobs.filter(j => j.kind === 'food');
+    return shifts.map(j => j.role + ' ' + j.need).join(' · ') + (food.length ? ' · 🍪 ' + food.length + ' food items' : '');
+  };
+  $('view').innerHTML = '<a class="back" href="#events">‹ Events</a><h1>📋 Event templates</h1>' +
+    '<p class="helper">Events you run every year, with their jobs, how many people, and food lists. Tap <b>Use</b> and pick a date to add it to Events.</p>' +
+    '<div class="row-actions"><button type="button" id="tNew">+ New template</button></div>' +
+    list.map((t, i) => '<div class="card pad tpl-card"><div class="who"><b>' + esc(t.name) + '</b>' +
+      '<span class="sub">' + esc([fmtRange(t.start, t.end), t.location].filter(Boolean).join(' · ')) + '</span>' +
+      '<span class="sub">' + esc(sum(t)) + '</span></div>' +
+      '<div class="row-actions"><button type="button" data-use="' + i + '">Use</button><button type="button" class="ghost small" data-edit="' + i + '">Edit</button><button type="button" class="ghost small" data-del="' + i + '">Delete</button></div></div>').join('');
+  $('tNew').onclick = () => editEvent(null, null, { id: uid(), name: '', start: '', end: '', location: '', notes: '', jobs: [S('Volunteer', 4)], isNew: true });
+  $('view').querySelectorAll('[data-use]').forEach(b => b.onclick = () => useTemplate(list[Number(b.dataset.use)]));
+  $('view').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editEvent(null, null, list[Number(b.dataset.edit)]));
+  $('view').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    const t = list[Number(b.dataset.del)];
+    if (!confirm('Delete the template “' + t.name + '”? Events already made from it stay.')) return;
+    data.settings.eventTemplates = list.filter(x => x !== t); window.save(); viewTemplates();
+  });
+}
+function useTemplate(t) {
+  openModal('<h2>' + esc(t.name) + '</h2>' +
+    '<label>Event name<input id="uName" value="' + esc(t.name.replace(/\s*\((Friday|Thursday|Monday|Saturday|Tuesday night)\)$/, '')) + '" placeholder="RHS vs. Lake Hamilton"></label>' +
+    '<p class="helper">Tip: put the opponent in the name, like “RHS vs. Lake Hamilton”.</p>' +
+    '<div class="grid3"><label>Date<input id="uDate" type="date" value="' + today() + '"></label><label>Starts<input id="uStart" type="time" value="' + esc(t.start) + '"></label><label>Ends<input id="uEnd" type="time" value="' + esc(t.end) + '"></label></div>' +
+    '<div class="row-actions"><button type="button" id="uGo">Add event</button><button type="button" class="ghost" id="uCancel">Cancel</button></div>');
+  $('uCancel').onclick = closeModal;
+  $('uGo').onclick = () => {
+    const name = $('uName').value.trim(), date = $('uDate').value;
+    if (!name || !date) { toast('Give the event a name and date.'); return; }
+    const ev = { id: uid(), name, date, start: $('uStart').value, end: $('uEnd').value, location: t.location || '', notes: t.notes || '', isPublic: true };
+    data.events.push(ev);
+    t.jobs.forEach((j, i) => data.jobs.push({ id: uid(), eventId: ev.id, role: j.role, need: j.need, start: j.start || '', end: j.end || '', sort: i, kind: j.kind || 'shift', note: j.note || '', dropDate: j.kind === 'food' ? date : '' }));
+    window.save(); closeModal(); location.hash = 'event/' + ev.id; toast(name + ' added. Tap Edit event to change anything.');
+  };
+}
 
 // ---------- Events ----------
 function eventCounts(ev) {
@@ -319,7 +412,7 @@ function viewEvents() {
   $('view').innerHTML =
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') + quickLinks() +
     (nextGame() ? '<div class="row-actions"><button type="button" id="docNext">📄 Send next game to sign-in sheet <small>(' + esc(fmtDate(nextGame().date)) + ')</small></button>' + (data.settings.signinDoc ? '<a class="button ghost" href="' + esc(data.settings.signinDoc) + '" target="_blank" rel="noopener">Open sign-in sheet</a>' : '') + '</div>' : '') +
-    '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
+    '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><a class="button ghost" href="#templates">📋 New from template</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
     (data.events.length || !signedIn() ? '' : '<div class="empty"><h2>Welcome!</h2><p>Add an event and the jobs you need filled, then share your sign-up link or QR code.</p></div>') +
     (up.length ? '<h2>Coming up</h2>' + up.map(eventCard).join('') : (data.events.length ? '<p class="helper">No upcoming events. Import sign-ups or add one.</p>' : '')) +
     (past.length ? '<details class="past"><summary>Past events (' + past.length + ')</summary>' + past.map(eventCard).join('') + '</details>' : '');
@@ -329,15 +422,15 @@ function viewEvents() {
 }
 
 const EVENT_IDEAS = ['Football game concessions', 'Marching competition', 'Home game – stands help', 'Uniform fitting', 'Chaperones', 'Fundraiser', 'Band camp', 'Concert', 'Pit crew / equipment'];
-function editEvent(id, copyFrom) {
+function editEvent(id, copyFrom, tpl) {
   const src = copyFrom ? event(copyFrom) : null;
-  const ev = id ? event(id) : { name: src ? src.name : '', date: src ? '' : today(), start: src ? src.start : '', end: src ? src.end : '', location: src ? src.location : '', notes: src ? src.notes : '', isPublic: true };
+  const ev = tpl ? { name: tpl.name, date: '', start: tpl.start, end: tpl.end, location: tpl.location, notes: tpl.notes, isPublic: true } : id ? event(id) : { name: src ? src.name : '', date: src ? '' : today(), start: src ? src.start : '', end: src ? src.end : '', location: src ? src.location : '', notes: src ? src.notes : '', isPublic: true };
   // Work on a copy of the jobs so Cancel leaves them alone.
-  let jobs = (id ? jobsFor(id) : src ? jobsFor(src.id).map(j => Object.assign({}, j, { id: null, dropDate: '' })) : [{ role: 'Concession Stand', need: 10, start: '', end: '' }]).map(j => Object.assign({}, j));
-  openModal('<h2>' + (id ? 'Edit event' : src ? 'Copy of ' + esc(src.name) : 'New event') + '</h2>' +
+  let jobs = (tpl ? tpl.jobs : id ? jobsFor(id) : src ? jobsFor(src.id).map(j => Object.assign({}, j, { id: null, dropDate: '' })) : [{ role: 'Concession Stand', need: 10, start: '', end: '' }]).map(j => Object.assign({}, j));
+  openModal('<h2>' + (tpl ? (tpl.isNew ? 'New template' : 'Edit template') : id ? 'Edit event' : src ? 'Copy of ' + esc(src.name) : 'New event') + '</h2>' +
     '<label>Event<input id="evName" list="evIdeas" value="' + esc(ev.name) + '" placeholder="RHS vs. Lake Hamilton"></label>' +
     '<datalist id="evIdeas">' + EVENT_IDEAS.map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
-    '<div class="grid3"><label>Date<input id="evDate" type="date" value="' + esc(ev.date) + '"></label>' +
+    '<div class="grid3"><label' + (tpl ? ' hidden' : '') + '>Date<input id="evDate" type="date" value="' + esc(ev.date) + '"></label>' +
     '<label>Starts<input id="evStart" type="time" value="' + esc(ev.start) + '"></label>' +
     '<label>Ends<input id="evEnd" type="time" value="' + esc(ev.end) + '"></label></div>' +
     '<label>Where<input id="evLoc" value="' + esc(ev.location) + '" placeholder="Cyclone Stadium Concession Stand"></label>' +
@@ -346,9 +439,9 @@ function editEvent(id, copyFrom) {
     '<button type="button" class="ghost small" id="evAddJob">+ Add a job</button>' +
     '<h3>🍪 Food &amp; supplies needed</h3><p class="helper">Each item, how many people you need to bring one, and where or when to drop it off.</p><div id="evFood"></div>' +
     '<button type="button" class="ghost small" id="evAddFood">+ Add a food item</button>' +
-    '<label class="check"><input type="checkbox" id="evPublic"' + (ev.isPublic !== false ? ' checked' : '') + '> Show on the sign-up page</label>' +
-    '<div class="row-actions"><button type="button" id="evSave">Save</button><button type="button" class="ghost" id="evCancel">Cancel</button>' +
-    (id ? '<button type="button" class="ghost" id="evCopy">Copy to a new date</button><button type="button" class="danger" id="evDel">Delete</button>' : '') + '</div>');
+    '<label class="check"' + (tpl ? ' hidden' : '') + '><input type="checkbox" id="evPublic"' + (ev.isPublic !== false ? ' checked' : '') + '> Show on the sign-up page</label>' +
+    '<div class="row-actions"><button type="button" id="evSave">Save' + (tpl ? ' template' : '') + '</button><button type="button" class="ghost" id="evCancel">Cancel</button>' +
+    (id ? '<button type="button" class="ghost" id="evCopy">Copy to a new date</button><button type="button" class="ghost" id="evTpl">Save as template</button><button type="button" class="danger" id="evDel">Delete</button>' : '') + '</div>');
   const readJobs = () => document.querySelectorAll('#evJobs .jobrow, #evFood .jobrow').forEach(row => {
     const j = jobs[Number(row.dataset.i)], q = c => row.querySelector(c);
     Object.assign(j, { role: q('.jRole').value.trim(), need: Math.max(0, Number(q('.jNeed').value) || 0) });
@@ -380,11 +473,19 @@ function editEvent(id, copyFrom) {
   $('evAddJob').onclick = () => { readJobs(); jobs.push({ role: '', need: 1, start: '', end: '', kind: 'shift' }); drawJobs(); };
   $('evAddFood').onclick = () => { readJobs(); jobs.push({ role: '', need: 1, start: '', end: '', kind: 'food', note: '', dropDate: $('evDate').value }); drawJobs(); };
   $('evCancel').onclick = closeModal;
+  const plainJobs = () => jobs.map(j => ({ role: j.role, need: j.need, start: j.start || '', end: j.end || '', kind: j.kind || 'shift', note: j.note || '' }));
   $('evSave').onclick = () => {
     readJobs();
     const name = $('evName').value.trim(), date = $('evDate').value;
-    if (!name || !date) { toast('Give the event a name and date.'); return; }
     if (jobs.some(j => !j.role)) { toast('Give each job a name, or remove it.'); return; }
+    if (tpl) {
+      if (!name) { toast('Give the template a name.'); return; }
+      Object.assign(tpl, { name, start: $('evStart').value, end: $('evEnd').value, location: $('evLoc').value.trim(), notes: $('evNotes').value.trim(), jobs: plainJobs() });
+      const list = data.settings.eventTemplates = data.settings.eventTemplates || [];
+      if (tpl.isNew) { delete tpl.isNew; list.push(tpl); }
+      data.settings.eventTemplates = list.slice(); window.save(); closeModal(); viewTemplates(); return;
+    }
+    if (!name || !date) { toast('Give the event a name and date.'); return; }
     Object.assign(ev, { name, date, start: $('evStart').value, end: $('evEnd').value, location: $('evLoc').value.trim(), notes: $('evNotes').value.trim(), isPublic: $('evPublic').checked });
     if (!id) { ev.id = uid(); data.events.push(ev); }
     const keep = new Set(jobs.filter(j => j.id).map(j => j.id));
@@ -400,6 +501,11 @@ function editEvent(id, copyFrom) {
     if (!id) location.hash = 'event/' + ev.id; else route();
   };
   if (id) $('evCopy').onclick = () => { closeModal(); editEvent(null, id); };
+  if (id) $('evTpl').onclick = () => {
+    readJobs();
+    const t = { id: uid(), name: $('evName').value.trim() || ev.name, start: $('evStart').value, end: $('evEnd').value, location: $('evLoc').value.trim(), notes: $('evNotes').value.trim(), jobs: plainJobs() };
+    data.settings.eventTemplates = (data.settings.eventTemplates || []).concat([t]); window.save(); toast('Saved as a template. Find it under Events → New from template.');
+  };
   if (id) $('evDel').onclick = () => {
     if (!confirm('Delete ' + ev.name + ' and its ' + slotsFor(id).length + ' sign-ups? People stay in your People list.')) return;
     data.events = data.events.filter(e => e.id !== id);
