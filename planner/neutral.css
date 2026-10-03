@@ -471,3 +471,26 @@ body.dropping #view { outline: 3px dashed var(--sage); outline-offset: -8px; bor
 .wkrow2 { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; }
 .wkrow2 > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .wkrow2 select { margin: 0; }
+/* ATU · SNA Snack Closet */
+.snasum { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 64px; z-index: 5; }
+.snasum h2 { margin: 0; }
+.snasum .over { color: #b0645a; font-weight: 600; }
+.snarow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
+.snarow.on { background: linear-gradient(90deg, var(--sage-soft), transparent 70%); border-radius: 10px; }
+.snainfo { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; }
+.snainfo a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.snainfo small { color: var(--muted); font-size: 12px; }
+.snanums { display: flex; gap: 8px; align-items: flex-end; flex: none; }
+.snanums label { display: flex; flex-direction: column; font-size: 11px; color: var(--muted); margin: 0; }
+.snanums input { width: 52px; margin: 0; padding: 6px; text-align: center; }
+.ordq { display: flex; align-items: center; gap: 4px; }
+.ordq b { min-width: 20px; text-align: center; font-size: 1.05rem; color: var(--ink); }
+.ordq .small { padding: 2px 9px; min-height: 30px; }
+.budget { display: flex; align-items: center; gap: 4px; font-size: 13px; margin: 0; }
+.budget input { width: 80px; margin: 0; }
+table.snaform { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; }
+table.snaform th, table.snaform td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; }
+table.snaform td:first-child, table.snaform td:nth-child(n+4), table.snaform th:nth-child(n+4) { text-align: right; white-space: nowrap; }
+table.snaform td:first-child { text-align: center; font-weight: 700; }
+table.snaform tfoot td { border-top: 2px solid var(--ink); border-bottom: 0; }
+@media print { .snaprint { font-size: 11pt; } .snaprint table.snaform { font-size: 10.5pt; } }
