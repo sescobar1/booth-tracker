@@ -145,7 +145,8 @@
   const sb = window.supabase.createClient(P.url, P.key, { auth: { storageKey: (CFG.storageKey || 'plannerApp') + 'Auth', persistSession: true, autoRefreshToken: true } });
   const $ = id => document.getElementById(id), app = $('app');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  const photoUrl = p => P.url + '/storage/v1/object/public/' + BUCKET + '/' + p.split('/').map(encodeURIComponent).join('/');
+  // Uploaded photos live in the recipes bucket; card photos added with the website are plain paths like cards/x.jpg.
+  const photoUrl = p => /^(https?:|cards\/)/.test(p) ? p : P.url + '/storage/v1/object/public/' + BUCKET + '/' + p.split('/').map(encodeURIComponent).join('/');
   const lines = s => String(s || '').split('\n').map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean);
   let user = null, book = { title: 'Family Recipes', folders: [], recipes: [] }, share = null, cat = 'All', q = '';
   function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); }
@@ -442,7 +443,7 @@
         const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), folders: book.folders.map(f => f.id).filter(x => chosen.has(x)), photos: out, updated_at: new Date().toISOString() };
         const res = r ? await sb.from('family_recipes').update(row).eq('id', r.id).select().single() : await sb.from('family_recipes').insert(row).select().single();
         if (res.error) throw res.error;
-        if (removed.length) await sb.storage.from(BUCKET).remove(removed);
+        const gone = removed.filter(x => !/^(https?:|cards\/)/.test(x)); if (gone.length) await sb.storage.from(BUCKET).remove(gone);
         await load(); location.hash = '#' + res.data.id; route(); toast('✓ Saved');
       } catch (e) { toast('Couldn’t save: ' + (e.message || e)); btn.disabled = false; btn.textContent = 'Save recipe'; }
     };
@@ -450,7 +451,7 @@
       if (!confirm('Delete ' + r.title + ' and its photos?')) return;
       const { error } = await sb.from('family_recipes').delete().eq('id', r.id);
       if (error) return toast(error.message);
-      const paths = (r.photos || []).map(p => p.path).filter(Boolean); if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+      const paths = (r.photos || []).map(p => p.path).filter(x => x && !/^(https?:|cards\/)/.test(x)); if (paths.length) await sb.storage.from(BUCKET).remove(paths);
       await load(); location.hash = ''; list(); toast('Deleted');
     };
   }
