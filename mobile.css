@@ -388,3 +388,19 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .buy-cheaper>summary::-webkit-details-marker{display:none}
 .buy-cheaper[open]>summary{margin-bottom:8px}
 .cheaper-body{border:1px solid #e3e9ec;border-radius:12px;padding:10px 12px;background:#fbfcfd}
+/* My tasks on the Home screen */
+.mytasks{border-top:1px solid #edf1f2;margin-top:6px;padding:4px 0 8px}
+.mytask-add{display:flex;gap:8px;margin:6px 0 8px}
+.mytask-add input{flex:1;min-width:0;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.mytask-add .button{padding:8px 14px}
+.mytask-mic{font-size:1.2rem;width:44px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+.mytask-mic.on{background:#fde2e2;border-color:#e57373;animation:mtpulse 1s infinite}
+@keyframes mtpulse{50%{transform:scale(1.08)}}
+.mytask{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #edf1f2;cursor:pointer}
+.mytask input{width:24px;height:24px;flex:none;accent-color:var(--green);margin:0}
+.mytask span{flex:1;min-width:0}
+.mytask.done span{text-decoration:line-through;color:#8a979e}
+.mytask-x{border:0;background:none;color:#9aa6ac;font-size:1rem;padding:4px 6px;cursor:pointer}
+.mytask-donehead{display:flex;justify-content:space-between;align-items:center;color:#64747d;font-size:.9rem;padding:10px 0 2px}
+.mytask-donehead .linkish{border:0;background:none;color:var(--green);font:inherit;font-size:.9rem;cursor:pointer;text-decoration:underline}
+.mytask-empty{color:#64747d;margin:4px 0 6px}
