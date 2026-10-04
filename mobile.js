@@ -661,7 +661,35 @@
   }
 
   // ---------- to-do & reminders ----------
+  // Shaana's own tasks (typed or spoken) live in data.tasks so they sync with everything else.
+  let lastNeed = [];
+  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function myTasksHtml() {
+    const list = data.tasks || [], open = list.filter(x => !x.done), done = list.filter(x => x.done);
+    const row = x => '<label class="mytask' + (x.done ? ' done' : '') + '"><input type="checkbox" data-mytask="' + x.id + '"' + (x.done ? ' checked' : '') + '><span>' + esc(x.t) + '</span><button type="button" class="mytask-x" data-mytask-del="' + x.id + '" aria-label="Delete ' + esc(x.t) + '">✕</button></label>';
+    return '<div class="mytasks"><h3>My tasks</h3><form class="mytask-add" id="myTaskForm"><input id="myTaskText" placeholder="Add a task…" autocomplete="off" enterkeyhint="done">' +
+      (Speech ? '<button type="button" class="mytask-mic" id="myTaskMic" aria-label="Say a task">🎤</button>' : '') + '<button class="button" type="submit">Add</button></form>' +
+      (list.length ? open.map(row).join('') + (done.length ? '<div class="mytask-donehead"><span>Done (' + done.length + ')</span><button type="button" class="linkish" id="myTaskClear">Clear done</button></div>' + done.map(row).join('') : '') : '<p class="mytask-empty">Nothing yet. Type a task above' + (Speech ? ' or tap 🎤 and say it' : '') + '.</p>') + '</div>';
+  }
+  function wireMyTasks() {
+    const redraw = () => { renderTodo(lastNeed); };
+    const addTask = t => { t = String(t || '').trim(); if (!t) return; (data.tasks = data.tasks || []).unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: t.charAt(0).toUpperCase() + t.slice(1), done: false, at: todayIso() }); save(); redraw(); setTimeout(() => $('myTaskText') && $('myTaskText').focus(), 30); };
+    $('myTaskForm').onsubmit = e => { e.preventDefault(); addTask($('myTaskText').value); };
+    document.querySelectorAll('[data-mytask]').forEach(c => c.onchange = () => { const x = data.tasks.find(y => y.id === c.dataset.mytask); if (!x) return; x.done = c.checked; x.doneAt = c.checked ? todayIso() : null; save(); setTimeout(redraw, c.checked ? 350 : 0); });
+    document.querySelectorAll('[data-mytask-del]').forEach(b => b.onclick = e => { e.preventDefault(); data.tasks = data.tasks.filter(y => y.id !== b.dataset.mytaskDel); save(); redraw(); });
+    if ($('myTaskClear')) $('myTaskClear').onclick = () => { data.tasks = data.tasks.filter(y => !y.done); save(); redraw(); };
+    if ($('myTaskMic')) $('myTaskMic').onclick = () => {
+      const mic = $('myTaskMic'), rec = new Speech();
+      rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1;
+      mic.classList.add('on'); $('myTaskText').placeholder = 'Listening…';
+      rec.onresult = e => { const r = e.results[e.results.length - 1]; $('myTaskText').value = r[0].transcript; if (r.isFinal) { rec.stop(); addTask(r[0].transcript); } };
+      rec.onerror = e => { toast(e.error === 'not-allowed' ? 'Allow the microphone to speak tasks.' : 'I didn’t catch that. Try again.'); };
+      rec.onend = () => { const m = $('myTaskMic'); if (m) m.classList.remove('on'); const i = $('myTaskText'); if (i) i.placeholder = 'Add a task…'; };
+      try { rec.start(); } catch (err) { rec.onend(); }
+    };
+  }
   function renderTodo(need) {
+    lastNeed = need || [];
     const items = [], relicAge = daysSince(data.lastRelicImport), backupAge = daysSince(data.lastBackup);
     if (relicAge >= (Number(data.settings.relicEvery) || 7)) items.push(['Import your latest ' + STORE_SHORT + ' sales', data.lastRelicImport ? 'Last import ' + relicAge + ' days ago' : 'Not imported here yet', 'relic', 'Import']);
     if (backupAge >= 1) { items.push(['Back up to OneDrive', data.lastBackup ? 'Last backup ' + (backupAge === 1 ? 'yesterday' : backupAge + ' days ago') : 'No backup yet. Your data lives only on this phone', 'backup', 'Back up']); prepareBackup(); }
@@ -676,7 +704,8 @@
     if (need.length) items.push([need.length + ' item' + (need.length === 1 ? '' : 's') + ' to restock', need.filter(x => x.status === 'out').length + ' out of stock', 'restock', 'View']);
     $('todo').innerHTML = '<section class="todo" aria-labelledby="todoTitle"><h3 id="todoTitle">To do</h3>' + (items.length ?
       items.map(([t, s, task, btn]) => '<div class="todo-item"><div><b>' + esc(t) + '</b><small>' + esc(s) + '</small></div><button type="button" class="button" data-task="' + task + '">' + btn + '</button></div>').join('') :
-      '<div class="todo-done">You\'re all caught up.</div>') + '</section>';
+      '<div class="todo-done">You\'re all caught up.</div>') + myTasksHtml() + '</section>';
+    wireMyTasks();
   }
   function runTask(t) {
     if (t === 'relic') go('settings');
