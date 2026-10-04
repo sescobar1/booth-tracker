@@ -35,6 +35,8 @@
     .chips::-webkit-scrollbar { display: none; }
     .chip { flex: none; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-weight: 500; font-size: 15px; }
     .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .rcwrap { display: flex; flex-direction: column; gap: 6px; }
+    .fpick { padding: 7px 10px; font-size: 14px; border-radius: 10px; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
     .rc { background: var(--card); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); cursor: pointer; text-align: left; padding: 0; color: inherit; display: block; text-decoration: none; width: 100%; font-weight: 400; }
     .rc .pic { aspect-ratio: 4 / 3; background: var(--accent-soft) center / cover no-repeat; display: grid; place-items: center; font-size: 2.6rem; }
@@ -214,6 +216,7 @@
       $('fEdit').onclick = () => folderForm(f, () => folderView(book.folders.find(x => x.id === f.id)));
       $('fPick').onclick = () => pickRecipes(f);
     }
+    wireFolderPicks(() => folderView(f));
   }
   // Check off which recipes belong in a folder, all at once.
   function pickRecipes(f) {
@@ -234,7 +237,20 @@
       box.remove(); await load(); folderView(f); toast('✓ Folder updated');
     };
   }
-  const recipeCard = r => '<a class="rc" href="#' + r.id + '"><div class="pic"' + (r.photos && r.photos[0] ? ' style="background-image:url(\'' + esc(photoUrl(r.photos[0].path)) + '\')">' : '>' + (ICON[sectionOf(r)] || '🍽')) + '</div><div class="txt"><b>' + esc(r.title) + '</b><small>' + esc([r.from ? 'From ' + r.from : '', r.servings ? 'Serves ' + r.servings.replace(/^serves\s*/i, '') : ''].filter(Boolean).join(' · ')) + '</small></div></a>';
+  // Each recipe card; Shaana also gets a folder drop-down under it (pick a folder to put it in or take it out).
+  const recipeCard = r => '<div class="rcwrap">' + '<a class="rc" href="#' + r.id + '"><div class="pic"' + (r.photos && r.photos[0] ? ' style="background-image:url(\'' + esc(photoUrl(r.photos[0].path)) + '\')">' : '>' + (ICON[sectionOf(r)] || '🍽')) + '</div><div class="txt"><b>' + esc(r.title) + '</b><small>' + esc([r.from ? 'From ' + r.from : '', r.servings ? 'Serves ' + r.servings.replace(/^serves\s*/i, '') : ''].filter(Boolean).join(' · ')) + '</small></div></a>' + (owner() && book.folders.length ? '<select class="fpick noprint" data-fpick="' + r.id + '" aria-label="Folders for ' + esc(r.title) + '"><option value="">📁 ' + ((r.folders || []).length ? book.folders.filter(f => inFolder(r, f)).map(f => f.icon + ' ' + f.name).join(', ') : 'Add to a folder…') + '</option>' + book.folders.map(f => '<option value="' + f.id + '">' + (inFolder(r, f) ? '✓ ' : '＋ ') + f.icon + ' ' + esc(f.name) + (inFolder(r, f) ? ' (tap to remove)' : '') + '</option>').join('') + '</select>' : '') + '</div>';
+  function wireFolderPicks(redraw) {
+    app.querySelectorAll('[data-fpick]').forEach(sel => sel.onchange = async () => {
+      const r = book.recipes.find(x => x.id === sel.dataset.fpick), fid = sel.value; if (!r || !fid) return;
+      const f = book.folders.find(x => x.id === fid), has = inFolder(r, f);
+      const folders = has ? r.folders.filter(x => x !== fid) : (r.folders || []).concat(fid);
+      sel.disabled = true;
+      const { error } = await sb.from('family_recipes').update({ folders }).eq('id', r.id);
+      if (error) { sel.disabled = false; sel.value = ''; return toast(error.message); }
+      r.folders = folders; toast(has ? 'Removed from ' + f.name : '✓ Added to ' + f.name);
+      const y = window.scrollY; redraw(); window.scrollTo(0, y);
+    });
+  }
 
   function route() {
     const id = decodeURIComponent(location.hash.slice(1));
@@ -266,6 +282,7 @@
     if ($('q')) $('q').oninput = e => { q = e.target.value; const pos = e.target.selectionStart; list(); $('q').focus(); $('q').setSelectionRange(pos, pos); };
     app.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { cat = b.dataset.cat; list(); });
     if ($('fNew')) $('fNew').onclick = () => folderForm(null, () => list());
+    wireFolderPicks(list);
     if (owner()) {
       $('shCopy').onclick = async () => { try { await navigator.clipboard.writeText(shareLink()); toast('Link copied'); } catch (e) { prompt('Copy this link:', shareLink()); } };
       $('shShare').onclick = async () => { const text = 'Here’s our family recipe book 🍽💛 ' + shareLink(); if (navigator.share) { try { await navigator.share({ title: book.title, text: 'Here’s our family recipe book 🍽💛', url: shareLink() }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text); };
