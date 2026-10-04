@@ -157,12 +157,12 @@
     if (token) {
       const { data, error } = await sb.rpc('family_recipes_book', { p_token: token });
       if (error || !data) { app.innerHTML = '<div class="empty"><h1>🍽</h1><p>This recipe link doesn’t work. Ask for a new one.</p></div>'; return false; }
-      book = data; book.folders = book.folders || []; return true;
+      book = data; book.folders = []; return true;
     }
     const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
     if (error) { toast(error.message); return false; }
     share = sh;
-    book = { title: (sh && sh.title) || 'Family Recipes', folders: (sh && sh.folders) || [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at })) };
+    book = { title: (sh && sh.title) || 'Family Recipes', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at })) };
     book.recipes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     return true;
   }
@@ -267,12 +267,13 @@
     const cats = CATS.filter(c => book.recipes.some(r => sectionOf(r) === c));
     const card = recipeCard;
     const folders = book.folders.filter(f => owner() || book.recipes.some(r => inFolder(r, f)));
-    const folderRow = folders.length || owner() ? '<h2 class="secth">📁 Folders</h2><div class="folders">' + folders.map(f => { const n = book.recipes.filter(r => inFolder(r, f)).length; return '<a class="folder" href="#folder/' + f.id + '"><span class="fi">' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + n + ' recipe' + (n === 1 ? '' : 's') + '</small></a>'; }).join('') + (owner() ? '<button type="button" class="folder add noprint" id="fNew"><span class="fi">＋</span><b>New folder</b><small>Grandma’s, Christmas…</small></button>' : '') + '</div>' : '';
+    const folderRow = folders.length ? '<h2 class="secth">📁 Folders</h2><div class="folders">' + folders.map(f => { const n = book.recipes.filter(r => inFolder(r, f)).length; return '<a class="folder" href="#folder/' + f.id + '"><span class="fi">' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + n + ' recipe' + (n === 1 ? '' : 's') + '</small></a>'; }).join('') + (owner() ? '<button type="button" class="folder add noprint" id="fNew"><span class="fi">＋</span><b>New folder</b><small>Grandma’s, Christmas…</small></button>' : '') + '</div>' : '';
     // Like a cookbook: one section after another, unless searching or one section is picked.
     const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="grid">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="grid">' + rs.map(card).join('') + '</div>';
     app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
+      (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' : '') +
       (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see the recipes and photos (they can’t change anything).</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
-      (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' +
+      (book.recipes.length ?
         (!q && cat === 'All' ? folderRow : '') +
         (cats.length > 1 ? '<div class="chips">' + ['All'].concat(cats).map(c => '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + (ICON[c] ? ICON[c] + ' ' : '') + esc(c) + '</button>').join('') + '</div>' : '') +
         body
@@ -403,7 +404,6 @@
       '<p class="hint" style="margin-top:14px">Tap <b>✨ Type it out for me</b> above and the recipe fills itself in from the photos. Check it over and fix anything it misread.</p>' +
       '<label for="eI">Ingredients (one per line)</label><textarea id="eI" rows="6" placeholder="2 cups flour&#10;1 tsp salt">' + esc(r ? r.ingredients : '') + '</textarea>' +
       '<label for="eS">Directions (one step per line)</label><textarea id="eS" rows="6">' + esc(r ? r.steps : '') + '</textarea>' +
-      '<label>Folders</label><div class="chips wrap" id="eFolders"></div>' +
       '<label for="eN">Notes / memories</label><textarea id="eN" rows="3" placeholder="We make this every Christmas Eve…">' + esc(r ? r.notes : '') + '</textarea>' +
       '<div class="actions"><button type="button" id="save">Save recipe</button>' + (r ? '<button type="button" class="danger" id="del">Delete</button>' : '') + '</div></div>';
     window.scrollTo(0, 0);
@@ -413,13 +413,6 @@
       $('thumbs').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const [p] = pics.splice(+b.dataset.x, 1); if (p.path) removed.push(p.path); draw(); });
       $('thumbs').querySelectorAll('[data-l]').forEach(b => b.onclick = () => { const k = +b.dataset.l; [pics[k - 1], pics[k]] = [pics[k], pics[k - 1]]; draw(); });
     };
-    let chosen = new Set(r ? r.folders || [] : inFolderId ? [inFolderId] : []);
-    const drawFolders = () => {
-      $('eFolders').innerHTML = book.folders.map(f => '<button type="button" class="chip' + (chosen.has(f.id) ? ' on' : '') + '" data-f="' + f.id + '">' + (chosen.has(f.id) ? '✓ ' : '') + f.icon + ' ' + esc(f.name) + '</button>').join('') + '<button type="button" class="chip" id="eFNew">＋ New folder</button>';
-      $('eFolders').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { chosen.has(b.dataset.f) ? chosen.delete(b.dataset.f) : chosen.add(b.dataset.f); drawFolders(); });
-      $('eFNew').onclick = () => folderForm(null, f => { chosen.add(f.id); drawFolders(); });
-    };
-    drawFolders();
     const typed = () => ['eI', 'eS'].some(k => $(k).value.trim());
     const add = files => { [...files].forEach(f => pics.push({ file: f, preview: URL.createObjectURL(f) })); draw(); if (!r && !typed() && pics.length) readPhotos(); };
     const readPhotos = async () => {
@@ -457,7 +450,7 @@
           p.path = path; out.push({ path, w, h });
         }
         btn.textContent = 'Saving…';
-        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), folders: book.folders.map(f => f.id).filter(x => chosen.has(x)), photos: out, updated_at: new Date().toISOString() };
+        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), folders: r ? r.folders || [] : [], photos: out, updated_at: new Date().toISOString() };
         const res = r ? await sb.from('family_recipes').update(row).eq('id', r.id).select().single() : await sb.from('family_recipes').insert(row).select().single();
         if (res.error) throw res.error;
         const gone = removed.filter(x => !/^(https?:|cards\/)/.test(x)); if (gone.length) await sb.storage.from(BUCKET).remove(gone);
