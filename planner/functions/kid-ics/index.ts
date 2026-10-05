@@ -2,9 +2,11 @@
 //  - their daily reminders (repeat every day, alert at the time),
 //  - quick reminders Shaana sends them ("pick up Cece", "football game"), alert 30 minutes before and at the time,
 //  - matching events from Shaana's connected calendars (for Salvador: his work and Shaana's work), alert the night before.
-//  - for a link with a filter (Cece: only her events and work days), the planner and calendar events that match it.
+//  - for a link with a filter (Cece: her events and work days; Eli: his events, music, and Saturday football),
+//    the planner and calendar events that match it,
+//  - with period tracking on, a heads-up a couple of days before the next expected period.
 // Changes show up on their own when the phone refreshes the calendar.
-// With &list=1 it answers with the next 3 weeks of matching events as JSON, for the "Coming up" list on the page.
+// With &list=1 it answers with matching events as JSON (next 3 weeks, or &from=&to= up to 62 days) for the page's calendar.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -16,7 +18,14 @@ const ymd = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: TZID }).fo
 const alarm = (text: string, trig: string) => ['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc(text), 'TRIGGER:' + trig, 'END:VALARM'];
 
 // Copy matching events out of an .ics feed, renamed and with our own alert.
-function matching(ics: string, rules: { m: string; as: string }[], today: string, horizon: string, tzSeen: Set<string>, out: string[], tzOut: string[]) {
+type Rule = { m: string; as: string; dow?: number[] };
+// The event's start day where the family lives (a 7pm game is "20261011T000000Z", still Saturday here).
+function localStart(ev: string) {
+  const v = (ev.match(/\nDTSTART[^:\n]*:([0-9TZ]+)/) || [])[1] || '';
+  const t = /Z$/.test(v) ? icsTime(v) : v.replace(/^(\d{4})(\d{2})(\d{2}).*/, '$1-$2-$3');
+  return t.slice(0, 10);
+}
+function matching(ics: string, rules: Rule[], today: string, horizon: string, tzSeen: Set<string>, out: string[], tzOut: string[]) {
   const text = ics.replace(/\r?\n[ \t]/g, '');
   for (const tz of text.match(/BEGIN:VTIMEZONE[\s\S]*?END:VTIMEZONE/g) || []) {
     const id = (tz.match(/TZID:([^\r\n]+)/) || [])[1];
@@ -24,7 +33,8 @@ function matching(ics: string, rules: { m: string; as: string }[], today: string
   }
   for (const ev of text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || []) {
     const title = unesc(((ev.match(/\nSUMMARY[^:\n]*:([^\r\n]*)/) || [])[1] || '').trim());
-    const rule = rules.find((r) => new RegExp(r.m, 'i').test(title)); if (!rule) continue;
+    const day = localStart(ev);
+    const rule = rules.find((r) => new RegExp(r.m, 'i').test(title) && (!r.dow || r.dow.includes(new Date(day + 'T12:00').getDay()))); if (!rule) continue;
     const start = (ev.match(/\nDTSTART[^:\n]*:(\d{8})/) || [])[1] || '', rr = (ev.match(/\nRRULE:([^\r\n]*)/) || [])[1] || '';
     const until = (rr.match(/UNTIL=(\d{8})/) || [])[1], recId = (ev.match(/\nRECURRENCE-ID[^:\n]*:(\d{8})/) || [])[1];
     const keep = rr ? !until || until >= today : (recId || start) >= today && (recId || start) <= horizon;
@@ -133,13 +143,30 @@ function occurrences(events: Ev[], from: string, to: string) {
   });
   return out;
 }
+// Period days logged on the page → the next expected start (average cycle, 28 days until there are two periods logged).
+const daysBetween = (a: string, b: string) => Math.round((new Date(b + 'T12:00').getTime() - new Date(a + 'T12:00').getTime()) / 864e5);
+function periodPlan(days: string[], today: string) {
+  const set = new Set(days), starts = [...set].sort().filter((d) => !set.has(addDays(d, -1)));
+  if (!starts.length) return null;
+  const lens = starts.map((st) => { let n = 0; while (set.has(addDays(st, n))) n++; return n; });
+  const gaps: number[] = []; for (let i = 1; i < starts.length; i++) { const g = daysBetween(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
+  const avg = (a: number[]) => a.reduce((t, x) => t + x, 0) / a.length;
+  const cycle = gaps.length ? Math.round(avg(gaps.slice(-6))) : 28, ended = lens.filter((n, i) => addDays(starts[i], n) <= today), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
+  let next = addDays(starts[starts.length - 1], cycle);
+  while (addDays(next, len) <= today) next = addDays(next, cycle);
+  return { cycle, len, next };
+}
 const jsonHead = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' };
 
 Deno.serve(async (req) => {
   const params = new URL(req.url).searchParams, token = params.get('t') || '';
-  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx').eq('token', token).maybeSingle();
+  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx,show_days,period,period_days').eq('token', token).maybeSingle();
   if (!k || token.length < 20) return new Response('Not found', { status: 404 });
-  const show = k.show_rx ? new RegExp(k.show_rx, 'i') : null;
+  const rx = k.show_rx ? new RegExp(k.show_rx, 'i') : null, byDay: Rule[] = k.show_days || [];
+  const filtered = !!rx || byDay.length > 0;
+  // Same test as kid_shows() in the database.
+  const shows = (title: string, list: string, notes: string, date: string) => !filtered || (rx && rx.test((title || '') + ' ' + (list || ''))) ||
+    byDay.some((r) => new RegExp(r.m, 'i').test(title || '') && (r.dow || []).includes(new Date(date + 'T12:00').getDay())) || (notes || '').includes('Added by ' + k.name);
   const feedsOf = async () => {
     const { data: st } = await admin.from('planner_settings').select('data').eq('owner', k.owner).maybeSingle();
     const cals = ((st?.data?.settings?.calendars) || []).filter((c: { on?: boolean; url?: string }) => c.on !== false && c.url);
@@ -147,12 +174,14 @@ Deno.serve(async (req) => {
   };
   // The page's "Coming up" list: planner events plus calendar events that match the link's filter.
   if (params.get('list')) {
-    if (!show) return new Response(JSON.stringify({ events: null }), { headers: jsonHead });
-    const from = chicago(new Date()).slice(0, 10), to = addDays(from, 21);
+    const now = chicago(new Date()).slice(0, 10), okDay = (d: string | null) => d && /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const from = okDay(params.get('from')) ? params.get('from')! : now;
+    let to = okDay(params.get('to')) ? params.get('to')! : addDays(from, 21);
+    if (to < from || daysBetween(from, to) > 62) to = addDays(from, 62);
     const { data: items } = await admin.from('planner_items').select('title,date,start_time,end_time,all_day,location,list,id,repeat,notes').eq('owner', k.owner).eq('kind', 'event').gte('date', from).lte('date', to);
-    const out = (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && (show.test(i.title || '') || (i.notes || '').includes('Added by ' + k.name)))
+    const out = (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && shows(i.title, i.list, i.notes, i.date))
       .map((i) => ({ title: i.title, date: i.date, start: i.start_time || '', end: i.end_time || '', allDay: !!i.all_day, location: i.location || '' }));
-    for (const ics of await feedsOf()) out.push(...occurrences(parseIcs(ics), from, to).filter((e: Ev) => show.test(e.title)));
+    if (filtered) for (const ics of await feedsOf()) out.push(...occurrences(parseIcs(ics), from, to).filter((e: Ev) => shows(e.title, '', '', e.date)));
     const seen = new Set<string>();
     const events = out.filter((e) => { const key = e.date + e.start + e.title.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
       .sort((a, b) => (a.date + (a.start || '')).localeCompare(b.date + (b.start || '')));
@@ -166,24 +195,34 @@ Deno.serve(async (req) => {
     events.push('BEGIN:VEVENT', 'UID:kidrem-' + token.slice(0, 10) + '-' + i + '@family-planner', 'DTSTAMP:' + stamp, 'DTSTART;TZID=' + TZID + ':' + day + 'T' + hm + '00',
       'DURATION:PT10M', 'RRULE:FREQ=DAILY', 'SUMMARY:' + esc(r.t), 'TRANSP:TRANSPARENT', ...alarm(r.t, 'PT0M'), 'END:VEVENT');
   });
-  (k.pings || []).filter((p: { date: string }) => p.date.replace(/-/g, '') >= yest).forEach((p: { id: string; t: string; date: string; at?: string; from?: string }) => {
+  (k.pings || []).filter((p: { date: string }) => p.date.replace(/-/g, '') >= yest).forEach((p: { id: string; t: string; date: string; at?: string; from?: string; alerts?: string[] }) => {
     const d = p.date.replace(/-/g, ''), title = p.t + (p.from ? ' (from ' + p.from + ')' : '');
     events.push('BEGIN:VEVENT', 'UID:ping-' + p.id + '@family-planner', 'DTSTAMP:' + stamp,
-      ...(p.at ? ['DTSTART;TZID=' + TZID + ':' + d + 'T' + p.at.replace(':', '') + '00', 'DURATION:PT30M', 'SUMMARY:' + esc(title), ...alarm(title, '-PT30M'), ...alarm(title, 'PT0M')]
+      ...(p.at ? ['DTSTART;TZID=' + TZID + ':' + d + 'T' + p.at.replace(':', '') + '00', 'DURATION:PT30M', 'SUMMARY:' + esc(title), ...(p.alerts || ['-PT30M', 'PT0M']).flatMap((a) => alarm(title, a))]
         : ['DTSTART;VALUE=DATE:' + d, 'DURATION:P1D', 'SUMMARY:' + esc(title), ...alarm(title, 'PT7H')]), 'END:VEVENT');
   });
-  const rules = [...(k.cal_rules || []), ...(k.show_rx ? [{ m: k.show_rx, as: '{title}' }] : [])];
+  const rules: Rule[] = [...(k.cal_rules || []), ...(k.show_rx ? [{ m: k.show_rx, as: '{title}' }] : []), ...byDay.map((r) => ({ m: r.m, as: '{title}', dow: r.dow }))];
   if (rules.length) (await feedsOf()).forEach((ics) => matching(ics, rules, day, horizon, tzSeen, events, tzs));
   // Planner events that match the filter (Cece's own events), with a heads-up before.
-  if (show) {
+  if (filtered) {
     const from = day.slice(0, 4) + '-' + day.slice(4, 6) + '-' + day.slice(6), to = horizon.slice(0, 4) + '-' + horizon.slice(4, 6) + '-' + horizon.slice(6);
     const { data: items } = await admin.from('planner_items').select('id,title,date,start_time,end_time,all_day,list,repeat,notes').eq('owner', k.owner).eq('kind', 'event').gte('date', from).lte('date', to);
-    (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && (show.test(i.title || '') || (i.notes || '').includes('Added by ' + k.name))).forEach((i) => {
+    (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && shows(i.title, i.list, i.notes, i.date)).forEach((i) => {
       const d = i.date.replace(/-/g, ''), timed = !i.all_day && i.start_time;
       events.push('BEGIN:VEVENT', 'UID:fam-item-' + i.id + '@family-planner', 'DTSTAMP:' + stamp,
         ...(timed ? ['DTSTART;TZID=' + TZID + ':' + d + 'T' + i.start_time.replace(':', '') + '00', i.end_time ? 'DTEND;TZID=' + TZID + ':' + d + 'T' + i.end_time.replace(':', '') + '00' : 'DURATION:PT1H']
           : ['DTSTART;VALUE=DATE:' + d, 'DURATION:P1D']), 'SUMMARY:' + esc(i.title), ...alarm(i.title, timed ? '-PT60M' : '-PT4H'), 'END:VEVENT');
     });
+  }
+  // A quiet heads-up two days before the next expected period.
+  if (k.period) {
+    const today = chicago(now).slice(0, 10), plan = periodPlan(k.period_days || [], today);
+    const warn = plan && addDays(plan.next, -2);
+    if (warn && warn >= today) {
+      const t = '🌸 Heads-up: your period may start in about 2 days';
+      events.push('BEGIN:VEVENT', 'UID:period-' + token.slice(0, 10) + '-' + warn + '@family-planner', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + warn.replace(/-/g, ''), 'DURATION:P1D',
+        'SUMMARY:' + esc(t), 'TRANSP:TRANSPARENT', ...alarm(t, 'PT8H'), 'END:VEVENT');
+    }
   }
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Family Planner//Reminders//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + esc(k.name + '’s reminders'),
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H', TZ, ...tzs, ...events, 'END:VCALENDAR'];
