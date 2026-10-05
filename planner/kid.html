@@ -25,7 +25,7 @@
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin: 12px 0; }
     h2 { font-size: .95rem; margin: 2px 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
     label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
-    input, textarea { width: 100%; font: inherit; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+    input, textarea, select { width: 100%; font: inherit; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 500; }
     .check input { width: 20px; height: 20px; }
@@ -92,6 +92,9 @@
     .dayp h3 { margin: 12px 0 4px; font-size: 1rem; }
     .pbtn { margin-top: 10px; width: 100%; border: 2px solid #e58fb0; background: none; color: inherit; border-radius: 999px; padding: 11px; font: inherit; font-weight: 700; }
     .pbtn.on { background: #f7c6d6; color: #5a1f35; border-color: #f7c6d6; }
+    .pbig { display: block; width: 100%; margin-top: 12px; border: 0; border-radius: 999px; padding: 15px; font: inherit; font-weight: 700; font-size: 1.05rem; background: #e0648f; color: #fff; }
+    .pbig.end { background: var(--sage); }
+    .pcard .link { color: inherit; }
     .pcard { background: #fff0f5; border-color: #f7c6d6; color: #5a1f35; }
     .pcard h2 { color: #b23a6b; }
     @media (prefers-color-scheme: dark) { .pcard { background: #3a2530; border-color: #6b3a52; color: #f7d9e4; } .pcard h2 { color: #f2a6c3; } .grid button.per { background: #7a3554; color: #fff; } }
@@ -160,6 +163,12 @@
     let dayNo = 0; if (set.has(today)) { let d = today; while (set.has(addDays(d, -1))) d = addDays(d, -1); dayNo = daysBetween(d, today) + 1; }
     return { cycle, len, next, predicted, dayNo };
   }
+  // While a period is "started" and not ended yet, every day from the start through today counts.
+  const perDays = () => {
+    const days = [...(info.periodDays || [])], open = info.periodOpen;
+    if (open && open <= today) for (let d = open, i = 0; d <= today && i < 10; d = addDays(d, 1), i++) days.push(d);
+    return days;
+  };
   const eventsOn = d => (monthEvents[d.slice(0, 7)] || info.events || []).filter(e => e.date === d || (e.endDate && e.date <= d && e.endDate >= d));
   async function loadMonth(ym) {
     if (monthEvents[ym]) return;
@@ -171,7 +180,7 @@
   }
   function calHtml() {
     const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), last = new Date(y, m, 0).getDate();
-    const per = new Set(info.period ? info.periodDays || [] : []), plan = info.period ? periodPlan(info.periodDays || []) : null;
+    const per = new Set(info.period ? perDays() : []), plan = info.period ? periodPlan(perDays()) : null;
     let cells = '';
     for (let i = 0; i < first.getDay(); i++) cells += '<button type="button" class="out" tabindex="-1"></button>';
     for (let d = 1; d <= last; d++) {
@@ -187,15 +196,29 @@
       (sel.length ? sel.map(e => '<div class="row"><b>' + (e.allDay || !e.start ? 'All day' : niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted" style="margin:4px 0">Nothing that day.</p>') +
       (info.period ? '<button type="button" class="pbtn' + (per.has(selDay) ? ' on' : '') + '" id="perT">' + (per.has(selDay) ? '🌸 Period day ✓ (tap to remove)' : '🌸 Mark as a period day') + '</button>' : '') + '</div>';
   }
+  let perOther = '';   // 'start' or 'end' while picking another day
   function periodHtml() {
     if (!info.period) return '';
-    const plan = periodPlan(info.periodDays || []);
-    const line = !plan ? 'Start by marking the days of your last period on the calendar below. It will guess when the next one comes.'
-      : plan.dayNo ? 'Today is <b>day ' + plan.dayNo + '</b> of your period.' + ' Next one expected around <b>' + esc(niceDate(plan.next > today ? plan.next : addDays(plan.next, plan.cycle))) + '</b>.'
+    const plan = periodPlan(perDays()), open = info.periodOpen;
+    const line = open ? 'Your period started <b>' + esc(niceDate(open)) + '</b>' + (plan && plan.dayNo ? ' · today is <b>day ' + plan.dayNo + '</b>' : '') + '.'
+      : !plan ? 'Tap <b>Period started</b> the day it starts, and <b>Period ended</b> the day it stops. It will guess when the next one comes.'
       : 'Next period expected around <b>' + esc(niceDate(plan.next)) + '</b>' + (daysBetween(today, plan.next) > 0 ? ' (in ' + daysBetween(today, plan.next) + ' day' + (daysBetween(today, plan.next) === 1 ? '' : 's') + ')' : ' (any day now)') + '.';
+    const act = open ? 'end' : 'start';
     return '<div class="card pcard"><h2>🌸 Period tracker</h2><p style="margin:0">' + line + '</p>' +
-      (plan ? '<p style="margin:6px 0 0;font-size:14px">Usual cycle: ' + plan.cycle + ' days · usually lasts ' + plan.len + ' days</p>' : '') +
-      '<p style="margin:6px 0 0;font-size:14px">Tap a day, then 🌸 to mark it. The more you mark, the better the guess. If pop-ups are on, your phone gives you a heads-up 2 days before.</p></div>';
+      (plan && !open ? '<p style="margin:6px 0 0;font-size:14px">Usual cycle: ' + plan.cycle + ' days · usually lasts ' + plan.len + ' days</p>' : '') +
+      '<button type="button" class="pbig ' + act + '" data-per="' + act + '">' + (open ? '✅ My period ended today' : '🌸 My period started today') + '</button>' +
+      (perOther ? '<div class="two" style="margin-top:8px"><input type="date" id="perDay" max="' + today + '" value="' + (perOther === 'end' && open ? (open > addDays(today, -1) ? open : addDays(today, -1)) : addDays(today, -1)) + '"' + (open ? ' min="' + open + '"' : '') + '><button type="button" class="go" style="margin:0" data-per-day="' + act + '">Save</button></div>'
+        : '<button type="button" class="link" data-per-other="' + act + '" style="font-size:14px">' + (open ? 'It ended on another day' : 'It started on another day') + '</button>') +
+      '<p style="margin:6px 0 0;font-size:14px">You can also tap any day on the calendar and use 🌸 to fix it. If pop-ups are on, your phone gives you a heads-up 2 days before the next one.</p></div>';
+  }
+  async function periodAction(action, day) {
+    try {
+      const r = await rpc('kid_period', { p_token: token, p_action: action, p_day: day });
+      info.periodDays = r.days; info.periodOpen = r.open; perOther = '';
+      const pc = app.querySelector('.pcard'); if (pc) pc.outerHTML = periodHtml();
+      if ($('cal')) $('cal').innerHTML = calHtml();
+      toast(action === 'start' ? '🌸 Saved. Tap “ended” when it stops.' : '✅ Saved. The days in between are filled in.');
+    } catch (e) { toast('Couldn’t save. Try again.'); }
   }
   // Daily reminders: anyone with the link can add, change or delete them. Checkboxes are for today.
   // The phone pops them up through a calendar subscription, which picks up changes on its own.
@@ -241,6 +264,10 @@
     (ios ? '<ol><li>Open this link in <b>Safari</b>.</li><li>Tap the <b>Share</b> button <span class="ico">⬆︎</span> (bottom of the screen on iPhone, top on iPad).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>'
       : '<ol><li>Open this link in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>') + '</div>';
 
+  // Who an event is for: just me (default), everyone, or one other person in the family.
+  const FAMILY = [['Eli', 'Elisha'], ['Cece', 'Cece'], ['Shaana', 'Shaana'], ['Salvador', 'Salvador']];
+  const whoOpts = () => '<option value="' + esc(info.name) + '">Just me</option><option value="everyone">👪 Everyone</option>' +
+    FAMILY.filter(([v]) => v !== info.name).map(([v, l]) => '<option value="' + v + '">Just ' + (v === 'Shaana' && info.tell === 'Mom' ? 'Mom' : l) + '</option>').join('');
   const upHtml = () => '<h2>Coming up</h2>' + (info.events.length ? info.events.map(e => '<div class="row"><b>' + esc(niceDate(e.date)) + (e.endDate ? '<br>– ' + esc(niceDate(e.endDate)) : '') + (e.allDay || !e.start ? '' : '<br>' + niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">Nothing on the calendar for the next 3 weeks.</p>');
   // A link with a filter (only Cece's events and work days) also lists matching events from the family calendars.
   async function loadUpcoming() {
@@ -265,6 +292,7 @@
         '<label for="d">Day</label><input id="d" type="date" required min="' + today + '" value="' + (selDay >= today ? selDay : today) + '">' +
         '<label class="check"><input type="checkbox" id="ad"> All day</label>' +
         '<div class="two" id="times"><div><label for="s">Starts</label><input id="s" type="time"></div><div><label for="e">Ends</label><input id="e" type="time"></div></div>' +
+        '<label for="w">Whose calendar?</label><select id="w">' + whoOpts() + '</select>' +
         '<label for="n">Anything else? (where, need a ride…)</label><textarea id="n" rows="2" maxlength="500"></textarea>' +
         '<button class="go">Add to the calendar</button></form>' +
         '<div class="card" id="up">' + upHtml() + '</div>'
@@ -289,6 +317,12 @@
     if (rf) rf.onsubmit = e => { e.preventDefault(); const x = { t: $('remT').value.trim(), at: $('remAt').value }; if (!x.t || !x.at) return; const l = (info.reminders || []).slice(); if (remEdit === 'new') l.push(x); else l[remEdit] = x; saveRems(l); };
     if (app.querySelector('.bday:not(.other)')) confetti();
     if ($('hsX')) $('hsX').onclick = () => { store.set('hsHide', '1'); draw(); };
+    app.onclick = e => {
+      const b = e.target.closest('[data-per]'), o = e.target.closest('[data-per-other]'), sv = e.target.closest('[data-per-day]');
+      if (b) periodAction(b.dataset.per, today);
+      else if (o) { perOther = o.dataset.perOther; app.querySelector('.pcard').outerHTML = periodHtml(); }
+      else if (sv) { const d = $('perDay').value; if (d) periodAction(sv.dataset.perDay, d); }
+    };
     if ($('cal')) {
       loadMonth(calMonth);
       $('cal').onclick = async e => {
@@ -307,8 +341,8 @@
     $('f').onsubmit = async e => {
       e.preventDefault();
       const btn = app.querySelector('.go'), title = $('t').value.trim(); if (!title) return;
-      const body = { p_token: token, p_kind: tab, p_title: title, p_notes: $('n').value.trim() };
-      if (tab === 'event') Object.assign(body, { p_date: $('d').value, p_start: $('ad').checked ? '' : $('s').value, p_end: $('ad').checked ? '' : $('e').value });
+      const body = { p_token: token, p_kind: tab, p_title: title, p_notes: $('n').value.trim(), p_date: null, p_start: '', p_end: '', p_list: '', p_for: '' };
+      if (tab === 'event') Object.assign(body, { p_date: $('d').value, p_start: $('ad').checked ? '' : $('s').value, p_end: $('ad').checked ? '' : $('e').value, p_for: $('w').value });
       else body.p_list = aisleOf(title);
       btn.disabled = true; btn.textContent = 'Adding…';
       try {

@@ -271,7 +271,7 @@ function agenda(from, to) {
   const out = [];
   data.items.filter(i => (i.kind === 'event' && !i.id.startsWith('medrem-')) || (i.kind === 'task' && i.date)).forEach(i => itemDates(i, from, to).forEach(d => {
     const span = i.endDate && i.endDate > i.date ? Math.round((new Date(i.endDate) - new Date(i.date)) / 864e5) : 0;
-    out.push({ src: 'planner', id: i.id, kind: i.kind, listName: i.list, driver: i.driver, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.kind === 'task' ? (i.list ? pastel(i.list)[0] : '#c9b8ff') : (i.color || COLORS[0]), list: i.list, priority: i.priority });
+    out.push({ src: 'planner', id: i.id, kind: i.kind, listName: i.list, driver: i.driver, who: i.who, date: d, endDate: span ? addDays(d, span) : d, start: i.allDay ? '' : i.start, end: i.allDay ? '' : i.end, allDay: i.kind === 'task' || i.allDay || !i.start, title: i.title, location: i.location, notes: i.notes, done: i.done, color: i.kind === 'task' ? (i.list ? pastel(i.list)[0] : '#c9b8ff') : (i.color || COLORS[0]), list: i.list, priority: i.priority });
   }));
   S().calendars.filter(c => c.on !== false).forEach(c => {
     const got = cache.get('cal_' + c.id); if (!got) return;
@@ -290,7 +290,7 @@ function entryRow(e) {
   const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.kind === 'task' ? (e.list || 'Task') : '';
   const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '"' + (e.listName ? ' style="--lc:' + pastel(e.listName)[0] + '"' : '') + '>' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
   const open = e.src === 'planner' ? ' data-item="' + e.id + '"' : e.link ? ' data-link="' + esc(e.link) + '"' : ' data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
-  return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, drv, src].filter(Boolean).join(' · ')) + '</span></div></div>';
+  return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, drv, whoLabel(e.who), src].filter(Boolean).join(' · ')) + '</span></div></div>';
 }
 function wireRows(root) {
   root.querySelectorAll('[data-done]').forEach(b => b.onclick = ev => {
@@ -772,6 +772,10 @@ function viewTasks() {
   if ($('tClear')) $('tClear').onclick = () => { if (!confirm('Delete ' + done.length + ' done tasks?')) return; const ids = new Set(done.map(i => i.id)); data.items = data.items.filter(i => !ids.has(i.id)); window.save(); viewTasks(); };
 }
 
+// Whose calendar an event goes on: the family links show it to everyone, only one person, or (Auto) by each link's own rules.
+const WHO = [['', 'Auto'], ['everyone', '👪 Everyone'], ['Eli', 'Elisha'], ['Cece', 'Cece'], ['Shaana', 'Shaana'], ['Salvador', 'Salvador']];
+const whoLabel = w => w === 'everyone' ? '👪 Everyone' : w ? '👤 Just ' + (w === 'Eli' ? 'Elisha' : w) : '';
+
 // ---------- Add / edit an event or task ----------
 function editItem(id, preset) {
   const it = id ? data.items.find(i => i.id === id) : Object.assign({ kind: 'event', title: '', date: today(), endDate: null, start: '', end: '', allDay: false, done: false, list: '', priority: 0, notes: '', location: '', repeat: '', color: '' }, preset || {});
@@ -793,6 +797,8 @@ function editItem(id, preset) {
     '<div class="grid2"><label>Repeats<select id="iRepeat">' + Object.entries(REPEATS).map(([k, l]) => '<option value="' + k + '"' + (it.repeat === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
     '<label>List<select id="iList"><option value="">—</option>' + S().lists.map(l => '<option' + (l === it.list ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label></div>' +
     '<label class="ev-only">Where<input id="iLoc" value="' + esc(it.location) + '" placeholder="Address or place"></label>' +
+    '<p class="lbl ev-only">Whose calendar</p><div class="segs ev-only" id="iWho">' + WHO.map(([v, l]) => '<button type="button" class="seg' + ((it.who || '') === v ? ' on' : '') + '" data-who="' + v + '">' + l + '</button>').join('') + '</div>' +
+    '<p class="helper ev-only">Auto: each family link decides by the event name (Eli, Cece, work, games…).</p>' +
     '<div class="grid2"><label class="ev-only">Who’s driving<input id="iDriver" list="drivers" value="' + esc(it.driver || '') + '" placeholder="Me, Salvador, carpool…"></label>' +
     '<label>Remind me<select id="iRemind"></select></label></div><datalist id="drivers">' + [...new Set(data.items.map(i => i.driver).filter(Boolean).concat(['Me']))].map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
     '<label class="task-only check"><input type="checkbox" id="iPri"' + (it.priority >= 2 ? ' checked' : '') + '> ❗ Important</label>' +
@@ -803,7 +809,8 @@ function editItem(id, preset) {
     '<label class="button ghost small file">Attach a file<input type="file" id="iFile" hidden></label><p class="helper" id="iFileNote"></p>' +
     (id && kind === 'event' ? '<p class="lbl">Put it on another calendar</p><div class="row-actions"><a class="button ghost small" target="_blank" rel="noopener" href="' + esc(googleLink(it)) + '">Google</a><a class="button ghost small" target="_blank" rel="noopener" href="' + esc(outlookLink(it)) + '">Outlook</a><button type="button" class="ghost small" id="iIcs">iPhone / .ics</button></div>' : '') +
     '<div class="row-actions"><button type="button" id="iSave">Save</button><button type="button" class="ghost" id="iCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="iDel">Delete</button>' : '') + '</div>');
-  let color = it.color || COLORS[0], pending = null;
+  let color = it.color || COLORS[0], pending = null, who = it.who || '';
+  $('iWho').querySelectorAll('[data-who]').forEach(b => b.onclick = () => { who = b.dataset.who; $('iWho').querySelectorAll('[data-who]').forEach(x => x.classList.toggle('on', x === b)); });
   const sync = () => {
     document.querySelectorAll('#modalBody .ev-only').forEach(x => { x.hidden = kind !== 'event'; });
     document.querySelectorAll('#modalBody .task-only').forEach(x => { x.hidden = kind !== 'task'; });
@@ -831,7 +838,7 @@ function editItem(id, preset) {
     if (kind === 'event' && !$('iDate').value) { toast('Pick the date.'); return; }
     if (pending && !signedIn()) { toast('Sign in (More) to attach files.'); return; }
     const allDay = kind === 'task' || $('iAllDay').checked || !$('iStart').value;
-    Object.assign(it, { kind, title, date: $('iDate').value || null, endDate: kind === 'event' && $('iEndDate').value > $('iDate').value ? $('iEndDate').value : null, allDay, start: allDay ? '' : $('iStart').value, end: allDay ? '' : $('iEnd').value, repeat: $('iRepeat').value, list: $('iList').value, location: $('iLoc').value.trim(), priority: $('iPri').checked ? 2 : 0, notes: $('iNotes').value, color: kind === 'event' ? color : '', driver: kind === 'event' ? $('iDriver').value.trim() : '', remind: $('iRemind').value === '' ? null : Number($('iRemind').value) });
+    Object.assign(it, { kind, title, date: $('iDate').value || null, endDate: kind === 'event' && $('iEndDate').value > $('iDate').value ? $('iEndDate').value : null, allDay, start: allDay ? '' : $('iStart').value, end: allDay ? '' : $('iEnd').value, repeat: $('iRepeat').value, list: $('iList').value, location: $('iLoc').value.trim(), priority: $('iPri').checked ? 2 : 0, notes: $('iNotes').value, color: kind === 'event' ? color : '', driver: kind === 'event' ? $('iDriver').value.trim() : '', who: kind === 'event' ? who : '', remind: $('iRemind').value === '' ? null : Number($('iRemind').value) });
     if (!id) { it.id = uid(); it.done = false; it.sort = 0; data.items.push(it); }
     if (!id && kind === 'event' && $('iStar') && $('iStar').checked) saveQuick({ title, allDay, start: it.start, end: it.end, location: it.location, color: it.color, driver: it.driver, list: it.list, remind: it.remind });
     if (pending) {

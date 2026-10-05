@@ -160,13 +160,13 @@ const jsonHead = { 'Content-Type': 'application/json', 'Cache-Control': 'no-stor
 
 Deno.serve(async (req) => {
   const params = new URL(req.url).searchParams, token = params.get('t') || '';
-  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx,show_days,period,period_days').eq('token', token).maybeSingle();
+  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx,show_days,period,period_days,period_open').eq('token', token).maybeSingle();
   if (!k || token.length < 20) return new Response('Not found', { status: 404 });
   const rx = k.show_rx ? new RegExp(k.show_rx, 'i') : null, byDay: Rule[] = k.show_days || [];
   const filtered = !!rx || byDay.length > 0;
   // Same test as kid_shows() in the database.
-  const shows = (title: string, list: string, notes: string, date: string) => !filtered || (rx && rx.test((title || '') + ' ' + (list || ''))) ||
-    byDay.some((r) => new RegExp(r.m, 'i').test(title || '') && (r.dow || []).includes(new Date(date + 'T12:00').getDay())) || (notes || '').includes('Added by ' + k.name);
+  const shows = (title: string, list: string, notes: string, date: string, forWho = '') => forWho === 'everyone' || forWho === k.name || (!forWho && (!filtered || (rx && rx.test((title || '') + ' ' + (list || ''))) ||
+    byDay.some((r) => new RegExp(r.m, 'i').test(title || '') && (r.dow || []).includes(new Date(date + 'T12:00').getDay())) || (notes || '').includes('Added by ' + k.name)));
   const feedsOf = async () => {
     const { data: st } = await admin.from('planner_settings').select('data').eq('owner', k.owner).maybeSingle();
     const cals = ((st?.data?.settings?.calendars) || []).filter((c: { on?: boolean; url?: string }) => c.on !== false && c.url);
@@ -178,8 +178,8 @@ Deno.serve(async (req) => {
     const from = okDay(params.get('from')) ? params.get('from')! : now;
     let to = okDay(params.get('to')) ? params.get('to')! : addDays(from, 21);
     if (to < from || daysBetween(from, to) > 62) to = addDays(from, 62);
-    const { data: items } = await admin.from('planner_items').select('title,date,start_time,end_time,all_day,location,list,id,repeat,notes').eq('owner', k.owner).eq('kind', 'event').gte('date', from).lte('date', to);
-    const out = (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && shows(i.title, i.list, i.notes, i.date))
+    const { data: items } = await admin.from('planner_items').select('title,date,start_time,end_time,all_day,location,list,id,repeat,notes,for_who').eq('owner', k.owner).eq('kind', 'event').gte('date', from).lte('date', to);
+    const out = (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && shows(i.title, i.list, i.notes, i.date, i.for_who))
       .map((i) => ({ title: i.title, date: i.date, start: i.start_time || '', end: i.end_time || '', allDay: !!i.all_day, location: i.location || '' }));
     if (filtered) for (const ics of await feedsOf()) out.push(...occurrences(parseIcs(ics), from, to).filter((e: Ev) => shows(e.title, '', '', e.date)));
     const seen = new Set<string>();
@@ -203,11 +203,12 @@ Deno.serve(async (req) => {
   });
   const rules: Rule[] = [...(k.cal_rules || []), ...(k.show_rx ? [{ m: k.show_rx, as: '{title}' }] : []), ...byDay.map((r) => ({ m: r.m, as: '{title}', dow: r.dow }))];
   if (rules.length) (await feedsOf()).forEach((ics) => matching(ics, rules, day, horizon, tzSeen, events, tzs));
-  // Planner events that match the filter (Cece's own events), with a heads-up before.
-  if (filtered) {
+  // Planner events for this person, with a heads-up before: the filter's matches (Cece's own events), and events
+  // marked "Everyone" or "Just <name>" (for every link, including ones without a filter).
+  {
     const from = day.slice(0, 4) + '-' + day.slice(4, 6) + '-' + day.slice(6), to = horizon.slice(0, 4) + '-' + horizon.slice(4, 6) + '-' + horizon.slice(6);
-    const { data: items } = await admin.from('planner_items').select('id,title,date,start_time,end_time,all_day,list,repeat,notes').eq('owner', k.owner).eq('kind', 'event').gte('date', from).lte('date', to);
-    (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && shows(i.title, i.list, i.notes, i.date)).forEach((i) => {
+    const { data: items } = await admin.from('planner_items').select('id,title,date,start_time,end_time,all_day,list,repeat,notes,for_who').eq('owner', k.owner).eq('kind', 'event').gte('date', from).lte('date', to);
+    (items || []).filter((i) => !i.repeat && !/^medrem-/.test(i.id) && i.list !== 'Medicine' && (filtered ? shows(i.title, i.list, i.notes, i.date, i.for_who) : i.for_who === 'everyone' || i.for_who === k.name)).forEach((i) => {
       const d = i.date.replace(/-/g, ''), timed = !i.all_day && i.start_time;
       events.push('BEGIN:VEVENT', 'UID:fam-item-' + i.id + '@family-planner', 'DTSTAMP:' + stamp,
         ...(timed ? ['DTSTART;TZID=' + TZID + ':' + d + 'T' + i.start_time.replace(':', '') + '00', i.end_time ? 'DTEND;TZID=' + TZID + ':' + d + 'T' + i.end_time.replace(':', '') + '00' : 'DURATION:PT1H']
@@ -216,7 +217,9 @@ Deno.serve(async (req) => {
   }
   // A quiet heads-up two days before the next expected period.
   if (k.period) {
-    const today = chicago(now).slice(0, 10), plan = periodPlan(k.period_days || [], today);
+    const today = chicago(now).slice(0, 10), open = k.period_open && k.period_open <= today ? k.period_open : '';
+    const days = [...(k.period_days || [])]; if (open) for (let d = open, i = 0; d <= today && i < 10; d = addDays(d, 1), i++) days.push(d);
+    const plan = periodPlan(days, today);
     const warn = plan && addDays(plan.next, -2);
     if (warn && warn >= today) {
       const t = '🌸 Heads-up: your period may start in about 2 days';
