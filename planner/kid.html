@@ -159,10 +159,19 @@
     (ios ? '<ol><li>Open this link in <b>Safari</b>.</li><li>Tap the <b>Share</b> button <span class="ico">⬆︎</span> (bottom of the screen on iPhone, top on iPad).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>'
       : '<ol><li>Open this link in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>') + '</div>';
 
+  const upHtml = () => '<h2>Coming up</h2>' + (info.events.length ? info.events.map(e => '<div class="row"><b>' + esc(niceDate(e.date)) + (e.endDate ? '<br>– ' + esc(niceDate(e.endDate)) : '') + (e.allDay || !e.start ? '' : '<br>' + niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">Nothing on the calendar for the next 3 weeks.</p>');
+  // A link with a filter (only Cece's events and work days) also lists matching events from the family calendars.
+  async function loadUpcoming() {
+    if (!info.filtered) return;
+    try {
+      const r = await fetch(icsUrl() + '&list=1').then(x => x.json());
+      if (r && Array.isArray(r.events)) { info.events = r.events; if ($('up')) $('up').innerHTML = upHtml(); }
+    } catch (e) {}
+  }
   async function load() {
     try { info = await rpc('kid_info', { p_token: token }); } catch (e) { info = null; }
     if (!info) { app.innerHTML = '<div class="msg"><h1>🙈</h1><p>This link doesn’t work. Ask for a new one.</p></div>'; return; }
-    draw();
+    draw(); loadUpcoming();
   }
   function draw() {
     document.title = info.name + '’s Family Planner';
@@ -175,7 +184,7 @@
         '<div class="two" id="times"><div><label for="s">Starts</label><input id="s" type="time"></div><div><label for="e">Ends</label><input id="e" type="time"></div></div>' +
         '<label for="n">Anything else? (where, need a ride…)</label><textarea id="n" rows="2" maxlength="500"></textarea>' +
         '<button class="go">Add to the calendar</button></form>' +
-        '<div class="card"><h2>Coming up</h2>' + (info.events.length ? info.events.map(e => '<div class="row"><b>' + esc(niceDate(e.date)) + (e.allDay || !e.start ? '' : '<br>' + niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">Nothing on the calendar for the next 3 weeks.</p>') + '</div>'
+        '<div class="card" id="up">' + upHtml() + '</div>'
       :
         '<form class="card" id="f"><label for="t">What do we need?</label><input id="t" required maxlength="120" placeholder="Goldfish crackers, shampoo…" autocomplete="off">' +
         '<label for="n">Details (optional)</label><input id="n" maxlength="200" placeholder="the big box, strawberry kind…">' +
@@ -209,7 +218,7 @@
         const r = await rpc('kid_add', body);
         call('/functions/v1/kid-notify', { token, activity: r.activity }).catch(() => {});
         toast('✓ Added! ' + (info.tell || 'Mom') + ' will see it.');
-        info = await rpc('kid_info', { p_token: token }); draw();
+        info = await rpc('kid_info', { p_token: token }); draw(); loadUpcoming();
       } catch (err) { btn.disabled = false; btn.textContent = tab === 'event' ? 'Add to the calendar' : 'Add to the shopping list'; toast(/date/i.test(err.message) ? 'Pick a day.' : /slow/i.test(err.message) ? 'That’s a lot! Try again later.' : 'Couldn’t add that. Try again.'); }
     };
   }
