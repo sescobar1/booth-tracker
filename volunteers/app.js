@@ -1473,8 +1473,15 @@ function parseSug(text) {
     if (/^©|want no ads|^view plans|^dates (are )?shown|^date$|^location$|^available slot$/i.test(l)) continue;
     const dm = l.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (dm) { ev = { date: dm[3] + '-' + pad(dm[1]) + '-' + pad(dm[2]), start: '', end: '', name: '', location: '', jobs: [] }; events.push(ev); job = null; stage = 'time';
-      const rest = l.slice(dm[0].length).trim(); if (rest) lines.splice(i + 1, 0, rest); continue; }
+      let rest = l.slice(dm[0].length).trim();
+      // One-line style: "10/08/2026 (Thu. 4:15PM - 9:30PM) - RJHS vs. Beebe @Cyclone Stadium Concession Stand"
+      const one = rest.match(/^\(([^)]*)\)\s*[-–—]?\s*(.*)$/);
+      if (one) { (one[1].match(/\d{1,2}(:\d{2})?\s*[ap]\.?m/gi) || []).forEach(t => { if (!ev.start) ev.start = parseTime(t); else if (!ev.end) ev.end = parseTime(t); }); rest = one[2].trim(); }
+      if (rest) lines.splice(i + 1, 0, rest); continue; }
     if (!ev) continue;
+    // One-line style job: "Concession Stand Volunteer (16)" followed by "Name: …Email: …Phone: …" lines.
+    const jm = l.match(/^(.+?)\s*\((\d+)\)$/);
+    if (jm && /^name\s*:/i.test(next)) { job = { role: jm[1].replace(/\s+volunteers?$/i, '').trim() || 'Volunteer', need: Number(jm[2]), filled: 0, people: [], count: true }; ev.jobs.push(job); stage = 'people'; continue; }
     if (SLOTS.test(next)) { const m = next.match(SLOTS); job = { role: l.replace(/\s+volunteers?$/i, '').trim() || 'Volunteer', need: Number(m[2]), filled: Number(m[1]), people: [] }; ev.jobs.push(job); i++; stage = 'people'; continue; }
     if (stage === 'time') {
       const times = l.match(/\d{1,2}(:\d{2})?\s*[ap]\.?m/gi);
@@ -1482,6 +1489,18 @@ function parseSug(text) {
       if (DAYS.test(l)) continue;
       const at = l.split(/\s+@\s*/);
       ev.name = at[0].trim(); ev.location = (at[1] || '').trim(); stage = 'title'; continue;
+    }
+    if (stage === 'people' && job && /^(name|email|phone)\s*:/i.test(l)) {
+      const f = {}; l.replace(/(name|email|phone)\s*:\s*(.*?)(?=(?:name|email|phone)\s*:|$)/gi, (_, k, v) => { f[k.toLowerCase()] = v.trim(); });
+      if ('name' in f) {
+        if (!f.name) continue;   // "Name:Email:Phone:" is an open spot
+        const { first, last } = splitName(f.name.replace(/(\.\.\.|…)$/, ''));
+        job.people.push({ first, last, phone: '', email: '', truncated: /(\.\.\.|…)$/.test(f.name) });
+      }
+      const p = job.people[job.people.length - 1];
+      if (p && f.email && /@/.test(f.email)) p.email = f.email.toLowerCase();
+      if (p && digits(f.phone)) p.phone = digits(f.phone);
+      continue;
     }
     if (stage === 'people' && job) {
       if (PHONE_LINE.test(l) && digits(l)) { const p = job.people[job.people.length - 1]; if (p && !p.phone) p.phone = digits(l); continue; }
@@ -1492,14 +1511,18 @@ function parseSug(text) {
       job.people.push({ first, last, phone: '', truncated });
     }
   }
+  events.forEach(e => e.jobs.forEach(j => { if (j.count) j.filled = j.people.length; }));
   return events.filter(e => e.date);
 }
 // SignUpGenius cuts long names short ("Samantha Mitche..."), so match on phone, then on the start of the name.
 function findSugPerson(x) {
   const d = digits(x.phone);
   if (d) { const hit = data.people.find(p => digits(p.phone) === d); if (hit) return hit; }
-  const f = x.first.toLowerCase(), l = x.last.toLowerCase();
-  return data.people.find(p => (p.first || '').toLowerCase() === f && (x.truncated ? (p.last || '').toLowerCase().startsWith(l) : (p.last || '').toLowerCase() === l)) || null;
+  const f = x.first.toLowerCase(), l = x.last.toLowerCase(), sameFirst = data.people.filter(p => (p.first || '').toLowerCase() === f);
+  // Families often share one email, so email only counts together with the first name.
+  return sameFirst.find(p => (p.last || '').toLowerCase() === l) || (x.email && sameFirst.find(p => (p.email || '').toLowerCase() === x.email)) ||
+    // cut-off names, and small spelling differences at the end ("Mitchell" / "Mitchelle")
+    sameFirst.find(p => { const pl = (p.last || '').toLowerCase(); return pl && l && (pl.startsWith(l) && (x.truncated || l.length >= 4) || l.startsWith(pl) && pl.length >= 4); }) || null;
 }
 let sugPlan = null;
 function planSug(parsed) {
@@ -1570,8 +1593,8 @@ function applySug() {
       job.need = Math.max(pj.pj.need, filledOf(job.id));
       pj.listed.forEach(r => {
         let p = r.p;
-        if (!p) { p = { id: uid(), first: r.x.first, last: r.x.last, phone: r.x.phone, email: '', type: 'adult', parent: '', notes: '' }; data.people.push(p); }
-        else if (r.x.phone) p.phone = r.x.phone;
+        if (!p) { p = { id: uid(), first: r.x.first, last: r.x.last, phone: r.x.phone, email: r.x.email || '', type: 'adult', parent: '', notes: '' }; data.people.push(p); }
+        else { if (r.x.phone) p.phone = r.x.phone; if (r.x.email && !p.email) p.email = r.x.email; }
         if (!data.slots.some(s => s.jobId === job.id && s.personId === p.id)) {
           data.slots.push({ id: uid(), eventId: ev.id, jobId: job.id, personId: p.id, role: job.role, start: '', end: '', source: 'SignUpGenius', inAt: null, outAt: null }); added++;
         }
