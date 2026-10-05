@@ -222,6 +222,7 @@ async function refreshAll(force) {
     for (const c of cals) await refreshCalendar(c, true);
     if (S().showBand !== false) await loadBand();
     if (S().showBills !== false) await loadBills();
+    await loadPeriods();
     giftCheck(); lunchCheck(); carCheck();
   } finally { refreshing = false; }
   route();
@@ -232,6 +233,47 @@ async function loadBand() {
     const { data: rows, error } = await client().from('vol_events').select('id,name,date,start_time,end_time,location').gte('date', addDays(today(), -60));
     if (!error) cache.set('band', { at: Date.now(), rows });
   } catch (e) {}
+}
+// Period days logged on a family link (Cece's), shown on Shaana's calendar: logged days and the next expected ones.
+async function loadPeriods() {
+  try {
+    const { data: rows, error } = await client().from('kid_links').select('name,period_days,period_open').eq('period', true);
+    if (!error) cache.set('periods', { at: Date.now(), rows: rows || [] });
+  } catch (e) {}
+}
+// Same guess as the family page: average cycle (28 days until two periods are logged), usual length from ended periods.
+function periodGuess(days) {
+  const t = today(), set = new Set(days), starts = [...set].sort().filter(d => !set.has(addDays(d, -1)));
+  if (!starts.length) return null;
+  const between = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
+  const lens = starts.map(st => { let n = 0; while (set.has(addDays(st, n))) n++; return n; });
+  const gaps = []; for (let i = 1; i < starts.length; i++) { const g = between(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length, ended = lens.filter((n, i) => addDays(starts[i], n) <= t);
+  const cycle = gaps.length ? Math.round(avg(gaps.slice(-6))) : 28, len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
+  let next = addDays(starts[starts.length - 1], cycle);
+  while (addDays(next, len) <= t) next = addDays(next, cycle);
+  return { cycle, len, next };
+}
+function periodEntries(from, to) {
+  const out = [], p = cache.get('periods'); if (!p) return out;
+  p.rows.forEach(r => {
+    const days = [...(r.period_days || [])];
+    if (r.period_open && r.period_open <= today()) for (let d = r.period_open, i = 0; d <= today() && i < 10; d = addDays(d, 1), i++) days.push(d);
+    const set = new Set(days), color = '#e58fb0';
+    [...set].sort().filter(d => !set.has(addDays(d, -1))).forEach(st => {
+      let end = st; while (set.has(addDays(end, 1))) end = addDays(end, 1);
+      if (end < from || st > to) return;
+      const going = r.period_open && st <= r.period_open && r.period_open <= end;
+      out.push({ src: 'period', date: st, endDate: end, allDay: true, title: '🌸 ' + r.name + ' – period' + (going ? ' (started ' + fmtDate(r.period_open) + ')' : ''), color, location: '', notes: '' });
+    });
+    const g = periodGuess(days);
+    if (g) for (let c = 0; c < 3; c++) {
+      const st = addDays(g.next, c * g.cycle), end = addDays(st, g.len - 1);
+      if (end < from || st > to || set.has(st)) continue;
+      out.push({ src: 'period', date: st, endDate: end, allDay: true, title: '🌸 ' + r.name + ' – period expected', color, location: '', notes: 'A guess from the days ' + r.name + ' marked (usual cycle ' + g.cycle + ' days).' });
+    }
+  });
+  return out;
 }
 async function loadBills() {
   try {
@@ -278,6 +320,7 @@ function agenda(from, to) {
     calendarOccurrences(got.events, from, to).forEach(e => out.push(Object.assign(e, { src: 'cal', cal: c.name, color: c.color })));
   });
   if (S().showBand !== false) { const b = cache.get('band'); if (b) b.rows.filter(e => e.date >= from && e.date <= to).forEach(e => out.push({ src: 'band', date: e.date, endDate: e.date, start: e.start_time || '', end: e.end_time || '', allDay: !e.start_time, title: e.name, location: e.location || '', color: '#b59f83', link: '../volunteers/#event/' + e.id })); }
+  out.push(...periodEntries(from, to));
   if (S().showBills !== false) { const b = cache.get('bills'); if (b) b.recurring.forEach(r => billDates(r, from, to).forEach(d => out.push({ src: 'bill', date: d, endDate: d, allDay: true, title: r.payee + ' ' + (r.type === 'income' ? '+' : '−') + '$' + Number(r.amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }), color: r.type === 'income' ? '#7d9b76' : '#c99a8e', link: '../money/#recurring' }))); }
   return out.sort((a, b) => a.date.localeCompare(b.date) || (a.allDay === b.allDay ? (a.start || '').localeCompare(b.start || '') : a.allDay ? -1 : 1));
 }
@@ -287,7 +330,7 @@ const onDay = (list, d) => list.filter(e => e.date <= d && (e.endDate || e.date)
 function entryRow(e) {
   const when = e.kind === 'task' ? '' : e.allDay ? (e.endDate && e.endDate > e.date ? 'until ' + fmtDate(e.endDate) : 'All day') : fmtTime(e.start) + (e.end ? '–' + fmtTime(e.end) : '');
   const drv = e.driver ? '🚗 ' + e.driver : '';
-  const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.kind === 'task' ? (e.list || 'Task') : '';
+  const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.src === 'period' ? 'Family link' : e.kind === 'task' ? (e.list || 'Task') : '';
   const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '"' + (e.listName ? ' style="--lc:' + pastel(e.listName)[0] + '"' : '') + '>' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
   const open = e.src === 'planner' ? ' data-item="' + e.id + '"' : e.link ? ' data-link="' + esc(e.link) + '"' : ' data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
   return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, drv, whoLabel(e.who), src].filter(Boolean).join(' · ')) + '</span></div></div>';
@@ -738,6 +781,7 @@ function legend() {
   const parts = [[COLORS[0], 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
   if (S().showBand !== false && cache.get('band')) parts.push(['#b59f83', 'Band']);
   if (S().showBills !== false && cache.get('bills')) parts.push(['#c99a8e', 'Bills']);
+  ((cache.get('periods') || {}).rows || []).forEach(r => parts.push(['#e58fb0', r.name + '’s period']));
   return '<p class="helper legend">' + parts.map(([c, n]) => '<span><i style="background:' + esc(c) + '"></i>' + esc(n) + '</span>').join('') + '</p>';
 }
 
