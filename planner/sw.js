@@ -1,5 +1,5 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'planner-v41';
+const CACHE = 'planner-v42';
 const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'planner.css', 'theme.css', 'neutral.css', 'db.js', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -24,4 +24,18 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(hit => hit || caches.match('index.html')))
   );
+});
+
+// Phone alerts (for example when Eli or Cece add something).
+self.addEventListener('push', e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: 'Planner', body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Planner', { body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag, data: { url: d.url || './' } }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const w = list.find(c => c.url.startsWith(self.registration.scope));
+    return w ? w.navigate(url).then(c => c && c.focus()) : clients.openWindow(url);
+  }));
 });

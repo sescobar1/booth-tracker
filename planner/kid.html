@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Family Planner</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f7f4ef">
+  <link rel="icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <style>
+    :root { --bg: #f7f4ef; --card: #fff; --ink: #2b2522; --muted: #8e837b; --line: #e6dfd7; --sage: #7d9b76; --sage-soft: #e7efe4; --accent: #2b2522; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1a18; --card: #2a2623; --ink: #f2ede8; --muted: #a99f97; --line: #3b3531; --sage: #93b28b; --sage-soft: #2f3a2c; --accent: #f2ede8; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+    main { max-width: 600px; margin: 0 auto; padding: 18px 16px 60px; }
+    h1 { font-size: 1.7rem; margin: 6px 0 2px; }
+    .sub { color: var(--muted); margin: 0 0 14px; }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+    .tabs button { font: inherit; font-weight: 600; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+    .tabs button.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin: 12px 0; }
+    h2 { font-size: .95rem; margin: 2px 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+    input, textarea { width: 100%; font: inherit; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 500; }
+    .check input { width: 20px; height: 20px; }
+    .go { width: 100%; margin-top: 14px; background: var(--accent); color: var(--bg); border: 0; border-radius: 999px; padding: 14px; font: inherit; font-weight: 700; }
+    .go:disabled { opacity: .5; }
+    .row { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+    .row:first-of-type { border-top: 0; }
+    .row b { flex: none; min-width: 92px; font-weight: 600; color: var(--muted); font-size: 14px; padding-top: 1px; }
+    .muted { color: var(--muted); }
+    .ok { background: var(--sage-soft); border-color: var(--sage); }
+    .msg { text-align: center; padding: 40px 10px; }
+    #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--accent); color: var(--bg); padding: 11px 18px; border-radius: 14px; max-width: 90%; text-align: center; }
+  </style>
+</head>
+<body>
+<main id="app"><p class="msg">Loading…</p></main>
+<div id="toast" hidden></div>
+<script src="config.js"></script>
+<script>
+(() => {
+  // A link for Eli or Cece: they can add events and shopping items, but can't change or delete anything.
+  const CFG = window.PLANNER_CONFIG, P = CFG.sync, token = new URLSearchParams(location.search).get('t') || '';
+  const $ = id => document.getElementById(id), app = $('app');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const call = async (path, body) => {
+    const r = await fetch(P.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: P.key, Authorization: 'Bearer ' + P.key }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error((j && (j.message || j.error)) || 'Something went wrong');
+    return j;
+  };
+  const rpc = (fn, body) => call('/rest/v1/rpc/' + fn, body);
+  function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2800); }
+  const pad = n => String(n).padStart(2, '0'), iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const today = iso(new Date());
+  const niceDate = d => new Date(d + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const niceTime = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return (h % 12 || 12) + (m ? ':' + pad(m) : '') + (h < 12 ? 'am' : 'pm'); };
+  const AISLES = [
+    ['Produce', /lettuce|tomato|onion|garlic|pepper|potato|carrot|celery|banana|apple|berr|grape|lemon|lime|avocado|cilantro|spinach|broccoli|corn|cucumber|fruit|vegetable|salad|mushroom|zucchini|green bean|orange|herb|parsley|jalape/i],
+    ['Meat & seafood', /beef|chicken|pork|turkey|sausage|bacon|ham|steak|shrimp|fish|salmon|tuna|ground|hot dog|pepperoni|meat/i],
+    ['Dairy & eggs', /milk|cheese|butter|egg|yogurt|cream|sour cream|half.and.half|creamer/i],
+    ['Bakery & bread', /bread|bun|tortilla|roll|bagel|muffin|biscuit|croissant|pita/i],
+    ['Frozen', /frozen|ice cream|pizza|fries|tater|waffle/i],
+    ['Pantry', /rice|pasta|spaghetti|noodle|sauce|bean|soup|broth|stock|flour|sugar|oil|vinegar|spice|seasoning|salt|pepper|cereal|oat|peanut butter|jelly|syrup|can|taco shell|chip|cracker|ketchup|mustard|mayo|dressing|honey|pancake mix|salsa|cookie|snack|granola/i],
+    ['Drinks', /water|soda|juice|coffee|tea|gatorade|drink/i],
+    ['Household', /paper|towel|toilet|soap|detergent|trash|foil|wrap|bag|dish|cleaner|wipes|shampoo|toothpaste|diaper|napkin|plate|cup/i]
+  ];
+  // Canned/boxed things are pantry and "garlic bread" is bakery, so those are checked before produce.
+  const AISLE_CHECK = ['Frozen', 'Bakery & bread', 'Pantry*', 'Meat & seafood', 'Dairy & eggs', 'Produce', 'Pantry', 'Drinks', 'Household'];
+  const PANTRY_FIRST = /goldfish|crackers?|peanut butter|cream of|\bcans?\b|canned|jar|packets?|box(ed)?|seasoning|sauce|\bmix\b|diced|crushed|dried|broth/i;
+  function aisleOf(text) {
+    for (const a of AISLE_CHECK) {
+      if (a === 'Pantry*') { if (PANTRY_FIRST.test(text)) return 'Pantry'; continue; }
+      if (AISLES.find(x => x[0] === a)[1].test(text)) return a;
+    }
+    return 'Other';
+  }
+  let info = null, tab = 'event';
+
+  async function load() {
+    try { info = await rpc('kid_info', { p_token: token }); } catch (e) { info = null; }
+    if (!info) { app.innerHTML = '<div class="msg"><h1>🙈</h1><p>This link doesn’t work. Ask Mom for a new one.</p></div>'; return; }
+    draw();
+  }
+  function draw() {
+    document.title = info.name + '’s Family Planner';
+    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. Mom gets a message when you do.</p>' +
+      '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
+      (tab === 'event' ?
+        '<form class="card" id="f"><label for="t">What is it?</label><input id="t" required maxlength="120" placeholder="Band practice, game, friend’s party…" autocomplete="off">' +
+        '<label for="d">Day</label><input id="d" type="date" required min="' + today + '" value="' + today + '">' +
+        '<label class="check"><input type="checkbox" id="ad"> All day</label>' +
+        '<div class="two" id="times"><div><label for="s">Starts</label><input id="s" type="time"></div><div><label for="e">Ends</label><input id="e" type="time"></div></div>' +
+        '<label for="n">Anything else? (where, need a ride…)</label><textarea id="n" rows="2" maxlength="500"></textarea>' +
+        '<button class="go">Add to the calendar</button></form>' +
+        '<div class="card"><h2>Coming up</h2>' + (info.events.length ? info.events.map(e => '<div class="row"><b>' + esc(niceDate(e.date)) + (e.allDay || !e.start ? '' : '<br>' + niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">Nothing on the calendar for the next 3 weeks.</p>') + '</div>'
+      :
+        '<form class="card" id="f"><label for="t">What do we need?</label><input id="t" required maxlength="120" placeholder="Goldfish crackers, shampoo…" autocomplete="off">' +
+        '<label for="n">Details (optional)</label><input id="n" maxlength="200" placeholder="the big box, strawberry kind…">' +
+        '<button class="go">Add to the shopping list</button></form>' +
+        '<div class="card"><h2>Already on the list</h2>' + (info.shop.length ? info.shop.map(s => '<div class="row"><span>' + esc(s.title) + (s.notes ? ' <span class="muted">· ' + esc(s.notes) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">The list is empty.</p>') + '</div>') +
+      (info.mine.length ? '<div class="card ok"><h2>You added</h2>' + info.mine.map(m => '<div class="row"><span>' + (m.kind === 'event' ? '📅 ' : '🛒 ') + esc(m.title) + '</span></div>').join('') + '</div>' : '');
+    app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); });
+    if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
+    $('f').onsubmit = async e => {
+      e.preventDefault();
+      const btn = app.querySelector('.go'), title = $('t').value.trim(); if (!title) return;
+      const body = { p_token: token, p_kind: tab, p_title: title, p_notes: $('n').value.trim() };
+      if (tab === 'event') Object.assign(body, { p_date: $('d').value, p_start: $('ad').checked ? '' : $('s').value, p_end: $('ad').checked ? '' : $('e').value });
+      else body.p_list = aisleOf(title);
+      btn.disabled = true; btn.textContent = 'Adding…';
+      try {
+        const r = await rpc('kid_add', body);
+        call('/functions/v1/kid-notify', { token, activity: r.activity }).catch(() => {});
+        toast('✓ Added! Mom will see it.');
+        info = await rpc('kid_info', { p_token: token }); draw();
+      } catch (err) { btn.disabled = false; btn.textContent = tab === 'event' ? 'Add to the calendar' : 'Add to the shopping list'; toast(/date/i.test(err.message) ? 'Pick a day.' : /slow/i.test(err.message) ? 'That’s a lot! Try again later.' : 'Couldn’t add that. Try again.'); }
+    };
+  }
+  load();
+})();
+</script>
+</body>
+</html>
