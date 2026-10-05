@@ -222,7 +222,6 @@ async function refreshAll(force) {
     for (const c of cals) await refreshCalendar(c, true);
     if (S().showBand !== false) await loadBand();
     if (S().showBills !== false) await loadBills();
-    await loadPeriods();
     giftCheck(); lunchCheck(); carCheck();
   } finally { refreshing = false; }
   route();
@@ -232,13 +231,6 @@ async function loadBand() {
   try {
     const { data: rows, error } = await client().from('vol_events').select('id,name,date,start_time,end_time,location').gte('date', addDays(today(), -60));
     if (!error) cache.set('band', { at: Date.now(), rows });
-  } catch (e) {}
-}
-// Period days logged on a family link (Cece's), shown on Shaana's calendar: logged days and the next expected ones.
-async function loadPeriods() {
-  try {
-    const { data: rows, error } = await client().from('kid_links').select('name,period_days,period_open').eq('period', true);
-    if (!error) cache.set('periods', { at: Date.now(), rows: rows || [] });
   } catch (e) {}
 }
 // Same guess as the family page: average cycle (28 days until two periods are logged), usual length from ended periods.
@@ -254,24 +246,30 @@ function periodGuess(days) {
   while (addDays(next, len) <= t) next = addDays(next, cycle);
   return { cycle, len, next };
 }
+// Cycle trackers (Cecilia's period) as pink entries on the calendar: each logged period for as many days as its note
+// says ("5 days"), the next three expected ones, and a heads-up 3 days before the next one. Cece's family page
+// saves her "started"/"ended" taps into the same tracker.
 function periodEntries(from, to) {
-  const out = [], p = cache.get('periods'); if (!p) return out;
-  p.rows.forEach(r => {
-    const days = [...(r.period_days || [])];
-    if (r.period_open && r.period_open <= today()) for (let d = r.period_open, i = 0; d <= today() && i < 10; d = addDays(d, 1), i++) days.push(d);
-    const set = new Set(days), color = '#e58fb0';
-    [...set].sort().filter(d => !set.has(addDays(d, -1))).forEach(st => {
-      let end = st; while (set.has(addDays(end, 1))) end = addDays(end, 1);
-      if (end < from || st > to) return;
-      const going = r.period_open && st <= r.period_open && r.period_open <= end;
-      out.push({ src: 'period', date: st, endDate: end, allDay: true, title: '🌸 ' + r.name + ' – period' + (going ? ' (started ' + fmtDate(r.period_open) + ')' : ''), color, location: '', notes: '' });
+  const out = [], color = '#e58fb0', t = today();
+  trackers().filter(tr => tr.cycle).forEach(tr => {
+    const who = tr.name.replace(/’s period$|'s period$/i, '');
+    const days = [];
+    logsOf(tr.id).forEach(l => {
+      const m = /^\s*(\d+)\s*day/.exec(l.notes || ''), going = !m && l.date <= t && daysBetween(l.date, t) < 10;
+      const n = m ? Math.min(14, Math.max(1, +m[1])) : going ? daysBetween(l.date, t) + 1 : 5;
+      for (let i = 0; i < n; i++) days.push(addDays(l.date, i));
+      const end = addDays(l.date, n - 1);
+      if (end >= from && l.date <= to) out.push({ src: 'period', date: l.date, endDate: end, allDay: true, title: '🌸 ' + who + ' – period' + (going ? ' (started ' + fmtDate(l.date) + ')' : ''), color, location: '', notes: l.notes || '' });
     });
-    const g = periodGuess(days);
-    if (g) for (let c = 0; c < 3; c++) {
+    const g = periodGuess(days); if (!g) return;
+    for (let c = 0; c < 3; c++) {
       const st = addDays(g.next, c * g.cycle), end = addDays(st, g.len - 1);
-      if (end < from || st > to || set.has(st)) continue;
-      out.push({ src: 'period', date: st, endDate: end, allDay: true, title: '🌸 ' + r.name + ' – period expected', color, location: '', notes: 'A guess from the days ' + r.name + ' marked (usual cycle ' + g.cycle + ' days).' });
+      if (end < from || st > to) continue;
+      out.push({ src: 'period', date: st, endDate: end, allDay: true, title: '🌸 ' + who + ' – period expected', color, location: '', notes: 'A guess from the logged periods (usual cycle ' + g.cycle + ' days).' });
     }
+    // 3 days before, or today if that's already past.
+    const warn = addDays(g.next, -3) >= t ? addDays(g.next, -3) : t, n = daysBetween(warn, g.next);
+    if (warn >= from && warn <= to) out.push({ src: 'period', date: warn, endDate: warn, allDay: true, title: '🌸 Heads-up: ' + who + '’s period may start ' + (n > 1 ? 'in about ' + n + ' days' : n === 1 ? 'tomorrow' : 'any day now'), color, location: '', notes: 'Expected around ' + fmtDate(g.next) + '.' });
   });
   return out;
 }
@@ -330,7 +328,7 @@ const onDay = (list, d) => list.filter(e => e.date <= d && (e.endDate || e.date)
 function entryRow(e) {
   const when = e.kind === 'task' ? '' : e.allDay ? (e.endDate && e.endDate > e.date ? 'until ' + fmtDate(e.endDate) : 'All day') : fmtTime(e.start) + (e.end ? '–' + fmtTime(e.end) : '');
   const drv = e.driver ? '🚗 ' + e.driver : '';
-  const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.src === 'period' ? 'Family link' : e.kind === 'task' ? (e.list || 'Task') : '';
+  const src = e.src === 'cal' ? e.cal : e.src === 'band' ? 'Band Volunteers' : e.src === 'bill' ? 'Money' : e.src === 'period' ? 'Tracker' : e.kind === 'task' ? (e.list || 'Task') : '';
   const box = e.kind === 'task' ? '<button type="button" class="tick' + (e.done ? ' on' : '') + '" data-done="' + e.id + '"' + (e.listName ? ' style="--lc:' + pastel(e.listName)[0] + '"' : '') + '>' + (e.done ? '✓' : '') + '</button>' : '<span class="bar" style="background:' + esc(e.color || '#888') + '"></span>';
   const open = e.src === 'planner' ? ' data-item="' + e.id + '"' : e.link ? ' data-link="' + esc(e.link) + '"' : ' data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';
   return '<div class="ev' + (e.done ? ' done' : '') + '"' + open + '>' + box + '<div class="who"><b>' + (e.priority >= 2 ? '★ ' : '') + esc(e.title) + '</b><span class="sub">' + esc([when, e.location, drv, whoLabel(e.who), src].filter(Boolean).join(' · ')) + '</span></div></div>';
@@ -473,7 +471,8 @@ function viewToday() {
   if (!upNext) for (let k = 1; k <= 7 && !upNext; k++) upNext = onDay(week, addDays(t, k)).find(e => e.kind !== 'task' && !e.allDay && e.start);
   let next = '';
   for (let k = 1; k <= 7; k++) {
-    const d = addDays(t, k), es = onDay(week, d).filter(e => !(e.kind === 'task' && e.done));
+    // Periods show once in the week ahead (on their first day), not on every day they cover.
+    const d = addDays(t, k), es = onDay(week, d).filter(e => !(e.kind === 'task' && e.done) && !(e.src === 'period' && e.date < d && k > 1));
     if (es.length) next += '<div class="day">' + esc(fmtDate(d, 'rel')) + '</div>' + es.map(entryRow).join('');
   }
   const strip = [0, 1, 2, 3, 4, 5, 6].map(k => {
@@ -781,7 +780,7 @@ function legend() {
   const parts = [[COLORS[0], 'Planner']].concat(S().calendars.filter(c => c.on !== false).map(c => [c.color, c.name]));
   if (S().showBand !== false && cache.get('band')) parts.push(['#b59f83', 'Band']);
   if (S().showBills !== false && cache.get('bills')) parts.push(['#c99a8e', 'Bills']);
-  ((cache.get('periods') || {}).rows || []).forEach(r => parts.push(['#e58fb0', r.name + '’s period']));
+  if (trackers().some(tr => tr.cycle && logsOf(tr.id).length)) parts.push(['#e58fb0', 'Period']);
   return '<p class="helper legend">' + parts.map(([c, n]) => '<span><i style="background:' + esc(c) + '"></i>' + esc(n) + '</span>').join('') + '</p>';
 }
 

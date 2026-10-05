@@ -4,7 +4,7 @@
 //  - matching events from Shaana's connected calendars (for Salvador: his work and Shaana's work), alert the night before.
 //  - for a link with a filter (Cece: her events and work days; Eli: his events, music, and Saturday football),
 //    the planner and calendar events that match it,
-//  - with period tracking on, a heads-up a couple of days before the next expected period.
+//  - with period tracking on, a heads-up 3 days before the next expected period (from Shaana's planner tracker).
 // Changes show up on their own when the phone refreshes the calendar.
 // With &list=1 it answers with matching events as JSON (next 3 weeks, or &from=&to= up to 62 days) for the page's calendar.
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -160,7 +160,7 @@ const jsonHead = { 'Content-Type': 'application/json', 'Cache-Control': 'no-stor
 
 Deno.serve(async (req) => {
   const params = new URL(req.url).searchParams, token = params.get('t') || '';
-  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx,show_days,period,period_days,period_open').eq('token', token).maybeSingle();
+  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx,show_days,period,period_list,period_open').eq('token', token).maybeSingle();
   if (!k || token.length < 20) return new Response('Not found', { status: 404 });
   const rx = k.show_rx ? new RegExp(k.show_rx, 'i') : null, byDay: Rule[] = k.show_days || [];
   const filtered = !!rx || byDay.length > 0;
@@ -215,15 +215,22 @@ Deno.serve(async (req) => {
           : ['DTSTART;VALUE=DATE:' + d, 'DURATION:P1D']), 'SUMMARY:' + esc(i.title), ...alarm(i.title, timed ? '-PT60M' : '-PT4H'), 'END:VEVENT');
     });
   }
-  // A quiet heads-up two days before the next expected period.
-  if (k.period) {
-    const today = chicago(now).slice(0, 10), open = k.period_open && k.period_open <= today ? k.period_open : '';
-    const days = [...(k.period_days || [])]; if (open) for (let d = open, i = 0; d <= today && i < 10; d = addDays(d, 1), i++) days.push(d);
+  // A quiet heads-up 3 days before the next expected period. Periods are the start days logged in Shaana's planner
+  // tracker; each note says how many days it lasted ("5 days"), and one with no length yet is still going.
+  if (k.period && k.period_list) {
+    const today = chicago(now).slice(0, 10), days: string[] = [];
+    const { data: logs } = await admin.from('planner_items').select('date,notes').eq('owner', k.owner).eq('kind', 'track').eq('list', k.period_list);
+    (logs || []).filter((l) => l.date).forEach((l) => {
+      const m = /^\s*(\d+)\s*day/.exec(l.notes || ''), going = !m && l.date <= today && daysBetween(l.date, today) < 10;
+      const n = m ? Math.min(14, Math.max(1, +m[1])) : going ? daysBetween(l.date, today) + 1 : 5;
+      for (let i = 0; i < n; i++) days.push(addDays(l.date, i));
+    });
     const plan = periodPlan(days, today);
-    const warn = plan && addDays(plan.next, -2);
-    if (warn && warn >= today) {
-      const t = '🌸 Heads-up: your period may start in about 2 days';
-      events.push('BEGIN:VEVENT', 'UID:period-' + token.slice(0, 10) + '-' + warn + '@family-planner', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + warn.replace(/-/g, ''), 'DURATION:P1D',
+    // 3 days before, or today if that's already past.
+    const warn = plan && (addDays(plan.next, -3) >= today ? addDays(plan.next, -3) : today), n = plan ? daysBetween(warn!, plan.next) : 0;
+    if (warn && !k.period_open) {
+      const t = '🌸 Heads-up: your period may start ' + (n > 1 ? 'in about ' + n + ' days' : n === 1 ? 'tomorrow' : 'any day now');
+      events.push('BEGIN:VEVENT', 'UID:period-' + token.slice(0, 10) + '-' + plan!.next + '@family-planner', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + warn.replace(/-/g, ''), 'DURATION:P1D',
         'SUMMARY:' + esc(t), 'TRANSP:TRANSPARENT', ...alarm(t, 'PT8H'), 'END:VEVENT');
     }
   }
