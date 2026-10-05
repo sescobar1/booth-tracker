@@ -33,6 +33,8 @@ const MORE_TEMPLATES = [
   { id: 'ask', name: 'Can you help? (open spots)', text: 'Hi {first}! We still need {open} more volunteers for {event} {when}{time}. Could you help? Sign up here: {link} Thank you! – {from}' },
   { id: 'foodask', name: 'Food still needed', text: 'Hi {first}! We still need food donations for {event} on {date}: {foodneeded}. Could you bring something? Sign up here: {link} Thank you! – {from}' }
 ];
+// For parents of students who are already working a game.
+const PARENT_TEMPLATE = { id: 'parentask', name: 'Ask a parent (student is working)', text: 'Hi {first}! {kid} is signed up to work the concession stand {when} for {event}. 💛 Would you like to work alongside them? We still need {adultopen} more adults, and even an hour or two helps. Sign up here: {link} Thank you! – {from}' };
 const FOOD_EMAIL = 'Hi {first}! Thank you for signing up to bring {item} for {event}. {dropoff}We appreciate you supporting the band! – {from}';
 const DONATE_INFO = 'Please type what your donation is for in the Cash App note ("For"), for example: "Concessions 10/9 – Jane Smith" or "Band trip – student name". That way it goes to the right place. Thank you!';
 if (!data.settings.emailText) data.settings.emailText = CONCESSION_TEMPLATE.text;
@@ -41,6 +43,10 @@ if (!data.settings.donateInfo) data.settings.donateInfo = DONATE_INFO;
 if (!data.settings.hasMoreTemplates) {
   MORE_TEMPLATES.forEach(t => { if (!data.templates.some(x => x.id === t.id)) data.templates.push(Object.assign({}, t)); });
   data.settings.hasMoreTemplates = true;
+}
+if (!data.settings.hasParentTemplate) {
+  if (!data.templates.some(x => x.id === PARENT_TEMPLATE.id)) data.templates.push(Object.assign({}, PARENT_TEMPLATE));
+  data.settings.hasParentTemplate = true;
 }
 // The 9-12th grade student instructions, kept in More → Sign-up page and sent with this message.
 if (!data.settings.hasStudentInfo) {
@@ -256,7 +262,9 @@ function fillMessage(text, ev, slot, p) {
     .replace(/\{day\}/g, whenWords(ev, start, true))
     .replace(/\{arrive\}/g, start ? fmtTime(start) : 'your start time')
     .replace(/\{open\}/g, String(open))
+    .replace(/\{adultopen\}/g, String(ev ? adultOpen(ev.id) : 0))
     .replace(/\{stillneed\}/g, open ? 'We are also still looking for ' + open + ' more volunteer' + (open === 1 ? '' : 's') + '.\n' : '')
+    .replace(/\{kid\}/g, (ev && p && kidNames(ev.id, p)) || 'Your student')
     .replace(/\{first\}/g, p ? (p.first || 'there') : 'everyone')
     .replace(/\{name\}/g, p ? fullName(p) : 'everyone')
     .replace(/\{event\}/g, ev ? ev.name : '')
@@ -414,11 +422,12 @@ function viewEvents() {
   $('view').innerHTML = topTabs('events') +
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') + quickLinks() +
     (nextGame() ? '<div class="row-actions"><button type="button" id="docNext">📄 Send next game to sign-in sheet <small>(' + esc(fmtDate(nextGame().date)) + ')</small></button>' + (data.settings.signinDoc ? '<a class="button ghost" href="' + esc(data.settings.signinDoc) + '" target="_blank" rel="noopener">Open sign-in sheet</a>' : '') + '</div>' : '') +
-    '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><a class="button ghost" href="#templates">📋 New from template</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
+    '<div class="row-actions"><a class="button" href="#sug">🔄 Update from SignUpGenius</a><button type="button" id="openSpots">📢 Open spots message</button><a class="button ghost" href="#templates">📋 New from template</a><button type="button" class="ghost" id="newEvent">+ New event</button><a class="button ghost" href="#share">📣 Share sign-up link</a></div>' +
     (data.events.length || !signedIn() ? '' : '<div class="empty"><h2>Welcome!</h2><p>Add an event and the jobs you need filled, then share your sign-up link or QR code.</p></div>') +
     (up.length ? '<h2>Coming up</h2>' + up.map(eventCard).join('') : (data.events.length ? '<p class="helper">No upcoming events. Import sign-ups or add one.</p>' : '')) +
     (past.length ? '<details class="past"><summary>Past events (' + past.length + ')</summary>' + past.map(eventCard).join('') + '</details>' : '');
   $('newEvent').onclick = () => editEvent();
+  $('openSpots').onclick = openSpots;
   if ($('docNext')) $('docNext').onclick = () => sendToDoc(nextGame().id);
   document.querySelectorAll('[data-text]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); openTexter(b.dataset.text); });
   if (window.volSync) window.volSync.renderBox();
@@ -602,6 +611,7 @@ function viewEvent(id) {
     '<button type="button" id="addVol">➕<span>Add volunteer</span></button>' +
     '<a class="button" href="#share/' + id + '">📣<span>Share link</span></a>' +
     '<button type="button" id="findMore">🙋<span>Find more volunteers' + (c.open ? ' (' + c.open + ' open)' : '') + '</span></button>' +
+    (c.students && ev.date >= today() && parentsOf(id).length ? '<button type="button" id="askParents">👨‍👩‍👧<span>Ask parents of students (' + parentsOf(id).length + ')</span></button>' : '') +
     (c.students ? '<button type="button" id="emailDirs">📧<span>Email band directors</span></button>' : '') +
     (ev.date <= today() ? '<a class="button" href="#checkin/' + id + '">❌<span>Mark no-shows' + (c.noShows ? ' (' + c.noShows + ')' : '') + '</span></a>' : '') + '</div>' +
     '<div class="segs">' + f('all', 'All ' + c.total) + f('adult', 'Adults ' + c.adults) + f('student', 'Students ' + c.students) + (c.noPhone ? f('nophone', 'Need phone ' + c.noPhone) : '') + '</div>' +
@@ -612,6 +622,7 @@ function viewEvent(id) {
   $('textAll').onclick = () => openTexter(id);
   $('addVol').onclick = () => addVolunteer(id);
   $('findMore').onclick = () => findMore(id);
+  if ($('askParents')) $('askParents').onclick = () => findMore(id, 'parentask', 'parents');
   if ($('emailDirs')) $('emailDirs').onclick = () => emailDirectors(id);
   document.querySelectorAll('.seg').forEach(b => b.onclick = () => { evFilter = b.dataset.f; viewEvent(id); });
   document.querySelectorAll('.vol').forEach(el => el.addEventListener('click', e => { if (e.target.closest('a.icon')) return; editSlot(el.dataset.slot); }));
@@ -768,22 +779,50 @@ function textOneByOne(ev, queue, text, onSent) {
 // ---------- Find more volunteers ----------
 // Past volunteers who aren't on this event yet, best bets first: people who said they'd help with the
 // concession stand, then people who have volunteered the most. No-shows sink to the bottom.
+// Open adult spots: shift jobs that aren't the students' jobs.
+const isStudentJob = j => /student/i.test(j.role || '');
+const adultOpen = evId => jobsFor(evId).filter(j => !isFood(j) && !isStudentJob(j)).reduce((t, j) => t + Math.max(0, Number(j.need || 0) - filledOf(j.id)), 0);
+const studentOpen = evId => jobsFor(evId).filter(j => !isFood(j) && isStudentJob(j)).reduce((t, j) => t + Math.max(0, Number(j.need || 0) - filledOf(j.id)), 0);
+// Parents of the students working an event. Parents are saved with their kids' names ("Ava & Avery Hixson"),
+// so a match is the student's first name in that list plus the family name; a parent with only the same
+// last name is shown as "maybe family".
+function parentsOf(evId) {
+  const here = new Set(slotsFor(evId).map(s => s.personId));
+  const kids = [...here].map(person).filter(p => p && p.type === 'student' && p.first);
+  const word = (txt, w) => new RegExp('(^|[^a-z])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(txt);
+  const out = [];
+  data.people.forEach(p => {
+    if (p.type === 'student' || here.has(p.id) || !digits(p.phone)) return;
+    const list = (p.parent || '').toLowerCase(), last = (p.last || '').toLowerCase();
+    const sure = kids.filter(k => { const f = k.first.toLowerCase(), l = (k.last || '').toLowerCase(); return word(list, f) && (!l || word(list, l) || last === l); });
+    const maybe = sure.length ? [] : kids.filter(k => k.last && last === k.last.toLowerCase() && !list);
+    if (sure.length || maybe.length) out.push({ p, kids: sure.length ? sure : maybe, sure: !!sure.length });
+  });
+  return out.sort((a, b) => (b.sure - a.sure) || sortName(a.p).localeCompare(sortName(b.p)));
+}
+// "Ava" or "Ava & Avery": the student(s) this parent has working the event.
+function kidNames(evId, p) {
+  const hit = parentsOf(evId).find(x => x.p.id === p.id);
+  return hit ? hit.kids.map(k => k.first).join(' & ') : '';
+}
 function noShowsOf(p) { return data.slots.filter(s => s.personId === p.id && s.noShow).length; }
-function findMore(evId, tplId) {
+function findMore(evId, tplId, startWho) {
   const ev = event(evId); if (!ev) return;
   const c = eventCounts(ev);
   const here = new Set(slotsFor(evId).map(s => s.personId));
   const asked = (data.settings.asked || {})[evId] || {};
   let who = 'adult';
+  const parents = parentsOf(evId);
   const score = p => {
     const done = data.slots.filter(s => s.personId === p.id && !s.noShow).length;
     return (/concession/i.test(p.notes || '') ? 5 : 0) + Math.min(done, 6) - 3 * noShowsOf(p);
   };
-  const pool = () => data.people.filter(p => digits(p.phone) && !here.has(p.id) && (who === 'all' || p.type !== 'student'))
+  const pool = () => who === 'parents' ? parents.map(x => x.p) : data.people.filter(p => digits(p.phone) && !here.has(p.id) && (who === 'all' || p.type !== 'student'))
     .sort((a, b) => score(b) - score(a) || sortName(a).localeCompare(sortName(b)));
   const tplOpts = data.templates.map(t => '<option value="' + t.id + '"' + (t.id === (tplId || (c.open || !c.foodOpen ? 'ask' : 'foodask')) ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
   openModal('<h2>🙋 Find more volunteers</h2><p class="helper">' + esc(ev.name) + ' · ' + esc(fmtDate(ev.date)) + ' · <b>' + c.open + ' spots open</b>' + (c.foodNeed ? ' · ' + c.foodOpen + ' food items open' : '') + '</p>' +
-    '<div class="segs" id="fmWho"><button type="button" class="seg on" data-w="adult">Adults</button><button type="button" class="seg" data-w="all">Everyone with a phone</button></div>' +
+    '<div class="segs" id="fmWho"><button type="button" class="seg on" data-w="adult">Adults</button><button type="button" class="seg" data-w="all">Everyone with a phone</button>' +
+    '<button type="button" class="seg" data-w="parents">👨‍👩‍👧 Parents of students working (' + parents.length + ')</button></div>' +
     '<label>Message<select id="fmTpl">' + tplOpts + '</select></label><textarea id="fmText" rows="4"></textarea>' +
     '<div class="row-actions"><button type="button" class="ghost small" id="fmTop">Pick top 20</button><button type="button" class="ghost small" id="fmNone">Clear</button><span class="helper" id="fmCount"></span></div>' +
     '<div id="fmPick" class="pick tall"></div>' +
@@ -799,15 +838,17 @@ function findMore(evId, tplId) {
     list = pool();
     $('fmPick').innerHTML = list.map((p, i) => {
       const done = data.slots.filter(s => s.personId === p.id && !s.noShow).length, ns = noShowsOf(p);
-      const on = pickTop ? i < 20 && !asked[p.id] : false;
+      const par = who === 'parents' && parents.find(x => x.p.id === p.id);
+      const on = pickTop ? i < 20 && !asked[p.id] && (!par || par.sure) : false;
       return '<label class="check"><input type="checkbox" value="' + i + '"' + (on ? ' checked' : '') + '> ' + esc(fullName(p)) +
-        ' <span class="sub">' + esc([fmtPhone(p.phone), done ? 'helped ' + done + '×' : '', /concession/i.test(p.notes || '') ? 'interested in concessions' : '', p.type === 'student' ? 'student' : ''].filter(Boolean).join(' · ')) + '</span>' +
+        ' <span class="sub">' + esc([fmtPhone(p.phone), par ? (par.sure ? '' : 'maybe family of ') + par.kids.map(k => k.first).join(' & ') + (par.sure ? '’s parent' : ' (same last name)') : '', done ? 'helped ' + done + '×' : '', /concession/i.test(p.notes || '') ? 'interested in concessions' : '', p.type === 'student' ? 'student' : ''].filter(Boolean).join(' · ')) + '</span>' +
         (ns ? ' <span class="chip warn">' + ns + ' no-show' + (ns > 1 ? 's' : '') + '</span>' : '') + (asked[p.id] ? ' <span class="chip">asked ' + esc(fmtDate(asked[p.id].slice(0, 10))) + '</span>' : '') + '</label>';
-    }).join('') || '<p class="helper">Everyone with a phone number is already signed up. 🎉</p>';
+    }).join('') || '<p class="helper">' + (who === 'parents' ? 'No parents found for the students on this event. Add the student’s name to a parent’s “Parent / student name” in People to link them.' : 'Everyone with a phone number is already signed up. 🎉') + '</p>';
     count();
   }
   $('fmPick').addEventListener('change', count);
-  $('fmWho').querySelectorAll('.seg').forEach(b => b.onclick = () => { who = b.dataset.w; $('fmWho').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); draw(true); });
+  $('fmWho').querySelectorAll('.seg').forEach(b => b.onclick = () => { who = b.dataset.w;
+    if (who === 'parents' && data.templates.some(t => t.id === 'parentask')) { $('fmTpl').value = 'parentask'; $('fmText').value = tpl().text; } $('fmWho').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); draw(true); });
   $('fmTop').onclick = () => draw(true);
   $('fmNone').onclick = () => { document.querySelectorAll('#fmPick input').forEach(i => { i.checked = false; }); count(); };
   $('fmCopy').onclick = () => copy(chosen().map(p => fmtPhone(p.phone)).join(', '), 'Phone numbers');
@@ -817,7 +858,48 @@ function findMore(evId, tplId) {
     const markAsked = p => { data.settings.asked = data.settings.asked || {}; (data.settings.asked[evId] = data.settings.asked[evId] || {})[p.id] = new Date().toISOString(); };
     textOneByOne(ev, q.map(p => ({ s: null, p })), $('fmText').value, markAsked);
   };
+  if (startWho) { const b = $('fmWho').querySelector('[data-w="' + startWho + '"]'); if (b) { b.click(); return; } }
   draw(true);
+}
+
+// ---------- Open spots message ----------
+// One post or group text listing every upcoming event that still needs adults, with the sign-up link.
+function openSpotsText(days, withFood) {
+  const t = today(), until = days ? isoDay(new Date(Date.now() + days * 864e5)) : '9999';
+  const evs = data.events.filter(e => e.date >= t && e.date <= until).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  const lines = [];
+  evs.forEach(e => {
+    const a = adultOpen(e.id), st = studentOpen(e.id), food = eventCounts(e).foodOpen;
+    const bits = [a ? a + ' adult' + (a === 1 ? '' : 's') : '', st ? st + ' student' + (st === 1 ? '' : 's') : '', withFood && food ? food + ' food item' + (food === 1 ? '' : 's') : ''].filter(Boolean);
+    if (!bits.length) return;
+    const icon = /vs\.?|game|football/i.test(e.name) ? '🏈' : /bus|chaperone|parade|trip/i.test(e.name) ? '🚌' : /party|picnic|lunch/i.test(e.name) ? '🎉' : '📅';
+    lines.push(icon + ' ' + fmtDate(e.date) + ' – ' + e.name + (e.start ? ' (' + fmtRange(e.start, e.end) + ')' : '') + ': need ' + bits.join(', '));
+  });
+  if (!lines.length) return '';
+  const from = data.settings.from || data.settings.org || 'Band Boosters';
+  return '🎺 ' + (data.settings.org || 'The band') + ' still needs volunteers!\n\n' + lines.join('\n') +
+    '\n\nNo experience needed, and even an hour or two helps. We’ll pair you with someone who has done it before.\nSign up here: ' + signupUrl() + '\n\nThank you! 💛 – ' + from;
+}
+function openSpots() {
+  let days = 14, withFood = true;
+  openModal('<h2>📢 Open spots message</h2><p class="helper">Copy it into a group text, BAND, Facebook, or the newsletter. Only events that still need people are listed.</p>' +
+    '<div class="segs" id="osDays"><button type="button" class="seg" data-d="7">Next 7 days</button><button type="button" class="seg on" data-d="14">Next 2 weeks</button><button type="button" class="seg" data-d="31">Next month</button><button type="button" class="seg" data-d="0">All</button></div>' +
+    '<label class="check"><input type="checkbox" id="osFood" checked> Include food donations</label>' +
+    '<textarea id="osText" rows="12"></textarea>' +
+    '<div class="row-actions stack"><button type="button" id="osCopy">📋 Copy message</button><button type="button" class="ghost" id="osShare">📤 Share…</button><button type="button" class="ghost" id="osText2">💬 Text it</button>' +
+    (data.settings.band ? '<button type="button" class="ghost" id="osBand">🟢 Post to BAND</button>' : '') + (data.settings.facebook ? '<button type="button" class="ghost" id="osFb">📘 Post to Facebook</button>' : '') +
+    '<button type="button" class="ghost" id="osClose">Close</button></div><p class="helper">Tip: send it 3–4 days before each game. You can change any words before copying.</p>');
+  const fill = () => { $('osText').value = openSpotsText(days, withFood) || 'Every upcoming event in this range is full. 🎉'; };
+  $('osDays').querySelectorAll('.seg').forEach(b => b.onclick = () => { days = Number(b.dataset.d); $('osDays').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); fill(); });
+  $('osFood').onchange = e => { withFood = e.target.checked; fill(); };
+  $('osCopy').onclick = () => copy($('osText').value, 'Message');
+  $('osShare').onclick = () => { if (navigator.share) navigator.share({ text: $('osText').value }).catch(() => {}); else copy($('osText').value, 'Message'); };
+  $('osText2').onclick = () => { location.href = 'sms:' + (isIOS() ? '&' : '?') + 'body=' + encodeURIComponent($('osText').value); };
+  const post = where => async () => { try { await navigator.clipboard.writeText($('osText').value); toast('Message copied. Start a post and paste it.'); } catch (e) {} window.open(where, '_blank', 'noopener'); };
+  if ($('osBand')) $('osBand').onclick = post(data.settings.band);
+  if ($('osFb')) $('osFb').onclick = post(data.settings.facebook);
+  $('osClose').onclick = closeModal;
+  fill();
 }
 
 // ---------- Band director emails ----------
@@ -1632,6 +1714,7 @@ function shareText(ev) {
     ? 'We need volunteers for ' + ev.name + ' on ' + fmtDate(ev.date, true) + (ev.start ? ' at ' + fmtTime(ev.start) : '') + '! Adults and students can sign up here: ' + signupUrl(ev.id)
     : 'Help ' + org + '! Parents, adults, and students can sign up to volunteer here: ' + signupUrl();
 }
+let flyerStyle = 'flyer';
 async function viewShare(evId) {
   const ev = evId && event(evId);
   const url = signupUrl(ev && ev.id);
@@ -1651,12 +1734,21 @@ async function viewShare(evId) {
     '<button type="button" id="shPng">⬇<span>Save QR picture</span></button>' +
     '<button type="button" id="shPrint">🖨<span>Print QR flyer</span></button></div>' +
     '<p class="helper"><b>Post to BAND</b> and <b>Post to Facebook</b> copy the message below and open your BAND or Facebook group. Start a new post and paste.</p>' +
-    '<label>Message to go with the link<textarea id="shMsg" rows="3">' + esc(shareText(ev)) + '</textarea></label></div>' +
-    '<section class="flyer"><h1>' + esc(data.settings.org || 'Band Boosters') + '</h1><h2>' + (ev ? esc(ev.name) : 'Volunteers Needed!') + '</h2>' +
-    (ev ? '<p class="big">' + esc(fmtDate(ev.date, true)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + '</p>' : '<p class="big">Parents, adults, and students</p>') +
-    '<div id="shQr" class="qr"></div><p class="scan">Scan with your phone camera to sign up</p><p class="url">' + esc(url) + '</p>' +
-    (!ev && upcoming.length ? '<ul class="flyer-events">' + upcoming.slice(0, 8).map(e => '<li><b>' + esc(fmtDate(e.date)) + '</b> ' + esc(e.name) + '</li>').join('') + '</ul>' : '') +
-    '<p class="thanks">Thank you for supporting our band!</p></section>';
+    '<label>Message to go with the link<textarea id="shMsg" rows="3">' + esc(shareText(ev)) + '</textarea></label>' +
+    '<h2>Print or save</h2><div class="segs" id="shStyle"><button type="button" class="seg' + (flyerStyle === 'flyer' ? ' on' : '') + '" data-s="flyer">📄 Sign-up flyer</button>' +
+    '<button type="button" class="seg' + (flyerStyle === 'stand' ? ' on' : '') + '" data-s="stand">🏈 Concession stand poster</button></div>' +
+    '<p class="helper">' + (flyerStyle === 'stand' ? 'Tape this on the stand window and the band table so parents watching the game can sign up on the spot.' : 'A flyer for the band room, newsletter, or parent meeting.') + ' Tap <b>Print QR flyer</b> above.</p></div>' +
+    (flyerStyle === 'stand'
+      ? '<section class="flyer stand"><h1>' + esc(data.settings.org || 'Band Boosters') + '</h1><h2>Enjoying the game? 🏈</h2>' +
+        '<p class="big"><b>Lend a hand in the concession stand!</b></p><p class="big">Even an hour or two helps the band. No experience needed, and we’ll show you what to do.</p>' +
+        '<div id="shQr" class="qr"></div><p class="scan">Scan with your phone camera to pick a shift</p><p class="url">' + esc(url) + '</p>' +
+        '<p class="thanks">Every shift supports our band students. Thank you! 💛</p></section>'
+      : '<section class="flyer"><h1>' + esc(data.settings.org || 'Band Boosters') + '</h1><h2>' + (ev ? esc(ev.name) : 'Volunteers Needed!') + '</h2>' +
+        (ev ? '<p class="big">' + esc(fmtDate(ev.date, true)) + (ev.start ? ' · ' + esc(fmtRange(ev.start, ev.end)) : '') + '</p>' : '<p class="big">Parents, adults, and students</p>') +
+        '<div id="shQr" class="qr"></div><p class="scan">Scan with your phone camera to sign up</p><p class="url">' + esc(url) + '</p>' +
+        (!ev && upcoming.length ? '<ul class="flyer-events">' + upcoming.slice(0, 8).map(e => '<li><b>' + esc(fmtDate(e.date)) + '</b> ' + esc(e.name) + '</li>').join('') + '</ul>' : '') +
+        '<p class="thanks">Thank you for supporting our band!</p></section>');
+  $('shStyle').querySelectorAll('.seg').forEach(b => b.onclick = () => { flyerStyle = b.dataset.s; viewShare(evId); });
   $('shWhich').onchange = e => { location.hash = 'share' + (e.target.value ? '/' + e.target.value : ''); };
   $('shCopy').onclick = () => copy(url, 'Link');
   $('shShare').onclick = () => {
