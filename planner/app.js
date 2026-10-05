@@ -337,8 +337,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' || tab === 'meds' || tab === 'car' ? 'more' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : a === 'atu' ? viewAtu() : a === 'sna' ? viewSna() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, meds: viewMeds, car: viewCar, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' || tab === 'meds' || tab === 'car' || tab === 'kids' ? 'more' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : a === 'atu' ? viewAtu() : a === 'sna' ? viewSna() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, meds: viewMeds, car: viewCar, kids: viewKids, more: viewMore, calendars: viewCalendars, feed: viewFeed };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -458,11 +458,12 @@ function viewToday() {
     '<div class="strip">' + strip + '</div>' +
     '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
     (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
-    medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
+    '<div id="kidBox"></div>' + medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
+  loadKidNews();
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-sday]').forEach(b => b.onclick = () => { todaySel = b.dataset.sday; viewToday(); });
   $('view').querySelectorAll('[data-tile]').forEach(b => b.onclick = () => {
@@ -1898,6 +1899,53 @@ function wireMeds(root, redraw) {
   root.querySelectorAll('[data-dose]').forEach(b => b.onclick = () => { const [id, t, d] = b.dataset.dose.split('|'), m = meds().find(x => x.id === id); if (!m) return; const was = !!medLog(m, d, t); takeDose(m, d, t); if (!was) celebrate(b); (redraw || route)(); });
 }
 let medWho = 'all';
+// ---------- 👧 Kids' links: Eli and Cece add events and shopping items; Shaana gets a phone alert ----------
+const VAPID_PUBLIC = 'BHXwQh1ZPxnPD4wogzI6EhigVplkijPQEjQFMafIB5R4iafFv-JZVo-nqZw5zrNC01nOldzP-kFSMurNO4TL1qE';
+const kidLink = t => new URL('kid.html?t=' + t, location.href.split('#')[0]).href;
+// What the kids added that Shaana hasn't marked as seen, shown on Today.
+async function loadKidNews() {
+  const box = $('kidBox'), c = client(); if (!box || !c || !signedIn()) return;
+  try {
+    const { data } = await c.from('kid_activity').select('id,who,kind,title,created_at').eq('seen', false).order('created_at', { ascending: false }).limit(20);
+    if (!$('kidBox') || !data || !data.length) { if ($('kidBox')) box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="card pad kidnews"><div class="mini-head"><h2>👧 From the kids</h2><button type="button" class="ghost small" id="kidSeen">Got it</button></div>' +
+      data.map(a => '<div class="mini-row"><span>' + (a.kind === 'event' ? '📅 ' : '🛒 ') + '<b>' + esc(a.who) + '</b> added ' + esc(a.title) + '</span><span class="sub">' + esc(fmtDate(a.created_at.slice(0, 10), 'rel')) + '</span></div>').join('') + '</div>';
+    $('kidSeen').onclick = async () => { await c.from('kid_activity').update({ seen: true }).in('id', data.map(a => a.id)); box.innerHTML = ''; };
+  } catch (e) { box.innerHTML = ''; }
+}
+const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, ch => ch.charCodeAt(0)); };
+async function turnOnAlerts() {
+  const c = client(); if (!c || !signedIn()) { toast('Sign in first (More → Account).'); return; }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    toast(/iPhone|iPad/.test(navigator.userAgent) ? 'On iPhone: open the Planner from your Home Screen icon first (Share → Add to Home Screen), then try again.' : 'This browser can’t show alerts.'); return;
+  }
+  const ok = await Notification.requestPermission(); if (ok !== 'granted') { toast('Alerts are blocked. Allow notifications for the Planner in Settings.'); return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+    const j = sub.toJSON();
+    const { error } = await c.from('push_subs').upsert({ endpoint: j.endpoint, sub: j });
+    if (error) throw error;
+    await c.functions.invoke('kid-notify', { body: { test: true } });
+    toast('🔔 Alerts are on. You should get a test message now.');
+  } catch (e) { toast('Couldn’t turn on alerts: ' + (e.message || e)); }
+}
+function viewKids() {
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>👧 Kids’ links</h1>' +
+    '<div class="card pad"><p class="helper">Eli and Cece can <b>add</b> events to the family calendar and things to the shopping list. They can’t change or delete anything. You get a phone alert when they add something, and it shows on Today.</p></div>' +
+    '<div class="card pad"><h2>🔔 Phone alerts</h2><p class="helper">Turn this on once on each phone or computer you want alerts on. On iPhone, open the Planner from its Home Screen icon first.</p><button type="button" id="alertsOn">Turn on alerts</button></div>' +
+    '<div id="kidLinks"><p class="helper">Loading links…</p></div>';
+  $('alertsOn').onclick = turnOnAlerts;
+  const c = client(); if (!c || !signedIn()) { $('kidLinks').innerHTML = '<p class="helper">Sign in to see the links.</p>'; return; }
+  c.from('kid_links').select('token,name').order('name', { ascending: false }).then(({ data }) => {
+    $('kidLinks').innerHTML = (data || []).map(k => '<div class="card pad"><h2>' + esc(k.name) + '’s link</h2><p class="sub" style="word-break:break-all">' + esc(kidLink(k.token)) + '</p><div class="row-actions tight"><button type="button" class="small" data-kshare="' + esc(k.token) + '" data-kname="' + esc(k.name) + '">Send to ' + esc(k.name) + '</button><button type="button" class="small ghost" data-kcopy="' + esc(k.token) + '">Copy</button><a class="button small ghost" href="' + esc(kidLink(k.token)) + '" target="_blank" rel="noopener">See what they see</a></div></div>').join('') || '<p class="helper">No kid links yet.</p>';
+    $('kidLinks').querySelectorAll('[data-kcopy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(kidLink(b.dataset.kcopy)); toast('Link copied'); } catch (e) { prompt('Copy this link:', kidLink(b.dataset.kcopy)); } });
+    $('kidLinks').querySelectorAll('[data-kshare]').forEach(b => b.onclick = async () => {
+      const url = kidLink(b.dataset.kshare), text = 'Here’s your link to add things to our family calendar and shopping list 💛';
+      if (navigator.share) { try { await navigator.share({ title: 'Family Planner', text, url }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text + ' ' + url);
+    });
+  });
+}
 function viewMeds() {
   const t = today(), list = meds(), shown = list.filter(m => medWho === 'all' || m.who === medWho);
   const days = [6, 5, 4, 3, 2, 1, 0].map(k => addDays(t, -k));
@@ -2446,7 +2494,7 @@ const AISLES = [
 ];
 // Canned/boxed things are pantry and "garlic bread" is bakery, so those are checked before produce.
 const AISLE_CHECK = ['Frozen', 'Bakery & bread', 'Pantry*', 'Meat & seafood', 'Dairy & eggs', 'Produce', 'Pantry', 'Drinks', 'Household'];
-const PANTRY_FIRST = /peanut butter|cream of|\bcans?\b|canned|jar|packets?|box(ed)?|seasoning|sauce|\bmix\b|diced|crushed|dried|broth/i;
+const PANTRY_FIRST = /goldfish|crackers?|peanut butter|cream of|\bcans?\b|canned|jar|packets?|box(ed)?|seasoning|sauce|\bmix\b|diced|crushed|dried|broth/i;
 function aisleOf(text) {
   for (const a of AISLE_CHECK) {
     if (a === 'Pantry*') { if (PANTRY_FIRST.test(text)) return 'Pantry'; continue; }
@@ -2911,7 +2959,7 @@ function viewBrief() {
   const sec = (title, body) => body ? '<div class="card pad bsec"><h3>' + title + '</h3>' + body + '</div>' : '';
   $('view').innerHTML = '<div class="brief-hero">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
     '<div id="wx" class="wx">' + (w ? wxHtml(w) : '<span class="helper">Checking the weather…</span>') + '</div></div>' +
-    '<div class="bgrid">' +
+    '<div id="kidBox"></div><div class="bgrid">' +
     sec('Today’s schedule', events.length ? events.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? 'All day' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <small>· ' + esc(e.location) + '</small>' : '') + '</span></div>').join('') : '<p class="helper">A clear day — nothing on the calendar.</p>') +
     sec('Who’s driving', drives.length ? drives.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? '' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + ' — <em>' + esc(e.driver || 'not set') + '</em></span></div>').join('') + (drives.some(e => !e.driver && e.src === 'planner') ? '<p class="helper">Tap one to set who’s driving.</p>' : '') : '') +
     sec('Dinner tonight', dinner ? '<div class="bline2 dinner" data-meal="Dinner" data-mealdate="' + t + '"><b>🍽</b><span>' + esc(dinner.title) + (dinner.notes ? ' <small>· ' + esc(dinner.notes) + '</small>' : '') + '</span></div>' : '<button type="button" class="ghost small" data-meal="Dinner" data-mealdate="' + t + '">Pick dinner</button>') +
@@ -2924,6 +2972,7 @@ function viewBrief() {
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
   $('bOff').onclick = () => { S().autoBrief = S().autoBrief === false; window.save(); viewBrief(); };
+  loadKidNews();
   loadWeather().then(v => { const el = $('wx'); if (el && v) el.innerHTML = wxHtml(v); wireWx(); });
   wireWx();
 }
@@ -3305,6 +3354,7 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
+    '<a class="card pad tip" href="#kids"><b>Kids’ links</b><span class="sub">👧 Eli & Cece add events and shopping items · phone alerts →</span></a>' +
     '<a class="card pad tip" href="../recipes/"><b>Family recipes</b><span class="sub">📸 Recipe photos to share with family →</span></a>' +
     '<a class="card pad tip" href="#meds"><b>Medicines</b><span class="sub">💊 Medicine & vitamin reminders for everyone →</span></a>' +
     '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
