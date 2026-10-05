@@ -145,13 +145,13 @@ function occurrences(events: Ev[], from: string, to: string) {
 }
 // Period days logged on the page → the next expected start (average cycle, 28 days until there are two periods logged).
 const daysBetween = (a: string, b: string) => Math.round((new Date(b + 'T12:00').getTime() - new Date(a + 'T12:00').getTime()) / 864e5);
-function periodPlan(days: string[], today: string) {
+function periodPlan(days: string[], today: string, fixedCycle = 0) {
   const set = new Set(days), starts = [...set].sort().filter((d) => !set.has(addDays(d, -1)));
   if (!starts.length) return null;
   const lens = starts.map((st) => { let n = 0; while (set.has(addDays(st, n))) n++; return n; });
   const gaps: number[] = []; for (let i = 1; i < starts.length; i++) { const g = daysBetween(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
   const avg = (a: number[]) => a.reduce((t, x) => t + x, 0) / a.length;
-  const cycle = gaps.length ? Math.round(avg(gaps.slice(-6))) : 28, ended = lens.filter((n, i) => addDays(starts[i], n) <= today), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
+  const cycle = fixedCycle || (gaps.length ? Math.round(avg(gaps.slice(-6))) : 28), ended = lens.filter((n, i) => addDays(starts[i], n) <= today), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
   let next = addDays(starts[starts.length - 1], cycle);
   while (addDays(next, len) <= today) next = addDays(next, cycle);
   return { cycle, len, next };
@@ -225,7 +225,10 @@ Deno.serve(async (req) => {
       const n = m ? Math.min(14, Math.max(1, +m[1])) : going ? daysBetween(l.date, today) + 1 : 5;
       for (let i = 0; i < n; i++) days.push(addDays(l.date, i));
     });
-    const plan = periodPlan(days, today);
+    // The usual cycle length Shaana set on the tracker, if any.
+    const { data: st } = await admin.from('planner_settings').select('data').eq('owner', k.owner).maybeSingle();
+    const tr = ((st?.data?.settings?.trackers) || []).find((x: { id: string }) => x.id === k.period_list);
+    const plan = periodPlan(days, today, Number(tr?.cycleDays) || 0);
     // 3 days before, or today if that's already past.
     const warn = plan && (addDays(plan.next, -3) >= today ? addDays(plan.next, -3) : today), n = plan ? daysBetween(warn!, plan.next) : 0;
     if (warn && !k.period_open) {

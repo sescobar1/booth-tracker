@@ -156,7 +156,7 @@
     const lens = starts.map(st => { let n = 0; while (set.has(addDays(st, n))) n++; return n; });
     const gaps = []; for (let i = 1; i < starts.length; i++) { const g = daysBetween(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
     const avg = a => a.reduce((t, x) => t + x, 0) / a.length;
-    const cycle = gaps.length ? Math.round(avg(gaps.slice(-6))) : 28, ended = lens.filter((n, i) => addDays(starts[i], n) <= today), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
+    const cycle = info.cycleDays || (gaps.length ? Math.round(avg(gaps.slice(-6))) : 28), ended = lens.filter((n, i) => addDays(starts[i], n) <= today), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
     let next = addDays(starts[starts.length - 1], cycle);
     while (addDays(next, len) <= today) next = addDays(next, cycle);
     const predicted = new Set(); for (let c = 0; c < 3; c++) for (let i = 0; i < len; i++) predicted.add(addDays(next, c * cycle + i));
