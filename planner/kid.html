@@ -11,6 +11,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Family">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&family=Patrick+Hand&family=Inter:wght@400;500;600&display=swap">
   <style>
     :root { --bg: #f7f4ef; --card: #fff; --ink: #2b2522; --muted: #8e837b; --line: #e6dfd7; --sage: #7d9b76; --sage-soft: #e7efe4; --accent: #2b2522; }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1a18; --card: #2a2623; --ink: #f2ede8; --muted: #a99f97; --line: #3b3531; --sage: #93b28b; --sage-soft: #2f3a2c; --accent: #f2ede8; } }
@@ -99,6 +102,51 @@
     .pcard h2 { color: #b23a6b; }
     @media (prefers-color-scheme: dark) { .pcard { background: #3a2530; border-color: #6b3a52; color: #f7d9e4; } .pcard h2 { color: #f2a6c3; } .grid button.per { background: #7a3554; color: #fff; } }
     #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--accent); color: var(--bg); padding: 11px 18px; border-radius: 14px; max-width: 90%; text-align: center; }
+    /* The same look as Shaana's planner: soft taupe, blush and cream boxes, sage leaves, a tall hand-lettered title,
+       handwritten labels and very round cards. */
+    :root { --taupe: #cdbdb0; --blush: #dccbc1; --cream: #ece8e2; --sage-deep: #6f8f66; --radius: 26px; --shadow: 0 1px 2px rgba(43, 37, 34, .04), 0 6px 18px rgba(43, 37, 34, .05); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --taupe: #4a3f38; --blush: #4b3c37; --cream: #34302c; --shadow: none; } }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+    main { padding-top: 10px; }
+    .hello { position: relative; padding: 4px 2px 6px; }
+    .vine { display: block; width: 210px; height: 36px; margin: 0 0 0 -6px; }
+    .hello .eyebrow { display: block; font-family: 'Patrick Hand', 'Comic Sans MS', cursive; font-size: 1.25rem; color: var(--sage); }
+    h1, .hello h1 { font-family: 'Amatic SC', 'Arial Narrow', sans-serif; font-weight: 700; letter-spacing: 1px; font-size: 2.9rem; line-height: 1; margin: 4px 0 6px; }
+    .sub { font-size: .95rem; }
+    .card { border: 0; border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; }
+    h2, .card h2, .hs h2, .pcard h2 { font-family: 'Patrick Hand', 'Comic Sans MS', cursive; font-weight: 400; text-transform: none; letter-spacing: .3px; font-size: 1.4rem; color: var(--ink); margin: 0 0 8px; }
+    .bday h2 { font-family: 'Amatic SC', sans-serif; font-weight: 700; font-size: 2.2rem; letter-spacing: 1px; }
+    .tabs { background: var(--cream); padding: 5px; border-radius: 999px; gap: 4px; }
+    .tabs button { border: 0; border-radius: 999px; background: transparent; font-family: 'Patrick Hand', cursive; font-size: 1.15rem; font-weight: 400; padding: 10px; }
+    .tabs button.on { background: var(--ink); color: var(--bg); }
+    .hs { background: var(--sage-soft); }
+    .row b, .ping b { font-family: 'Patrick Hand', cursive; font-weight: 400; font-size: 1rem; color: var(--ink-2, var(--muted)); }
+    .go { background: var(--ink); color: var(--bg); }
+    .addcal { background: var(--sage); }
+    input, textarea, select { border-radius: 14px; border-color: var(--line); }
+    label { font-family: 'Patrick Hand', cursive; font-weight: 400; font-size: 1.02rem; color: var(--ink); }
+    .rem span { font-weight: 500; }
+    /* boxes in the planner's colors */
+    #cal { background: var(--card); }
+    .calhead b { font-family: 'Amatic SC', sans-serif; font-weight: 700; font-size: 2rem; letter-spacing: 1px; }
+    .calhead button { border: 0; background: var(--cream); }
+    .grid .wd { font-family: 'Patrick Hand', cursive; font-size: .95rem; font-weight: 400; }
+    .grid button { border-radius: 16px; }
+    .grid button.today { border-color: var(--sage); color: var(--sage-deep); }
+    .grid button.sel { background: var(--taupe); color: var(--ink); }
+    .grid button.sel .dots i { background: var(--sage-deep); }
+    .dayp h3 { font-family: 'Patrick Hand', cursive; font-weight: 400; font-size: 1.2rem; }
+    .pcard { background: #f6e4e1; color: #4a2e2c; }
+    .pcard h2 { color: #4a2e2c; }
+    .pcard.warn { background: var(--blush); }
+    .pcard h3 { font-family: 'Patrick Hand', cursive; font-weight: 400; font-size: 1.25rem !important; }
+    [data-pl-edit][aria-label] { text-decoration: none; }
+    .pbig { background: #d98a95; }
+    .pbig.end { background: var(--sage); }
+    .ok { background: var(--sage-soft); border: 0; }
+    #up { background: var(--cream); }
+    #f { background: var(--card); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pcard { background: #3a2a2b; color: #f3dcdc; } :root:not([data-theme="light"]) .pcard h2 { color: #f3dcdc; } }
   </style>
 </head>
 <body>
@@ -144,6 +192,10 @@
     return 'Other';
   }
   let info = null, tab = 'event';
+  // A little vine of leaves across the top, like Shaana's planner.
+  const VINE = '<svg class="vine" viewBox="0 0 240 40" aria-hidden="true"><path d="M2 8 C 50 34, 90 30, 120 14 S 190 2, 238 20" fill="none" stroke="#6f8f66" stroke-width="1.6"/>' +
+    [[22, 18, -30], [44, 26, 25], [66, 29, -20], [88, 26, 30], [110, 18, -35], [134, 11, 20], [158, 7, -25], [182, 8, 30], [206, 12, -20], [226, 17, 25]].map(([x, y, r], i) =>
+      '<ellipse cx="' + x + '" cy="' + (y + (i % 2 ? 7 : -7)) + '" rx="8" ry="4" transform="rotate(' + r + ' ' + x + ' ' + (y + (i % 2 ? 7 : -7)) + ')" fill="' + (i % 3 ? '#8fb48a' : '#a9c7a2') + '" stroke="#5f7d57" stroke-width=".8"/>').join('') + '</svg>';
   // ---- Month calendar (and period tracking for Cece) ----
   const addDays = (d, n) => { const x = new Date(d + 'T12:00'); x.setDate(x.getDate() + n); return iso(x); };
   const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
@@ -311,7 +363,10 @@
   }
   function draw() {
     document.title = info.name + '’s Family Planner';
-    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + bdayHtml() + periodWarn() + homeHelp() + pingsHtml() + remsHtml() +
+    const hr = new Date().getHours();
+    app.innerHTML = '<div class="hello">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', ' + esc(info.name) + ' 💛</span>' +
+      '<h1>' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + '</h1>' +
+      '<p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p></div>' + bdayHtml() + periodWarn() + homeHelp() + pingsHtml() + remsHtml() +
       '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
       (tab === 'event' ?
         periodHtml() + '<div class="card" id="cal">' + calHtml() + '</div>' +
