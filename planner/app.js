@@ -234,14 +234,14 @@ async function loadBand() {
   } catch (e) {}
 }
 // Same guess as the family page: average cycle (28 days until two periods are logged), usual length from ended periods.
-function periodGuess(days) {
+function periodGuess(days, fixedCycle) {
   const t = today(), set = new Set(days), starts = [...set].sort().filter(d => !set.has(addDays(d, -1)));
   if (!starts.length) return null;
   const between = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
   const lens = starts.map(st => { let n = 0; while (set.has(addDays(st, n))) n++; return n; });
   const gaps = []; for (let i = 1; i < starts.length; i++) { const g = between(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
   const avg = a => a.reduce((x, y) => x + y, 0) / a.length, ended = lens.filter((n, i) => addDays(starts[i], n) <= t);
-  const cycle = gaps.length ? Math.round(avg(gaps.slice(-6))) : 28, len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
+  const cycle = fixedCycle || (gaps.length ? Math.round(avg(gaps.slice(-6))) : 28), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
   let next = addDays(starts[starts.length - 1], cycle);
   while (addDays(next, len) <= t) next = addDays(next, cycle);
   return { cycle, len, next };
@@ -261,7 +261,7 @@ function periodEntries(from, to) {
       const end = addDays(l.date, n - 1);
       if (end >= from && l.date <= to) out.push({ src: 'period', date: l.date, endDate: end, allDay: true, title: '🌸 ' + who + ' – period' + (going ? ' (started ' + fmtDate(l.date) + ')' : ''), color, location: '', notes: l.notes || '' });
     });
-    const g = periodGuess(days); if (!g) return;
+    const g = periodGuess(days, Number(tr.cycleDays) || 0); if (!g) return;
     for (let c = 0; c < 3; c++) {
       const st = addDays(g.next, c * g.cycle), end = addDays(st, g.len - 1);
       if (end < from || st > to) continue;
@@ -3301,7 +3301,8 @@ const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 
 function trackStats(t) {
   const logs = logsOf(t.id), dates = [...new Set(logs.map(l => l.date))], tdy = today();
   const gaps = dates.slice(1).map((d, k) => daysBetween(dates[k], d)).filter(g => !t.cycle || (g >= 18 && g <= 45));
-  const recent = gaps.slice(-6), avg = recent.length ? Math.round(recent.reduce((s, g) => s + g, 0) / recent.length) : null;
+  // A cycle length set on the tracker wins over the average (short or missed logs can throw the average off).
+  const recent = gaps.slice(-6), avg = t.cycle && Number(t.cycleDays) ? Number(t.cycleDays) : recent.length ? Math.round(recent.reduce((s, g) => s + g, 0) / recent.length) : null;
   const last = dates[dates.length - 1] || null;
   const month = dates.filter(d => d.startsWith(tdy.slice(0, 7))).length;
   const next = t.cycle && last && avg ? addDays(last, avg) : null;
@@ -3364,13 +3365,15 @@ function editTracker(id) {
   openModal('<h2>' + (id ? 'Edit tracker' : 'New tracker') + '</h2><label>Name<input id="tkName" value="' + esc(t.name) + '" placeholder="Workout, vitamins, haircut…"></label>' +
     '<p class="lbl">Icon</p><div class="iconpick">' + TRACK_ICONS.map(x => '<button type="button" class="ipk' + (x === icon ? ' on' : '') + '" data-ipk="' + x + '">' + x + '</button>').join('') + '</div>' +
     '<label class="check"><input type="checkbox" id="tkCycle"' + (t.cycle ? ' checked' : '') + '> Predict the next one (for a monthly cycle)</label>' +
+    '<label>Usual cycle length (days)<input id="tkCycleDays" type="number" min="18" max="45" inputmode="numeric" value="' + esc(t.cycleDays || '') + '" placeholder="Leave blank to figure it out"></label>' +
     '<label class="check"><input type="checkbox" id="tkShow"' + (t.show !== false ? ' checked' : '') + '> Show the icon on my calendar</label>' +
     '<div class="row-actions"><button type="button" id="tkSave">Save</button><button type="button" class="ghost" id="tkCancel">Cancel</button>' + (id ? '<button type="button" class="danger" id="tkDel">Delete</button>' : '') + '</div>');
   document.querySelectorAll('[data-ipk]').forEach(b => b.onclick = () => { icon = b.dataset.ipk; document.querySelectorAll('[data-ipk]').forEach(x => x.classList.toggle('on', x === b)); });
   $('tkCancel').onclick = closeModal;
   $('tkSave').onclick = () => {
     const name = $('tkName').value.trim(); if (!name) { toast('Name it.'); return; }
-    Object.assign(t, { name, icon, cycle: $('tkCycle').checked, show: $('tkShow').checked });
+    const cd = Number($('tkCycleDays').value);
+    Object.assign(t, { name, icon, cycle: $('tkCycle').checked, show: $('tkShow').checked, cycleDays: cd >= 18 && cd <= 45 ? cd : '' });
     if (!id) { t.id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + uid().slice(-4); list.push(t); }
     S().trackers = list.slice(); window.save(); closeModal(); route();
   };

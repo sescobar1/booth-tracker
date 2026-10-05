@@ -14,14 +14,14 @@ const RR: Record<string, string> = { daily: 'FREQ=DAILY', weekly: 'FREQ=WEEKLY',
 // start (average of the last cycles that look like a cycle, 18–45 days; 28 until there are two) and a heads-up 3 days before.
 const addDays = (d: string, n: number) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const between = (a: string, b: string) => Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 864e5);
-function periodWarnings(items: Item[], today: string) {
+function periodWarnings(items: Item[], today: string, cycles: Record<string, number>) {
   const out: { uid: string; date: string; title: string; next: string }[] = [], lists = new Map<string, Item[]>();
   items.filter((i) => i.kind === 'track' && /period/i.test(i.title || '') && i.date).forEach((i) => { const l = lists.get(i.list) || []; l.push(i); lists.set(i.list, l); });
   lists.forEach((logs, list) => {
     const starts = [...new Set(logs.map((l) => l.date))].sort(), lens = starts.map((d) => { const l = logs.find((x) => x.date === d)!, m = /^\s*(\d+)\s*day/.exec(l.notes || ''); return m ? +m[1] : 0; });
     const gaps: number[] = []; for (let i = 1; i < starts.length; i++) { const g = between(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
     const done = lens.filter((n) => n > 0).slice(-6);
-    const cycle = gaps.length ? Math.round(gaps.slice(-6).reduce((a, b) => a + b, 0) / gaps.slice(-6).length) : 28;
+    const cycle = cycles[list] || (gaps.length ? Math.round(gaps.slice(-6).reduce((a, b) => a + b, 0) / gaps.slice(-6).length) : 28);
     const len = done.length ? Math.min(8, Math.max(3, Math.round(done.reduce((a, b) => a + b, 0) / done.length))) : 5;
     if (!starts.length) return;
     let next = addDays(starts[starts.length - 1], cycle);
@@ -72,7 +72,10 @@ Deno.serve(async (req: Request) => {
     lines.push('END:VEVENT');
   }
   const todayHere = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
-  for (const w of periodWarnings(items, todayHere)) {
+  // Cycle lengths set on the trackers (planner settings), so the warning matches the planner.
+  const cycles = await fetch(Deno.env.get('SUPABASE_URL') + '/rest/v1/rpc/planner_feed_cycles', { method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) })
+    .then((x) => x.ok ? x.json() : {}).catch(() => ({}));
+  for (const w of periodWarnings(items, todayHere, cycles || {})) {
     lines.push('BEGIN:VEVENT', 'UID:' + w.uid + '@planner', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + day(w.date), 'DTEND;VALUE=DATE:' + day(nextDay(w.date)), 'TRANSP:TRANSPARENT',
       'SUMMARY:' + esc(w.title), 'DESCRIPTION:' + esc('Expected around ' + w.next + '.'), 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc(w.title), 'TRIGGER:PT8H', 'END:VALARM', 'END:VEVENT');
   }
