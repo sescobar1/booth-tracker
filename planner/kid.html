@@ -8,6 +8,9 @@
   <meta name="theme-color" content="#f7f4ef">
   <link rel="icon" href="icon.svg">
   <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Family">
   <style>
     :root { --bg: #f7f4ef; --card: #fff; --ink: #2b2522; --muted: #8e837b; --line: #e6dfd7; --sage: #7d9b76; --sage-soft: #e7efe4; --accent: #2b2522; }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1a18; --card: #2a2623; --ink: #f2ede8; --muted: #a99f97; --line: #3b3531; --sage: #93b28b; --sage-soft: #2f3a2c; --accent: #f2ede8; } }
@@ -33,6 +36,12 @@
     .row b { flex: none; min-width: 92px; font-weight: 600; color: var(--muted); font-size: 14px; padding-top: 1px; }
     .muted { color: var(--muted); }
     .ok { background: var(--sage-soft); border-color: var(--sage); }
+    .hs { background: var(--sage-soft); border-color: var(--sage); }
+    .hs h2 { color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 1.05rem; }
+    .hs ol { margin: 6px 0 4px; padding-left: 1.3em; }
+    .hs li { margin: 6px 0; }
+    .hs .x { float: right; border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; text-decoration: underline; }
+    .ico { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; background: var(--card); font-size: 15px; }
     .msg { text-align: center; padding: 40px 10px; }
     #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--accent); color: var(--bg); padding: 11px 18px; border-radius: 14px; max-width: 90%; text-align: center; }
   </style>
@@ -80,15 +89,23 @@
     return 'Other';
   }
   let info = null, tab = 'event';
+  // Instructions for putting this page on the Home Screen, hidden once it's opened from there.
+  const standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const homeHelp = () => standalone || store.get('hsHide') ? '' :
+    '<div class="card hs"><button type="button" class="x" id="hsX">Hide</button><h2>📲 Put this on your Home Screen</h2>' +
+    (ios ? '<ol><li>Open this link in <b>Safari</b>.</li><li>Tap the <b>Share</b> button <span class="ico">⬆︎</span> (bottom of the screen on iPhone, top on iPad).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>'
+      : '<ol><li>Open this link in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>') + '</div>';
 
   async function load() {
     try { info = await rpc('kid_info', { p_token: token }); } catch (e) { info = null; }
-    if (!info) { app.innerHTML = '<div class="msg"><h1>🙈</h1><p>This link doesn’t work. Ask Mom for a new one.</p></div>'; return; }
+    if (!info) { app.innerHTML = '<div class="msg"><h1>🙈</h1><p>This link doesn’t work. Ask for a new one.</p></div>'; return; }
     draw();
   }
   function draw() {
     document.title = info.name + '’s Family Planner';
-    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. Mom gets a message when you do.</p>' +
+    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + homeHelp() +
       '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
       (tab === 'event' ?
         '<form class="card" id="f"><label for="t">What is it?</label><input id="t" required maxlength="120" placeholder="Band practice, game, friend’s party…" autocomplete="off">' +
@@ -105,6 +122,7 @@
         '<div class="card"><h2>Already on the list</h2>' + (info.shop.length ? info.shop.map(s => '<div class="row"><span>' + esc(s.title) + (s.notes ? ' <span class="muted">· ' + esc(s.notes) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">The list is empty.</p>') + '</div>') +
       (info.mine.length ? '<div class="card ok"><h2>You added</h2>' + info.mine.map(m => '<div class="row"><span>' + (m.kind === 'event' ? '📅 ' : '🛒 ') + esc(m.title) + '</span></div>').join('') + '</div>' : '');
     app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); });
+    if ($('hsX')) $('hsX').onclick = () => { store.set('hsHide', '1'); draw(); };
     if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
     $('f').onsubmit = async e => {
       e.preventDefault();
@@ -116,7 +134,7 @@
       try {
         const r = await rpc('kid_add', body);
         call('/functions/v1/kid-notify', { token, activity: r.activity }).catch(() => {});
-        toast('✓ Added! Mom will see it.');
+        toast('✓ Added! ' + (info.tell || 'Mom') + ' will see it.');
         info = await rpc('kid_info', { p_token: token }); draw();
       } catch (err) { btn.disabled = false; btn.textContent = tab === 'event' ? 'Add to the calendar' : 'Add to the shopping list'; toast(/date/i.test(err.message) ? 'Pick a day.' : /slow/i.test(err.message) ? 'That’s a lot! Try again later.' : 'Couldn’t add that. Try again.'); }
     };
