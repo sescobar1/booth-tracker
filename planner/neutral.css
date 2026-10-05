@@ -544,3 +544,9 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .kidrems button { align-self: flex-start; margin-top: 6px; }
 .frrow { align-items: center; margin: 6px 0; }
 .frtime { display: flex; gap: 6px; align-items: center; }
+/* Quick reminders & birthdays */
+.pingbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.bdaycard { text-align: center; background: linear-gradient(135deg, #ffe3ec, #fff3c9 55%, #dff3ff); color: #4a2a35; }
+.bdaycard h2 { color: #b23a6b; margin: 4px 0; }
+.bdaycard p { margin: 4px 0 6px; }
+.bdbig { font-size: 2.6rem; line-height: 1.1; }

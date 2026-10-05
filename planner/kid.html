@@ -57,6 +57,17 @@
     .remform .go { margin: 0; padding: 11px; }
     .remrow { display: flex; gap: 16px; }
     .addcal { display: block; text-align: center; text-decoration: none; margin-top: 10px; background: var(--sage); color: #fff; border-radius: 999px; padding: 12px; font-weight: 700; }
+    .bday { text-align: center; background: linear-gradient(135deg, #ffe3ec, #fff3c9 55%, #dff3ff); border: 0; color: #4a2a35; position: relative; overflow: hidden; }
+    .bday h2 { color: #b23a6b; text-transform: none; letter-spacing: 0; font-size: 1.5rem; margin: 4px 0; }
+    .bday p { margin: 4px 0; }
+    .bday .big { font-size: 3rem; line-height: 1.1; }
+    .bday.other { background: linear-gradient(135deg, #f3e9ff, #fff3c9); }
+    .bday.other h2 { font-size: 1.15rem; }
+    .confetti { position: fixed; top: -12px; width: 9px; height: 14px; z-index: 40; pointer-events: none; animation: fall linear forwards; }
+    @keyframes fall { to { transform: translateY(105vh) rotate(720deg); opacity: .9; } }
+    .ping { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+    .ping:first-of-type { border-top: 0; }
+    .ping b { flex: none; min-width: 92px; color: var(--muted); font-size: 14px; }
     .msg { text-align: center; padding: 40px 10px; }
     #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--accent); color: var(--bg); padding: 11px 18px; border-radius: 14px; max-width: 90%; text-align: center; }
   </style>
@@ -116,13 +127,33 @@
     return '<div class="card"><h2>⏰ ' + esc(info.name) + '’s reminders</h2>' +
       (r.length ? r.map((x, i) => remEdit === i ? remForm(x, i) : '<div class="rem' + (done.includes(x.at + x.t) ? ' done' : '') + '"><input type="checkbox" aria-label="Done" data-rem="' + esc(x.at + x.t) + '"' + (done.includes(x.at + x.t) ? ' checked' : '') + '><span>' + esc(x.t) + '</span><small>' + niceTime(x.at) + '</small><button type="button" class="link" data-remedit="' + i + '" aria-label="Edit">✏️</button></div>').join('') : '<p class="muted">No reminders yet.</p>') +
       (remEdit === 'new' ? remForm(null, 'new') : '<button type="button" class="link addrem" id="remNew">＋ Add a reminder</button>') +
-      (r.length ? (store.get('remSub-' + token.slice(0, 8)) ? '<p class="muted" style="margin:10px 0 0;font-size:14px">✓ Pop-ups are on this phone. Changes show up on their own within about an hour. <a href="' + esc(webcal()) + '" id="remAdd">Set up again</a></p>' :
+      (r.length || (info.pings || []).length || info.hasWork ? (store.get('remSub-' + token.slice(0, 8)) ? '<p class="muted" style="margin:10px 0 0;font-size:14px">✓ Pop-ups are on this phone. Changes show up on their own within about an hour. <a href="' + esc(webcal()) + '" id="remAdd">Set up again</a></p>' :
         '<a class="addcal" id="remAdd" href="' + esc(ios ? webcal() : icsUrl()) + '">🔔 Get pop-up reminders on my phone</a><ol class="muted" style="font-size:14px;margin:8px 0 0;padding-left:1.2em">' + (ios ? '<li>Tap the button, then tap <b>Subscribe</b>.</li><li>Turn <b>Remove Alerts OFF</b> (important, or nothing pops up).</li><li>Tap <b>Add</b>. Your phone will pop up each reminder every day, and changes made here show up on their own.</li>' : '<li>Tap the button and open it with your <b>Calendar</b> app, then tap <b>Add</b>.</li><li>Your phone will pop up each reminder every day. After changing reminders, tap the button again.</li>') + '</ol>') : '') + '</div>';
   };
   // Instructions for putting this page on the Home Screen, hidden once it's opened from there.
   const standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
   const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Birthdays: a party banner on your own birthday, and a heads-up on everyone else's.
+  const md = (() => { const d = new Date(); return pad(d.getMonth() + 1) + '-' + pad(d.getDate()); })();
+  const BDAY_LINES = ['We love you so much and we’re so proud of you!', 'Today is all about YOU. Have the best day ever!', 'Another year of being awesome. Go celebrate!'];
+  const bdayHtml = () => {
+    const b = (info.birthdays || []).filter(x => x.md === md); if (!b.length) return '';
+    const me = b.find(x => x.name === info.name), others = b.filter(x => x.name !== info.name).map(x => x.name === 'Shaana' && info.tell === 'Mom' ? 'Mom' : x.name);
+    return (me ? '<div class="card bday"><div class="big">🎂🎉🎈</div><h2>Happy Birthday, ' + esc(info.name) + '!</h2><p>' + BDAY_LINES[new Date().getFullYear() % 3] + '</p><p>💛 Love, ' + (info.tell === 'Mom' ? 'Mom' : 'Shaana') + ' & the family</p></div>' : '') +
+      (others.length ? '<div class="card bday other"><h2>🎁 Today is ' + others.map(esc).join(' and ') + '’s birthday!</h2><p>Don’t forget to wish ' + (others.length > 1 ? 'them' : others.map(esc)[0]) + ' a happy birthday 🎉</p></div>' : '');
+  };
+  const confetti = () => {
+    if (store.get('confetti-' + md + new Date().getFullYear())) return; store.set('confetti-' + md + new Date().getFullYear(), '1');
+    const colors = ['#f59ab5', '#ffd166', '#7cc6fe', '#9ee493', '#c3a6ff'];
+    for (let i = 0; i < 70; i++) { const c = document.createElement('i'); c.className = 'confetti'; c.style.left = Math.random() * 100 + 'vw'; c.style.background = colors[i % colors.length]; c.style.animationDuration = 2.5 + Math.random() * 2.5 + 's'; c.style.animationDelay = Math.random() * 1.2 + 's'; document.body.appendChild(c); setTimeout(() => c.remove(), 6500); }
+  };
+  // Quick reminders Shaana sent (pick up Cece, football game…).
+  const pingsHtml = () => {
+    const p = (info.pings || []).filter(x => x.date >= today); if (!p.length && !info.hasWork) return '';
+    return '<div class="card"><h2>📣 From ' + esc(info.tell === 'Mom' ? 'Mom' : 'Shaana') + '</h2>' + (p.length ? p.map(x => '<div class="ping"><b>' + (x.date === today ? 'Today' : esc(niceDate(x.date))) + (x.at ? '<br>' + niceTime(x.at) : '') + '</b><span>' + esc(x.t) + '</span></div>').join('') : '<p class="muted">Nothing right now.</p>') +
+      (info.hasWork ? '<p class="muted" style="font-size:14px;margin:8px 0 0">💼 Work days from the family calendar are in your phone reminders too (you get a heads-up the night before).</p>' : '') + '</div>';
+  };
   const homeHelp = () => standalone || store.get('hsHide') ? '' :
     '<div class="card hs"><button type="button" class="x" id="hsX">Hide</button><h2>📲 Put this on your Home Screen</h2>' +
     (ios ? '<ol><li>Open this link in <b>Safari</b>.</li><li>Tap the <b>Share</b> button <span class="ico">⬆︎</span> (bottom of the screen on iPhone, top on iPad).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>'
@@ -135,7 +166,7 @@
   }
   function draw() {
     document.title = info.name + '’s Family Planner';
-    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + homeHelp() + remsHtml() +
+    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + bdayHtml() + homeHelp() + pingsHtml() + remsHtml() +
       '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
       (tab === 'event' ?
         '<form class="card" id="f"><label for="t">What is it?</label><input id="t" required maxlength="120" placeholder="Band practice, game, friend’s party…" autocomplete="off">' +
@@ -164,6 +195,7 @@
     if ($('remDel')) $('remDel').onclick = () => { if (confirm('Delete this reminder?')) saveRems(info.reminders.filter((x, i) => i !== remEdit)); };
     const rf = app.querySelector('[data-remform]');
     if (rf) rf.onsubmit = e => { e.preventDefault(); const x = { t: $('remT').value.trim(), at: $('remAt').value }; if (!x.t || !x.at) return; const l = (info.reminders || []).slice(); if (remEdit === 'new') l.push(x); else l[remEdit] = x; saveRems(l); };
+    if (app.querySelector('.bday:not(.other)')) confetti();
     if ($('hsX')) $('hsX').onclick = () => { store.set('hsHide', '1'); draw(); };
     if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
     $('f').onsubmit = async e => {
