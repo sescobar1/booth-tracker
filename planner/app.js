@@ -486,6 +486,7 @@ function viewToday() {
     '<div class="hello">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
     '<span class="sub">' + eventsToday.length + (eventsToday.length === 1 ? ' event' : ' events') + ' · ' + todayTasks.length + (todayTasks.length === 1 ? ' task' : ' tasks') + ' today</span>' +
     (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks complete' + (doneToday && doneToday === todayTasks.length ? ' — all done!' : '') + '<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
+    cheerCard() +
     '<div class="tiles">' +
     '<button type="button" class="tile t-event" data-tile="event">' + TILE_ICONS.event + '<b>Event</b></button>' +
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
@@ -2017,6 +2018,12 @@ async function answerDinner(d, change) {
   if (error) { toast('Couldn’t send the answer: ' + error.message); return; }
   await c.from('kid_activity').update({ seen: true }).eq('item_id', d.id);
   loadKidNews();
+}
+// ---------- 😄 Today's smile: a funny one for Shaana each day (a new one each day) ----------
+const CHEER_SHAANA = [["You are the CEO of finding everyone's shoes.", ""], ["Today's goal: be the person your to-do list thinks you are.", ""], ["You've survived 100% of your hardest days. And 100% of band carpool.", ""], ["If you can staff a concession stand, you can do anything. Except mute the group chat.", ""], ["You're doing great. The laundry is also doing great. It's thriving. It's multiplying.", ""], ["Somewhere, a calendar is very impressed with you.", ""], ["Your superpower: remembering everyone's schedule, but not where you put your keys. 🔑", ""], ["Plot twist: you DO have it all together. It's just in seven different apps.", ""], ["Take a deep breath. Now take another one, because someone just yelled “Mom!”", ""], ["You put the fun in fundraiser. 🎉", ""], ["Reminder: “quick question” is never quick.", ""], ["You are 87% coffee and 13% “where are your shoes?” ☕", ""], ["Nobody can fold a fitted sheet. You are not behind.", ""], ["“I'll think about it” is a complete sentence today.", ""], ["Your houseplants believe in you. Mostly. Water them anyway. 🪴", ""], ["Dinner plan: say yes to the kids' idea and look like a hero. 🍽️", ""], ["Today you will answer the same question three times, gracefully. Probably.", ""], ["If nobody is on fire, it's a good day. 🔥🚫", ""], ["Volunteer coordinator by day, snack hider by night.", ""], ["Be the reason someone signs up on SignUpGenius today. 😉", ""]];
+function cheerCard() {
+  const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5), [q] = CHEER_SHAANA[day % CHEER_SHAANA.length];
+  return '<div class="card pad cheer"><h2>😄 Today’s smile</h2><p class="q">' + esc(q) + '</p></div>';
 }
 // ---------- ✅ Family to-dos ----------
 // Each person's to-do list on their family page. Shaana sees them all here and can add to anyone's (with a reminder
