@@ -194,7 +194,7 @@
       '<div class="legend"><span class="l-ev">Event</span>' + (info.period ? '<span class="l-per">Period</span><span class="l-pred">Expected</span>' : '') + '</div>' +
       '<div class="dayp"><h3>' + esc(new Date(selDay + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + '</h3>' +
       (sel.length ? sel.map(e => '<div class="row"><b>' + (e.allDay || !e.start ? 'All day' : niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted" style="margin:4px 0">Nothing that day.</p>') +
-      (info.period ? '<button type="button" class="pbtn' + (per.has(selDay) ? ' on' : '') + '" id="perT">' + (per.has(selDay) ? '🌸 Period day ✓ (tap to remove)' : '🌸 Mark as a period day') + '</button>' : '') + '</div>';
+      (info.period && per.has(selDay) ? '<p class="muted" style="margin:6px 0 0">🌸 Period day</p>' : '') + '</div>';
   }
   let perOther = '';   // 'start' or 'end' while picking another day
   function periodHtml() {
@@ -209,14 +209,41 @@
       '<button type="button" class="pbig ' + act + '" data-per="' + act + '">' + (open ? '✅ My period ended today' : '🌸 My period started today') + '</button>' +
       (perOther ? '<div class="two" style="margin-top:8px"><input type="date" id="perDay" max="' + today + '" value="' + (perOther === 'end' && open ? (open > addDays(today, -1) ? open : addDays(today, -1)) : addDays(today, -1)) + '"' + (open ? ' min="' + open + '"' : '') + '><button type="button" class="go" style="margin:0" data-per-day="' + act + '">Save</button></div>'
         : '<button type="button" class="link" data-per-other="' + act + '" style="font-size:14px">' + (open ? 'It ended on another day' : 'It started on another day') + '</button>') +
-      '<p style="margin:6px 0 0;font-size:14px">You can also tap any day on the calendar and use 🌸 to fix it. If pop-ups are on, your phone gives you a heads-up 2 days before the next one.</p></div>';
+      periodList() +
+      '<p style="margin:8px 0 0;font-size:14px">If pop-ups are on, your phone warns you 3 days before the next one. ' + esc(info.tell === 'Mom' ? 'Mom' : 'Shaana') + ' gets the warning too.</p></div>';
+  }
+  // Her last 6 periods: when each started and how many days it lasted (tap ✏️ to fix one, or add one that was missed).
+  let perEdit = null;   // start date being edited, or 'new'
+  function periodList() {
+    const ps = info.periods || [];
+    const form = (start, days) => '<div class="two" style="margin:6px 0">' + (start === 'new' ? '<input type="date" id="plStart" max="' + today + '" value="' + addDays(today, -1) + '">' : '') +
+      '<div style="display:flex;gap:6px;align-items:center"><input type="number" id="plDays" min="1" max="14" inputmode="numeric" value="' + (days || 5) + '" style="width:70px"> days</div>' +
+      '<button type="button" class="go" style="margin:0" data-pl-save="' + start + '">Save</button></div>';
+    return '<h3 style="margin:14px 0 4px;font-size:1rem">Last ' + (ps.length || 6) + ' periods</h3>' +
+      (ps.length ? ps.map(x => perEdit === x.start ? '<div class="row"><b>' + esc(niceDate(x.start)) + '</b><span style="flex:1">' + form(x.start, x.days) + '</span></div>'
+        : '<div class="row"><b>' + esc(niceDate(x.start)) + (x.start.slice(0, 4) !== today.slice(0, 4) ? ' ' + x.start.slice(0, 4) : '') + '</b><span style="flex:1">' + (x.days ? x.days + ' day' + (x.days === 1 ? '' : 's') : x.start === info.periodOpen ? 'going now' : '—') + '</span>' +
+          '<button type="button" class="link" data-pl-edit="' + x.start + '" aria-label="Fix">✏️</button></div>').join('') : '<p class="muted" style="margin:4px 0">None yet.</p>') +
+      (perEdit === 'new' ? form('new', 5) : '<button type="button" class="link" data-pl-edit="new" style="font-size:14px">＋ Add a period I missed</button>');
+  }
+  // A heads-up at the top of the page when the next period is 3 days away or less.
+  function periodWarn() {
+    if (!info.period || info.periodOpen) return '';
+    const plan = periodPlan(perDays()); if (!plan || plan.dayNo) return '';
+    const n = daysBetween(today, plan.next); if (n > 3) return '';
+    return '<div class="card pcard warn"><h2>🌸 Heads-up</h2><p style="margin:0">' + (n > 1 ? 'Your period may start in about <b>' + n + ' days</b>' : n === 1 ? 'Your period may start <b>tomorrow</b>' : 'Your period may start <b>any day now</b>') +
+      ' (around ' + esc(niceDate(plan.next)) + '). Keep pads or tampons in your bag. 💛</p></div>';
+  }
+  async function reloadPeriod() {
+    const fresh = await rpc('kid_info', { p_token: token });
+    Object.assign(info, { periodDays: fresh.periodDays, periodOpen: fresh.periodOpen, periods: fresh.periods });
+    const pc = app.querySelector('.pcard:not(.warn)'); if (pc) pc.outerHTML = periodHtml();
+    const w = app.querySelector('.pcard.warn'); if (w) w.outerHTML = periodWarn() || '<span></span>';
+    if ($('cal')) $('cal').innerHTML = calHtml();
   }
   async function periodAction(action, day) {
     try {
-      const r = await rpc('kid_period', { p_token: token, p_action: action, p_day: day });
-      info.periodDays = r.days; info.periodOpen = r.open; perOther = '';
-      const pc = app.querySelector('.pcard'); if (pc) pc.outerHTML = periodHtml();
-      if ($('cal')) $('cal').innerHTML = calHtml();
+      await rpc('kid_period', { p_token: token, p_action: action, p_day: day });
+      perOther = ''; await reloadPeriod();
       toast(action === 'start' ? '🌸 Saved. Tap “ended” when it stops.' : '✅ Saved. The days in between are filled in.');
     } catch (e) { toast('Couldn’t save. Try again.'); }
   }
@@ -284,7 +311,7 @@
   }
   function draw() {
     document.title = info.name + '’s Family Planner';
-    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + bdayHtml() + homeHelp() + pingsHtml() + remsHtml() +
+    app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + bdayHtml() + periodWarn() + homeHelp() + pingsHtml() + remsHtml() +
       '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
       (tab === 'event' ?
         periodHtml() + '<div class="card" id="cal">' + calHtml() + '</div>' +
@@ -320,8 +347,14 @@
     app.onclick = e => {
       const b = e.target.closest('[data-per]'), o = e.target.closest('[data-per-other]'), sv = e.target.closest('[data-per-day]');
       if (b) periodAction(b.dataset.per, today);
-      else if (o) { perOther = o.dataset.perOther; app.querySelector('.pcard').outerHTML = periodHtml(); }
+      else if (o) { perOther = o.dataset.perOther; app.querySelector('.pcard:not(.warn)').outerHTML = periodHtml(); }
       else if (sv) { const d = $('perDay').value; if (d) periodAction(sv.dataset.perDay, d); }
+      else if (e.target.closest('[data-pl-edit]')) { perEdit = e.target.closest('[data-pl-edit]').dataset.plEdit; app.querySelector('.pcard:not(.warn)').outerHTML = periodHtml(); }
+      else if (e.target.closest('[data-pl-save]')) {
+        const k = e.target.closest('[data-pl-save]').dataset.plSave, start = k === 'new' ? $('plStart').value : k, days = Number($('plDays').value);
+        if (!start || !(days >= 1 && days <= 14)) { toast('Pick a day and 1–14 days.'); return; }
+        rpc('kid_period_len', { p_token: token, p_start: start, p_days: days }).then(() => { perEdit = null; toast('✓ Saved'); return reloadPeriod(); }).catch(() => toast('Couldn’t save. Try again.'));
+      }
     };
     if ($('cal')) {
       loadMonth(calMonth);
@@ -329,12 +362,6 @@
         const mv = e.target.closest('[data-mv]'), day = e.target.closest('[data-day]');
         if (mv) { const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + Number(mv.dataset.mv), 1); calMonth = iso(d).slice(0, 7); selDay = calMonth === today.slice(0, 7) ? today : calMonth + '-01'; $('cal').innerHTML = calHtml(); loadMonth(calMonth); }
         else if (day) { selDay = day.dataset.day; $('cal').innerHTML = calHtml(); if ($('d') && selDay >= today) $('d').value = selDay; }
-        else if (e.target.closest('#perT')) {
-          const set = new Set(info.periodDays || []); if (set.has(selDay)) set.delete(selDay); else set.add(selDay);
-          const before = info.periodDays; info.periodDays = [...set].sort(); $('cal').innerHTML = calHtml();
-          try { info.periodDays = await rpc('kid_set_period', { p_token: token, p_days: info.periodDays }); const pc = app.querySelector('.pcard'); if (pc) pc.outerHTML = periodHtml(); }
-          catch (err) { info.periodDays = before; $('cal').innerHTML = calHtml(); toast('Couldn’t save. Try again.'); }
-        }
       };
     }
     if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
