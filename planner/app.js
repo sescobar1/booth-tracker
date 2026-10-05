@@ -458,12 +458,12 @@ function viewToday() {
     '<div class="strip">' + strip + '</div>' +
     '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
     (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
-    '<div id="kidBox"></div>' + medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
+    '<div id="bdayBox"></div><div id="kidBox"></div>' + pingCard() + medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
-  loadKidNews();
+  loadKidNews(); loadBirthdays(); wirePing($('view'));
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-sday]').forEach(b => b.onclick = () => { todaySel = b.dataset.sday; viewToday(); });
   $('view').querySelectorAll('[data-tile]').forEach(b => b.onclick = () => {
@@ -1960,7 +1960,8 @@ function viewKids() {
   const c = client(); if (!c || !signedIn()) { $('kidLinks').innerHTML = '<p class="helper">Sign in to see the links.</p>'; return; }
   c.from('kid_links').select('token,name,reminders').order('created_at').then(({ data }) => {
     $('kidLinks').innerHTML = (data || []).map(k => '<div class="card pad"><h2>' + esc(k.name) + '’s link</h2><p class="sub" style="word-break:break-all">' + esc(kidLink(k.token)) + '</p><div class="row-actions tight"><button type="button" class="small" data-kshare="' + esc(k.token) + '" data-kname="' + esc(k.name) + '">Send to ' + esc(k.name) + '</button><button type="button" class="small ghost" data-kcopy="' + esc(k.token) + '">Copy</button><a class="button small ghost" href="' + esc(kidLink(k.token)) + '" target="_blank" rel="noopener">See what they see</a></div>' +
-      '<div class="kidrems"><b>⏰ Reminders</b>' + ((k.reminders || []).length ? (k.reminders || []).map(r => '<span class="sub">' + esc(fmtTime(r.at)) + ' · ' + esc(r.t) + '</span>').join('') : '<span class="sub">None yet</span>') + '<button type="button" class="small ghost" data-krem="' + esc(k.token) + '">Edit reminders</button></div></div>').join('') || '<p class="helper">No kid links yet.</p>';
+      '<div class="kidrems"><b>⏰ Reminders</b>' + ((k.reminders || []).length ? (k.reminders || []).map(r => '<span class="sub">' + esc(fmtTime(r.at)) + ' · ' + esc(r.t) + '</span>').join('') : '<span class="sub">None yet</span>') + '<div class="row-actions tight"><button type="button" class="small ghost" data-krem="' + esc(k.token) + '">Edit reminders</button><button type="button" class="small ghost" data-kping="' + esc(k.name) + '">📣 Quick reminder</button></div></div></div>').join('') || '<p class="helper">No kid links yet.</p>';
+    $('kidLinks').querySelectorAll('[data-kping]').forEach(b => b.onclick = () => sendPing('other', b.dataset.kping));
     $('kidLinks').querySelectorAll('[data-krem]').forEach(b => b.onclick = () => editFamilyReminders((data || []).find(k => k.token === b.dataset.krem)));
     $('kidLinks').querySelectorAll('[data-kcopy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(kidLink(b.dataset.kcopy)); toast('Link copied'); } catch (e) { prompt('Copy this link:', kidLink(b.dataset.kcopy)); } });
     $('kidLinks').querySelectorAll('[data-kshare]').forEach(b => b.onclick = async () => {
@@ -1968,6 +1969,67 @@ function viewKids() {
       if (navigator.share) { try { await navigator.share({ title: 'Family Planner', text, url }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text + ' ' + url);
     });
   });
+}
+// ---------- 📣 Quick reminders to the family (shows on their page + pops up on their phone), and 🎂 birthdays ----------
+const PING_PRESETS = [['pickup', '🚗 Pick up Cece', '🚗 Pick up Cece from school'], ['game', '🏈 Football game', '🏈 Football game'], ['event', '📅 Event', '📅 '], ['other', '✏️ Other', '']];
+function pingCard() {
+  return '<div class="card pad pingcard"><div class="mini-head"><h2>📣 Quick reminder</h2><span class="sub">pops up on their phone</span></div><div class="pingbtns">' +
+    PING_PRESETS.map(([k, label]) => '<button type="button" class="ghost small" data-ping="' + k + '">' + label + '</button>').join('') + '</div></div>';
+}
+function wirePing(root) { root.querySelectorAll('[data-ping]').forEach(b => b.onclick = () => sendPing(b.dataset.ping)); }
+async function sendPing(kind, who) {
+  const c = client(); if (!c || !signedIn()) { toast('Sign in first (More → Account).'); return; }
+  const { data: people } = await c.from('kid_links').select('token,name,pings').order('created_at');
+  if (!people || !people.length) { toast('No family links yet.'); return; }
+  const preset = PING_PRESETS.find(p => p[0] === kind) || PING_PRESETS[3], phones = S().phones || {};
+  const to = who || (people.find(p => p.name === 'Salvador') || people[0]).name;
+  openModal('<h2>📣 Quick reminder</h2>' +
+    '<label>To<select id="pgTo">' + people.map(p => '<option' + (p.name === to ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select></label>' +
+    '<label>What<input id="pgT" maxlength="100" value="' + esc(preset[2]) + '" placeholder="What do they need to remember?"></label>' +
+    '<div class="grid2"><label>Day<input id="pgD" type="date" value="' + today() + '"></label><label>Time<input id="pgAt" type="time"></label></div>' +
+    '<label>Where / notes (optional)<input id="pgW" maxlength="80" placeholder="RHS, stadium, gate 3…"></label>' +
+    '<label class="check"><input type="checkbox" id="pgCal" checked> Put it on my calendar too</label>' +
+    '<label class="check"><input type="checkbox" id="pgSms" checked> Also send a text now</label>' +
+    '<label id="pgPhoneL">Their cell (saved for next time)<input id="pgPhone" type="tel" inputmode="tel" placeholder="479-555-1234"></label>' +
+    '<p class="helper">It shows on their page right away and pops up on their phone 30 minutes before (once they’ve turned on pop-up reminders). Give it about an hour to reach their phone, so for something right now, keep “send a text” checked.</p>' +
+    '<div class="row-actions"><button type="button" id="pgGo">Send</button><button type="button" class="ghost" id="pgX">Cancel</button></div>');
+  const syncPhone = () => { $('pgPhone').value = phones[$('pgTo').value] || ''; $('pgPhoneL').style.display = $('pgSms').checked ? '' : 'none'; };
+  $('pgTo').onchange = syncPhone; $('pgSms').onchange = syncPhone; syncPhone();
+  $('pgX').onclick = closeModal;
+  $('pgGo').onclick = async () => {
+    const name = $('pgTo').value, t = $('pgT').value.trim(), date = $('pgD').value || today(), at = $('pgAt').value, where = $('pgW').value.trim();
+    if (!t || t === '📅') { toast('Type what it’s for.'); return; }
+    if (kind === 'pickup' && !at) { toast('Add the pick-up time.'); $('pgAt').focus(); return; }
+    const text = t + (where ? ' · ' + where : ''), person = people.find(p => p.name === name);
+    const pings = (person.pings || []).filter(p => p.date >= addDays(today(), -2)).concat({ id: uid(), t: text, date, at, from: 'Shaana' });
+    $('pgGo').disabled = true;
+    const { error } = await c.from('kid_links').update({ pings }).eq('token', person.token);
+    if (error) { $('pgGo').disabled = false; toast(error.message); return; }
+    if ($('pgCal').checked) { data.items.push(newItem({ kind: 'event', title: t.replace(/^(\S+ )?/, m => m) + ' – ' + name, date, start: at, end: '', allDay: !at, list: 'Family', driver: /pick ?up|drive|ride/i.test(t) ? name : '', notes: where, location: '' })); window.save(); }
+    const phone = $('pgPhone').value.trim();
+    if (phone && phone !== phones[name]) { S().phones = Object.assign({}, phones, { [name]: phone }); window.save(); }
+    const sms = $('pgSms').checked;
+    closeModal(); route(); toast('📣 Sent to ' + name);
+    if (sms) {
+      const when = (date === today() ? 'today' : fmtDate(date)) + (at ? ' at ' + fmtTime(at) : '');
+      location.href = 'sms:' + (phone ? phone.replace(/[^\d+]/g, '') : '') + (/iPhone|iPad|Mac/.test(navigator.userAgent) ? '&' : '?') + 'body=' + encodeURIComponent('Reminder: ' + text + ' – ' + when + ' 💛');
+    }
+  };
+}
+// Birthdays from the family list: a party card on the day, and a heads-up for the next two weeks.
+async function loadBirthdays() {
+  const box = $('bdayBox'), c = client(); if (!box || !c || !signedIn()) return;
+  let list = null;
+  try { const { data } = await c.from('family_birthdays').select('name,md'); if (data) { list = data; cache.set('bdays', data); } } catch (e) {}
+  list = list || cache.get('bdays'); if (!list) return;
+  if (!$('bdayBox')) return;
+  const t = today(), y = +t.slice(0, 4);
+  const next = list.map(b => { let d = y + '-' + b.md; if (d < t) d = (y + 1) + '-' + b.md; return Object.assign({ date: d, days: Math.round((new Date(d + 'T12:00') - new Date(t + 'T12:00')) / 864e5) }, b); }).sort((a, b) => a.days - b.days);
+  const todays = next.filter(b => b.days === 0), soon = next.filter(b => b.days > 0 && b.days <= 14);
+  const names = l => l.map(b => esc(b.name)).join(' & ');
+  box.innerHTML = (todays.length ? '<div class="card pad bdaycard"><div class="bdbig">🎂🎉🎈</div>' + (todays.some(b => b.name === 'Shaana') ? '<h2>Happy birthday, Shaana!</h2><p>You take care of everyone. Today, let everyone take care of you. 💛</p>' : '') +
+      (todays.some(b => b.name !== 'Shaana') ? '<h2>Today is ' + names(todays.filter(b => b.name !== 'Shaana')) + '’s birthday!</h2><p>Time for cake, candles and lots of hugs 🥳</p>' : '') + '</div>' : '') +
+    (soon.length ? '<a class="card pad tip" href="#gifts"><b>🎁 Birthdays coming up</b><span class="sub">' + soon.map(b => esc(b.name) + ' in ' + b.days + ' day' + (b.days === 1 ? '' : 's') + ' (' + esc(fmtDate(b.date)) + ')').join(' · ') + ' →</span></a>' : '');
 }
 function viewMeds() {
   const t = today(), list = meds(), shown = list.filter(m => medWho === 'all' || m.who === medWho);
@@ -2982,7 +3044,7 @@ function viewBrief() {
   const sec = (title, body) => body ? '<div class="card pad bsec"><h3>' + title + '</h3>' + body + '</div>' : '';
   $('view').innerHTML = '<div class="brief-hero">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
     '<div id="wx" class="wx">' + (w ? wxHtml(w) : '<span class="helper">Checking the weather…</span>') + '</div></div>' +
-    '<div id="kidBox"></div><div class="bgrid">' +
+    '<div id="bdayBox"></div><div id="kidBox"></div><div class="bgrid">' +
     sec('Today’s schedule', events.length ? events.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? 'All day' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <small>· ' + esc(e.location) + '</small>' : '') + '</span></div>').join('') : '<p class="helper">A clear day — nothing on the calendar.</p>') +
     sec('Who’s driving', drives.length ? drives.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? '' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + ' — <em>' + esc(e.driver || 'not set') + '</em></span></div>').join('') + (drives.some(e => !e.driver && e.src === 'planner') ? '<p class="helper">Tap one to set who’s driving.</p>' : '') : '') +
     sec('Dinner tonight', dinner ? '<div class="bline2 dinner" data-meal="Dinner" data-mealdate="' + t + '"><b>🍽</b><span>' + esc(dinner.title) + (dinner.notes ? ' <small>· ' + esc(dinner.notes) + '</small>' : '') + '</span></div>' : '<button type="button" class="ghost small" data-meal="Dinner" data-mealdate="' + t + '">Pick dinner</button>') +
@@ -2995,7 +3057,7 @@ function viewBrief() {
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
   $('bOff').onclick = () => { S().autoBrief = S().autoBrief === false; window.save(); viewBrief(); };
-  loadKidNews();
+  loadKidNews(); loadBirthdays();
   loadWeather().then(v => { const el = $('wx'); if (el && v) el.innerHTML = wxHtml(v); wireWx(); });
   wireWx();
 }
