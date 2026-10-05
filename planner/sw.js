@@ -1,5 +1,5 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'planner-v47';
+const CACHE = 'planner-v48';
 const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'planner.css', 'theme.css', 'neutral.css', 'db.js', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

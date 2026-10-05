@@ -69,6 +69,32 @@
     .ping:first-of-type { border-top: 0; }
     .ping b { flex: none; min-width: 92px; color: var(--muted); font-size: 14px; }
     .msg { text-align: center; padding: 40px 10px; }
+    .calhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .calhead b { font-size: 1.1rem; }
+    .calhead button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; width: 40px; height: 40px; font: inherit; font-size: 1.2rem; }
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
+    .grid .wd { font-size: 12px; color: var(--muted); font-weight: 600; padding: 2px 0 4px; }
+    .grid button { position: relative; aspect-ratio: 1 / 1.05; border: 1px solid transparent; border-radius: 12px; background: none; color: var(--ink); font: inherit; font-size: 15px; padding: 4px 0 0; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+    .grid button.out { visibility: hidden; }
+    .grid button.today { border-color: var(--ink); font-weight: 700; }
+    .grid button.sel { background: var(--accent); color: var(--bg); }
+    .grid button.per { background: #f7c6d6; color: #5a1f35; }
+    .grid button.per.sel { background: #c94f7c; color: #fff; }
+    .grid button.pred { border: 2px dashed #e58fb0; }
+    .dots { display: flex; gap: 2px; height: 6px; }
+    .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
+    .grid button.sel .dots i { background: var(--bg); }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .legend span::before { content: ''; display: inline-block; width: 11px; height: 11px; border-radius: 4px; margin-right: 5px; vertical-align: -1px; }
+    .legend .l-ev::before { background: var(--sage); border-radius: 50%; }
+    .legend .l-per::before { background: #f7c6d6; }
+    .legend .l-pred::before { border: 2px dashed #e58fb0; width: 9px; height: 9px; }
+    .dayp h3 { margin: 12px 0 4px; font-size: 1rem; }
+    .pbtn { margin-top: 10px; width: 100%; border: 2px solid #e58fb0; background: none; color: inherit; border-radius: 999px; padding: 11px; font: inherit; font-weight: 700; }
+    .pbtn.on { background: #f7c6d6; color: #5a1f35; border-color: #f7c6d6; }
+    .pcard { background: #fff0f5; border-color: #f7c6d6; color: #5a1f35; }
+    .pcard h2 { color: #b23a6b; }
+    @media (prefers-color-scheme: dark) { .pcard { background: #3a2530; border-color: #6b3a52; color: #f7d9e4; } .pcard h2 { color: #f2a6c3; } .grid button.per { background: #7a3554; color: #fff; } }
     #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--accent); color: var(--bg); padding: 11px 18px; border-radius: 14px; max-width: 90%; text-align: center; }
   </style>
 </head>
@@ -115,6 +141,62 @@
     return 'Other';
   }
   let info = null, tab = 'event';
+  // ---- Month calendar (and period tracking for Cece) ----
+  const addDays = (d, n) => { const x = new Date(d + 'T12:00'); x.setDate(x.getDate() + n); return iso(x); };
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
+  let calMonth = today.slice(0, 7), selDay = today;
+  const monthEvents = {};   // 'YYYY-MM' → events from the family calendars that belong on this link
+  // Logged period days → next expected start (average cycle; 28 days until two periods are logged). Same as kid-ics.
+  function periodPlan(days) {
+    const set = new Set(days), starts = [...set].sort().filter(d => !set.has(addDays(d, -1)));
+    if (!starts.length) return null;
+    const lens = starts.map(st => { let n = 0; while (set.has(addDays(st, n))) n++; return n; });
+    const gaps = []; for (let i = 1; i < starts.length; i++) { const g = daysBetween(starts[i - 1], starts[i]); if (g >= 18 && g <= 45) gaps.push(g); }
+    const avg = a => a.reduce((t, x) => t + x, 0) / a.length;
+    const cycle = gaps.length ? Math.round(avg(gaps.slice(-6))) : 28, ended = lens.filter((n, i) => addDays(starts[i], n) <= today), len = ended.length ? Math.min(8, Math.max(3, Math.round(avg(ended.slice(-6))))) : 5;
+    let next = addDays(starts[starts.length - 1], cycle);
+    while (addDays(next, len) <= today) next = addDays(next, cycle);
+    const predicted = new Set(); for (let c = 0; c < 3; c++) for (let i = 0; i < len; i++) predicted.add(addDays(next, c * cycle + i));
+    let dayNo = 0; if (set.has(today)) { let d = today; while (set.has(addDays(d, -1))) d = addDays(d, -1); dayNo = daysBetween(d, today) + 1; }
+    return { cycle, len, next, predicted, dayNo };
+  }
+  const eventsOn = d => (monthEvents[d.slice(0, 7)] || info.events || []).filter(e => e.date === d || (e.endDate && e.date <= d && e.endDate >= d));
+  async function loadMonth(ym) {
+    if (monthEvents[ym]) return;
+    const [y, m] = ym.split('-').map(Number), last = new Date(y, m, 0).getDate();
+    try {
+      const r = await fetch(icsUrl() + '&list=1&from=' + ym + '-01&to=' + ym + '-' + pad(last)).then(x => x.json());
+      if (r && Array.isArray(r.events)) { monthEvents[ym] = r.events; if ($('cal')) $('cal').innerHTML = calHtml(); }
+    } catch (e) {}
+  }
+  function calHtml() {
+    const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), last = new Date(y, m, 0).getDate();
+    const per = new Set(info.period ? info.periodDays || [] : []), plan = info.period ? periodPlan(info.periodDays || []) : null;
+    let cells = '';
+    for (let i = 0; i < first.getDay(); i++) cells += '<button type="button" class="out" tabindex="-1"></button>';
+    for (let d = 1; d <= last; d++) {
+      const day = calMonth + '-' + pad(d), n = eventsOn(day).length;
+      const cls = [day === today ? 'today' : '', day === selDay ? 'sel' : '', per.has(day) ? 'per' : '', !per.has(day) && plan && plan.predicted.has(day) && day >= today ? 'pred' : ''].filter(Boolean).join(' ');
+      cells += '<button type="button" data-day="' + day + '" class="' + cls + '">' + d + '<span class="dots">' + '<i></i>'.repeat(Math.min(n, 3)) + '</span></button>';
+    }
+    const sel = eventsOn(selDay);
+    return '<div class="calhead"><button type="button" data-mv="-1" aria-label="Last month">‹</button><b>' + first.toLocaleDateString([], { month: 'long', year: 'numeric' }) + '</b><button type="button" data-mv="1" aria-label="Next month">›</button></div>' +
+      '<div class="grid">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(w => '<span class="wd">' + w + '</span>').join('') + cells + '</div>' +
+      '<div class="legend"><span class="l-ev">Event</span>' + (info.period ? '<span class="l-per">Period</span><span class="l-pred">Expected</span>' : '') + '</div>' +
+      '<div class="dayp"><h3>' + esc(new Date(selDay + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + '</h3>' +
+      (sel.length ? sel.map(e => '<div class="row"><b>' + (e.allDay || !e.start ? 'All day' : niceTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <span class="muted">· ' + esc(e.location) + '</span>' : '') + '</span></div>').join('') : '<p class="muted" style="margin:4px 0">Nothing that day.</p>') +
+      (info.period ? '<button type="button" class="pbtn' + (per.has(selDay) ? ' on' : '') + '" id="perT">' + (per.has(selDay) ? '🌸 Period day ✓ (tap to remove)' : '🌸 Mark as a period day') + '</button>' : '') + '</div>';
+  }
+  function periodHtml() {
+    if (!info.period) return '';
+    const plan = periodPlan(info.periodDays || []);
+    const line = !plan ? 'Start by marking the days of your last period on the calendar below. It will guess when the next one comes.'
+      : plan.dayNo ? 'Today is <b>day ' + plan.dayNo + '</b> of your period.' + ' Next one expected around <b>' + esc(niceDate(plan.next > today ? plan.next : addDays(plan.next, plan.cycle))) + '</b>.'
+      : 'Next period expected around <b>' + esc(niceDate(plan.next)) + '</b>' + (daysBetween(today, plan.next) > 0 ? ' (in ' + daysBetween(today, plan.next) + ' day' + (daysBetween(today, plan.next) === 1 ? '' : 's') + ')' : ' (any day now)') + '.';
+    return '<div class="card pcard"><h2>🌸 Period tracker</h2><p style="margin:0">' + line + '</p>' +
+      (plan ? '<p style="margin:6px 0 0;font-size:14px">Usual cycle: ' + plan.cycle + ' days · usually lasts ' + plan.len + ' days</p>' : '') +
+      '<p style="margin:6px 0 0;font-size:14px">Tap a day, then 🌸 to mark it. The more you mark, the better the guess. If pop-ups are on, your phone gives you a heads-up 2 days before.</p></div>';
+  }
   // Daily reminders: anyone with the link can add, change or delete them. Checkboxes are for today.
   // The phone pops them up through a calendar subscription, which picks up changes on its own.
   const remKey = () => 'remDone-' + token.slice(0, 8) + '-' + today;
@@ -178,8 +260,9 @@
     app.innerHTML = '<h1>Hi ' + esc(info.name) + '! 👋</h1><p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p>' + bdayHtml() + homeHelp() + pingsHtml() + remsHtml() +
       '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
       (tab === 'event' ?
+        periodHtml() + '<div class="card" id="cal">' + calHtml() + '</div>' +
         '<form class="card" id="f"><label for="t">What is it?</label><input id="t" required maxlength="120" placeholder="Band practice, game, friend’s party…" autocomplete="off">' +
-        '<label for="d">Day</label><input id="d" type="date" required min="' + today + '" value="' + today + '">' +
+        '<label for="d">Day</label><input id="d" type="date" required min="' + today + '" value="' + (selDay >= today ? selDay : today) + '">' +
         '<label class="check"><input type="checkbox" id="ad"> All day</label>' +
         '<div class="two" id="times"><div><label for="s">Starts</label><input id="s" type="time"></div><div><label for="e">Ends</label><input id="e" type="time"></div></div>' +
         '<label for="n">Anything else? (where, need a ride…)</label><textarea id="n" rows="2" maxlength="500"></textarea>' +
@@ -206,6 +289,20 @@
     if (rf) rf.onsubmit = e => { e.preventDefault(); const x = { t: $('remT').value.trim(), at: $('remAt').value }; if (!x.t || !x.at) return; const l = (info.reminders || []).slice(); if (remEdit === 'new') l.push(x); else l[remEdit] = x; saveRems(l); };
     if (app.querySelector('.bday:not(.other)')) confetti();
     if ($('hsX')) $('hsX').onclick = () => { store.set('hsHide', '1'); draw(); };
+    if ($('cal')) {
+      loadMonth(calMonth);
+      $('cal').onclick = async e => {
+        const mv = e.target.closest('[data-mv]'), day = e.target.closest('[data-day]');
+        if (mv) { const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + Number(mv.dataset.mv), 1); calMonth = iso(d).slice(0, 7); selDay = calMonth === today.slice(0, 7) ? today : calMonth + '-01'; $('cal').innerHTML = calHtml(); loadMonth(calMonth); }
+        else if (day) { selDay = day.dataset.day; $('cal').innerHTML = calHtml(); if ($('d') && selDay >= today) $('d').value = selDay; }
+        else if (e.target.closest('#perT')) {
+          const set = new Set(info.periodDays || []); if (set.has(selDay)) set.delete(selDay); else set.add(selDay);
+          const before = info.periodDays; info.periodDays = [...set].sort(); $('cal').innerHTML = calHtml();
+          try { info.periodDays = await rpc('kid_set_period', { p_token: token, p_days: info.periodDays }); const pc = app.querySelector('.pcard'); if (pc) pc.outerHTML = periodHtml(); }
+          catch (err) { info.periodDays = before; $('cal').innerHTML = calHtml(); toast('Couldn’t save. Try again.'); }
+        }
+      };
+    }
     if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
     $('f').onsubmit = async e => {
       e.preventDefault();
@@ -218,6 +315,7 @@
         const r = await rpc('kid_add', body);
         call('/functions/v1/kid-notify', { token, activity: r.activity }).catch(() => {});
         toast('✓ Added! ' + (info.tell || 'Mom') + ' will see it.');
+        delete monthEvents[body.p_date ? body.p_date.slice(0, 7) : calMonth];
         info = await rpc('kid_info', { p_token: token }); draw(); loadUpcoming();
       } catch (err) { btn.disabled = false; btn.textContent = tab === 'event' ? 'Add to the calendar' : 'Add to the shopping list'; toast(/date/i.test(err.message) ? 'Pick a day.' : /slow/i.test(err.message) ? 'That’s a lot! Try again later.' : 'Couldn’t add that. Try again.'); }
     };
