@@ -550,3 +550,10 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .bdaycard h2 { color: #b23a6b; margin: 4px 0; }
 .bdaycard p { margin: 4px 0 6px; }
 .bdbig { font-size: 2.6rem; line-height: 1.1; }
+
+/* Dinner ideas the family sent from their links */
+.dinnerideas { background: var(--cream); }
+.didea { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.didea:first-of-type { border-top: 0; }
+.didea .sub { display: block; }
+.dlist .check { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: .95rem; color: var(--ink); }

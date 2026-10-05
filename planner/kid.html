@@ -119,6 +119,11 @@
     .tabs { background: var(--cream); padding: 5px; border-radius: 999px; gap: 4px; }
     .tabs button { border: 0; border-radius: 999px; background: transparent; font-family: 'Patrick Hand', cursive; font-size: 1.15rem; font-weight: 400; padding: 10px; }
     .tabs button.on { background: var(--ink); color: var(--bg); }
+    .tabs.three { grid-template-columns: 1fr 1fr 1.2fr; }
+    .tabs.three button { font-size: 1.02rem; padding: 10px 4px; }
+    .dstat { display: inline-block; margin-top: 4px; font-size: 14px; color: var(--muted); }
+    .dstat.yes { color: var(--sage-deep); font-weight: 600; }
+    #df { background: var(--card); }
     .hs { background: var(--sage-soft); }
     .row b, .ping b { font-family: 'Patrick Hand', cursive; font-weight: 400; font-size: 1rem; color: var(--ink-2, var(--muted)); }
     .go { background: var(--ink); color: var(--bg); }
@@ -356,6 +361,45 @@
       if (r && Array.isArray(r.events)) { info.events = r.events; if ($('up')) $('up').innerHTML = upHtml(); }
     } catch (e) {}
   }
+  // ---- Dinner ideas: suggest one (from the recipe book or typed), Mom says yes (planned + shopping list) or not this time ----
+  let recipesCache = null, dinnerAuto = '';
+  const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return iso(d); };
+  const dinnerStatus = d => d.status === 'yes' ? '<span class="dstat yes">✅ ' + esc(info.tell === 'Mom' ? 'Mom' : 'Shaana') + ' said yes' + (d.planDate ? ' · ' + esc(niceDate(d.planDate)) : '') + '</span>'
+    : d.status === 'no' ? '<span class="dstat no">💭 Not this time' + (d.reply ? ': ' + esc(d.reply) : '') + '</span>' : '<span class="dstat">⏳ Waiting for ' + esc(info.tell === 'Mom' ? 'Mom' : 'Shaana') + '</span>';
+  function dinnerHtml() {
+    const ds = info.dinners || [];
+    return '<form class="card" id="df"><label for="dt">What should we have for dinner?</label><input id="dt" list="recipeList" required maxlength="120" placeholder="Chicken alfredo, tacos, Grandma’s chili…" autocomplete="off"><datalist id="recipeList"></datalist>' +
+      '<p class="muted" id="dRec" style="margin:6px 0 0;font-size:14px">Start typing to pick from the family recipe book 📖</p>' +
+      '<label for="dd">Which night?</label><input id="dd" type="date" min="' + today + '" value="' + tomorrow() + '">' +
+      '<label for="di">What do we need for it? (one per line)</label><textarea id="di" rows="5" maxlength="2000" placeholder="1 lb ground beef&#10;Taco shells&#10;Shredded cheese"></textarea>' +
+      '<label for="dn">Anything else? (optional)</label><input id="dn" maxlength="300" placeholder="I can help cook!">' +
+      '<button class="go">Send to ' + esc(info.tell === 'Mom' ? 'Mom' : 'Shaana') + '</button></form>' +
+      '<div class="card"><h2>🍽️ Your dinner ideas</h2>' + (ds.length ? ds.map(d => '<div class="row"><b>' + (d.day ? esc(niceDate(d.day)) : 'Any night') + '</b><span style="flex:1">' + esc(d.title) + '<br>' + dinnerStatus(d) + '</span></div>').join('') : '<p class="muted">None yet. What sounds good this week?</p>') + '</div>';
+  }
+  async function wireDinner() {
+    const fill = () => {
+      const r = (recipesCache || []).find(x => x.title.toLowerCase() === $('dt').value.trim().toLowerCase());
+      if (r) {
+        if (!$('di').value.trim() || $('di').value === dinnerAuto) { dinnerAuto = String(r.ingredients || '').trim(); $('di').value = dinnerAuto; }
+        $('dRec').textContent = '📖 From the family recipe book — the ingredients are filled in. Take out anything we already have.';
+      } else $('dRec').textContent = 'Start typing to pick from the family recipe book 📖';
+    };
+    $('dt').addEventListener('input', fill); $('dt').addEventListener('change', fill);
+    $('df').onsubmit = async e => {
+      e.preventDefault();
+      const typed = $('dt').value.trim(), rec = (recipesCache || []).find(x => x.title.toLowerCase() === typed.toLowerCase());
+      const btn = $('df').querySelector('.go'), title = rec ? rec.title : typed; if (!title) return;
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const r = await rpc('kid_suggest_dinner', { p_token: token, p_title: title, p_day: $('dd').value || null, p_ingredients: $('di').value.trim(), p_notes: $('dn').value.trim() });
+        call('/functions/v1/kid-notify', { token, activity: r.activity }).catch(() => {});
+        toast('🍽️ Sent! ' + (info.tell === 'Mom' ? 'Mom' : 'Shaana') + ' will say yes or not this time.');
+        dinnerAuto = ''; info = await rpc('kid_info', { p_token: token }); draw();
+      } catch (err) { btn.disabled = false; btn.textContent = 'Send to ' + (info.tell === 'Mom' ? 'Mom' : 'Shaana'); toast(/date/i.test(err.message) ? 'Pick a night in the next 2 months.' : /slow/i.test(err.message) ? 'That’s a lot! Try again later.' : 'Couldn’t send that. Try again.'); }
+    };
+    if (!recipesCache) { try { recipesCache = await rpc('kid_recipes', { p_token: token }); } catch (e) { recipesCache = []; } }
+    if ($('recipeList')) $('recipeList').innerHTML = recipesCache.map(r => '<option value="' + esc(r.title) + '">').join('');
+  }
   async function load() {
     try { info = await rpc('kid_info', { p_token: token }); } catch (e) { info = null; }
     if (!info) { app.innerHTML = '<div class="msg"><h1>🙈</h1><p>This link doesn’t work. Ask for a new one.</p></div>'; return; }
@@ -367,8 +411,8 @@
     app.innerHTML = '<div class="hello">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', ' + esc(info.name) + ' 💛</span>' +
       '<h1>' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + '</h1>' +
       '<p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p></div>' + bdayHtml() + periodWarn() + homeHelp() + pingsHtml() + remsHtml() +
-      '<div class="tabs"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping list</button></div>' +
-      (tab === 'event' ?
+      '<div class="tabs three"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping</button><button type="button" data-tab="dinner" class="' + (tab === 'dinner' ? 'on' : '') + '">🍽️ Dinner idea</button></div>' +
+      (tab === 'dinner' ? dinnerHtml() : tab === 'event' ?
         periodHtml() + '<div class="card" id="cal">' + calHtml() + '</div>' +
         '<form class="card" id="f"><label for="t">What is it?</label><input id="t" required maxlength="120" placeholder="Band practice, game, friend’s party…" autocomplete="off">' +
         '<label for="d">Day</label><input id="d" type="date" required min="' + today + '" value="' + (selDay >= today ? selDay : today) + '">' +
@@ -383,7 +427,7 @@
         '<label for="n">Details (optional)</label><input id="n" maxlength="200" placeholder="the big box, strawberry kind…">' +
         '<button class="go">Add to the shopping list</button></form>' +
         '<div class="card"><h2>Already on the list</h2>' + (info.shop.length ? info.shop.map(s => '<div class="row"><span>' + esc(s.title) + (s.notes ? ' <span class="muted">· ' + esc(s.notes) + '</span>' : '') + '</span></div>').join('') : '<p class="muted">The list is empty.</p>') + '</div>') +
-      (info.mine.length ? '<div class="card ok"><h2>You added</h2>' + info.mine.map(m => '<div class="row"><span>' + (m.kind === 'event' ? '📅 ' : '🛒 ') + esc(m.title) + '</span></div>').join('') + '</div>' : '');
+      (info.mine.length ? '<div class="card ok"><h2>You added</h2>' + info.mine.map(m => '<div class="row"><span>' + (m.kind === 'event' ? '📅 ' : m.kind === 'dinner' ? '🍽️ ' : '🛒 ') + esc(m.title) + '</span></div>').join('') + '</div>' : '');
     app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); });
     app.querySelectorAll('[data-rem]').forEach(c => c.onchange = () => { const d = remDone().filter(x => x !== c.dataset.rem); if (c.checked) d.push(c.dataset.rem); store.set(remKey(), JSON.stringify(d)); draw(); });
     if ($('remAdd')) $('remAdd').onclick = () => store.set('remSub-' + token.slice(0, 8), '1');
@@ -420,9 +464,10 @@
       };
     }
     if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
-    $('f').onsubmit = async e => {
+    if (tab === 'dinner') wireDinner();
+    if ($('f')) $('f').onsubmit = async e => {
       e.preventDefault();
-      const btn = app.querySelector('.go'), title = $('t').value.trim(); if (!title) return;
+      const btn = $('f').querySelector('.go'), title = $('t').value.trim(); if (!title) return;
       const body = { p_token: token, p_kind: tab, p_title: title, p_notes: $('n').value.trim(), p_date: null, p_start: '', p_end: '', p_list: '', p_for: '' };
       if (tab === 'event') Object.assign(body, { p_date: $('d').value, p_start: $('ad').checked ? '' : $('s').value, p_end: $('ad').checked ? '' : $('e').value, p_for: $('w').value });
       else body.p_list = aisleOf(title);

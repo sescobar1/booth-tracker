@@ -1956,12 +1956,67 @@ const kidLink = t => new URL('kid.html?t=' + t, location.href.split('#')[0]).hre
 async function loadKidNews() {
   const box = $('kidBox'), c = client(); if (!box || !c || !signedIn()) return;
   try {
-    const { data } = await c.from('kid_activity').select('id,who,kind,title,created_at').eq('seen', false).order('created_at', { ascending: false }).limit(20);
-    if (!$('kidBox') || !data || !data.length) { if ($('kidBox')) box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="card pad kidnews"><div class="mini-head"><h2>👨‍👩‍👧‍👦 From the family</h2><button type="button" class="ghost small" id="kidSeen">Got it</button></div>' +
-      data.map(a => '<div class="mini-row"><span>' + (a.kind === 'event' ? '📅 ' : '🛒 ') + '<b>' + esc(a.who) + '</b> added ' + esc(a.title) + '</span><span class="sub">' + esc(fmtDate(a.created_at.slice(0, 10), 'rel')) + '</span></div>').join('') + '</div>';
-    $('kidSeen').onclick = async () => { await c.from('kid_activity').update({ seen: true }).in('id', data.map(a => a.id)); box.innerHTML = ''; };
+    const [{ data: acts }, { data: dinners }] = await Promise.all([
+      c.from('kid_activity').select('id,who,kind,title,created_at').eq('seen', false).neq('kind', 'dinner').order('created_at', { ascending: false }).limit(20),
+      c.from('kid_dinners').select('*').eq('status', 'new').order('created_at')]);
+    const data = acts || [], ideas = dinners || [];
+    if (!$('kidBox')) return;
+    if (!data.length && !ideas.length) { box.innerHTML = ''; return; }
+    box.innerHTML = (ideas.length ? '<div class="card pad kidnews dinnerideas"><h2>🍽️ Dinner ideas from the family</h2>' + ideas.map((d, n) =>
+        '<div class="didea"><div><b>' + esc(d.who) + '</b> suggests <b>' + esc(d.title) + '</b><span class="sub">' + esc([d.day ? fmtDate(d.day, 'rel') : 'any night', d.ingredients ? d.ingredients.split('\n').filter(x => x.trim()).length + ' ingredients' : '', d.notes ? '“' + d.notes + '”' : ''].filter(Boolean).join(' · ')) + '</span></div>' +
+        '<div class="row-actions tight"><button type="button" class="small" data-dyes="' + n + '">✓ Yes</button><button type="button" class="ghost small" data-dno="' + n + '">Not this time</button></div></div>').join('') + '</div>' : '') +
+      (data.length ? '<div class="card pad kidnews"><div class="mini-head"><h2>👨‍👩‍👧‍👦 From the family</h2><button type="button" class="ghost small" id="kidSeen">Got it</button></div>' +
+      data.map(a => '<div class="mini-row"><span>' + (a.kind === 'event' ? '📅 ' : '🛒 ') + '<b>' + esc(a.who) + '</b> added ' + esc(a.title) + '</span><span class="sub">' + esc(fmtDate(a.created_at.slice(0, 10), 'rel')) + '</span></div>').join('') + '</div>' : '');
+    if ($('kidSeen')) $('kidSeen').onclick = async () => { await c.from('kid_activity').update({ seen: true }).in('id', data.map(a => a.id)); loadKidNews(); };
+    box.querySelectorAll('[data-dyes]').forEach(b => b.onclick = () => acceptDinner(ideas[+b.dataset.dyes]));
+    box.querySelectorAll('[data-dno]').forEach(b => b.onclick = () => declineDinner(ideas[+b.dataset.dno]));
   } catch (e) { box.innerHTML = ''; }
+}
+// Yes to a dinner idea: pick the night, it goes on the meal plan, and the ingredients you don't have go on the shopping list.
+function acceptDinner(d) {
+  const lines = String(d.ingredients || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const have = line => { const name = ingredientName(line); return ALWAYS_HAVE.test(name) || !!onHandFor(line, onHand()) || data.items.some(i => i.kind === 'shop' && !i.done && i.title.toLowerCase() === name.toLowerCase()); };
+  const night = d.day && d.day >= today() ? d.day : addDays(today(), 1);
+  openModal('<h2>🍽️ ' + esc(d.title) + '</h2><p class="helper">' + esc(d.who) + '’s idea' + (d.notes ? ' · “' + esc(d.notes) + '”' : '') + '</p>' +
+    '<label>Which night?<input id="daDate" type="date" value="' + night + '"></label><p class="helper" id="daNow"></p>' +
+    (lines.length ? '<p class="lbl">Add to the shopping list</p><div class="dlist">' + lines.map((l, n) => '<label class="check"><input type="checkbox" data-dline="' + n + '"' + (have(l) ? '' : ' checked') + '> ' + esc(l) + (have(l) ? ' <span class="sub">(have it or already on the list)</span>' : '') + '</label>').join('') + '</div>'
+      : '<p class="helper">No ingredients were sent. You can add them to the shopping list later from Meals.</p>') +
+    '<div class="row-actions"><button type="button" id="daGo">✓ Yes, plan it</button><button type="button" class="ghost" id="daCancel">Cancel</button></div>');
+  const showNow = () => { const cur = data.items.find(i => i.kind === 'meal' && i.date === $('daDate').value && i.list === 'Dinner'); $('daNow').textContent = cur ? 'This replaces “' + cur.title + '” for dinner that night.' : ''; };
+  $('daDate').onchange = showNow; showNow();
+  $('daCancel').onclick = closeModal;
+  $('daGo').onclick = async () => {
+    const date = $('daDate').value; if (!date) { toast('Pick the night.'); return; }
+    const r = recipes().find(x => x.title.toLowerCase() === d.title.toLowerCase());
+    const cur = data.items.find(i => i.kind === 'meal' && i.date === date && i.list === 'Dinner');
+    if (cur) Object.assign(cur, { title: d.title, location: r ? r.id : '', notes: d.who + '’s idea' });
+    else data.items.push(newItem({ kind: 'meal', date, list: 'Dinner', title: d.title, location: r ? r.id : '', notes: d.who + '’s idea' }));
+    let n = 0;
+    document.querySelectorAll('[data-dline]').forEach(cb => {
+      if (!cb.checked) return;
+      const line = lines[+cb.dataset.dline], name = ingredientName(line);
+      if (data.items.some(i => i.kind === 'shop' && !i.done && i.title.toLowerCase() === name.toLowerCase())) return;
+      data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(line), notes: (amountOf(line) ? amountOf(line) + ' · ' : '') + d.title, location: (S().walmart || {})[name.toLowerCase()] || '' })); n++;
+    });
+    window.save();
+    await answerDinner(d, { status: 'yes', plan_date: date });
+    closeModal(); route();
+    toast('🍽️ ' + d.title + ' is on ' + fmtDate(date, 'rel') + (n ? ' · 🛒 ' + n + ' things added' : ''));
+  };
+}
+function declineDinner(d) {
+  openModal('<h2>Not this time</h2><p class="helper">' + esc(d.who) + ' suggested ' + esc(d.title) + '. They’ll see your answer on their page.</p>' +
+    '<label>A short note (optional)<input id="dnReply" maxlength="120" placeholder="Let’s do it next week!"></label>' +
+    '<div class="row-actions"><button type="button" id="dnGo">Send</button><button type="button" class="ghost" id="dnCancel">Cancel</button></div>');
+  $('dnCancel').onclick = closeModal;
+  $('dnGo').onclick = async () => { await answerDinner(d, { status: 'no', reply: $('dnReply').value.trim() }); closeModal(); route(); toast('Sent to ' + d.who); };
+}
+async function answerDinner(d, change) {
+  const c = client(); if (!c) return;
+  const { error } = await c.from('kid_dinners').update(change).eq('id', d.id);
+  if (error) { toast('Couldn’t send the answer: ' + error.message); return; }
+  await c.from('kid_activity').update({ seen: true }).eq('item_id', d.id);
+  loadKidNews();
 }
 const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, ch => ch.charCodeAt(0)); };
 async function turnOnAlerts() {
