@@ -1,4 +1,4 @@
-// Sends a phone notification to Shaana when Eli or Cece add something with their kid link.
+// Sends a phone notification to Shaana when Salvador, Eli or Cece add something with their family link.
 // Also sends a test notification when Shaana (signed in) asks for one from the Planner.
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
       const auth = req.headers.get('Authorization') || '';
       const { data: { user } } = await admin.auth.getUser(auth.replace(/^Bearer\s+/i, ''));
       if (!user) return json({ error: 'Sign in first.' }, 401);
-      const sent = await sendTo(user.id, { title: '🔔 Planner alerts are on', body: 'You’ll get a message here when Eli or Cece add something.', url: './#today' });
+      const sent = await sendTo(user.id, { title: '🔔 Planner alerts are on', body: 'You’ll get a message here when Salvador, Eli or Cece add something.', url: './#today' });
       return json({ sent });
     }
     const { data: link } = await admin.from('kid_links').select('owner,name').eq('token', String(body.token || '')).maybeSingle();
