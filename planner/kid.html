@@ -43,6 +43,8 @@
     .hs h2 { color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 1.05rem; }
     .hs ol { margin: 6px 0 4px; padding-left: 1.3em; }
     .hs li { margin: 6px 0; }
+    .hsdone { margin: 10px 0 2px; padding: 10px 12px; background: var(--card); border-radius: 14px; font-weight: 600; cursor: pointer; }
+    .hsdone input { accent-color: var(--sage); }
     .hs .x { float: right; border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; text-decoration: underline; }
     .ico { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; background: var(--card); font-size: 15px; }
     .rem { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-weight: 500; }
@@ -353,9 +355,10 @@
       (info.hasWork ? '<p class="muted" style="font-size:14px;margin:8px 0 0">💼 Work days from the family calendar are in your phone reminders too (you get a heads-up the night before).</p>' : '') + '</div>';
   };
   const homeHelp = () => standalone || store.get('hsHide') ? '' :
-    '<div class="card hs"><button type="button" class="x" id="hsX">Hide</button><h2>📲 Put this on your Home Screen</h2>' +
+    '<div class="card hs"><h2>📲 Put this on your Home Screen</h2>' +
     (ios ? '<ol><li>Open this link in <b>Safari</b>.</li><li>Tap the <b>Share</b> button <span class="ico">⬆︎</span> (bottom of the screen on iPhone, top on iPad).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>'
-      : '<ol><li>Open this link in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>') + '</div>';
+      : '<ol><li>Open this link in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li><li>Tap <b>Add</b>. Now open it from the new icon anytime.</li></ol>') +
+    '<label class="check hsdone"><input type="checkbox" id="hsDone"> ✅ I did it! Hide these steps</label></div>';
 
   // Who an event is for: just me (default), everyone, or one other person in the family.
   const FAMILY = [['Eli', 'Elisha'], ['Cece', 'Cece'], ['Shaana', 'Shaana'], ['Salvador', 'Salvador']];
@@ -498,7 +501,12 @@
     const rf = app.querySelector('[data-remform]');
     if (rf) rf.onsubmit = e => { e.preventDefault(); const x = { t: $('remT').value.trim(), at: $('remAt').value }; if (!x.t || !x.at) return; const l = (info.reminders || []).slice(); if (remEdit === 'new') l.push(x); else l[remEdit] = x; saveRems(l); };
     if (app.querySelector('.bday:not(.other)')) confetti();
-    if ($('hsX')) $('hsX').onclick = () => { store.set('hsHide', '1'); draw(); };
+    // Checking "I did it" hides the Home Screen steps for good on this phone.
+    if ($('hsDone')) $('hsDone').onchange = () => {
+      store.set('hsHide', '1');
+      const card = app.querySelector('.card.hs'); card.style.transition = 'opacity .35s'; card.style.opacity = '0';
+      setTimeout(() => { card.remove(); toast('🎉 Great! Open it from your Home Screen icon from now on.'); }, 350);
+    };
     app.onclick = e => {
       const b = e.target.closest('[data-per]'), o = e.target.closest('[data-per-other]'), sv = e.target.closest('[data-per-day]');
       if (b) periodAction(b.dataset.per, today);
