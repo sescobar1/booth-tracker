@@ -1908,7 +1908,7 @@ async function loadKidNews() {
   try {
     const { data } = await c.from('kid_activity').select('id,who,kind,title,created_at').eq('seen', false).order('created_at', { ascending: false }).limit(20);
     if (!$('kidBox') || !data || !data.length) { if ($('kidBox')) box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="card pad kidnews"><div class="mini-head"><h2>👧 From the kids</h2><button type="button" class="ghost small" id="kidSeen">Got it</button></div>' +
+    box.innerHTML = '<div class="card pad kidnews"><div class="mini-head"><h2>👨‍👩‍👧‍👦 From the family</h2><button type="button" class="ghost small" id="kidSeen">Got it</button></div>' +
       data.map(a => '<div class="mini-row"><span>' + (a.kind === 'event' ? '📅 ' : '🛒 ') + '<b>' + esc(a.who) + '</b> added ' + esc(a.title) + '</span><span class="sub">' + esc(fmtDate(a.created_at.slice(0, 10), 'rel')) + '</span></div>').join('') + '</div>';
     $('kidSeen').onclick = async () => { await c.from('kid_activity').update({ seen: true }).in('id', data.map(a => a.id)); box.innerHTML = ''; };
   } catch (e) { box.innerHTML = ''; }
@@ -1931,13 +1931,13 @@ async function turnOnAlerts() {
   } catch (e) { toast('Couldn’t turn on alerts: ' + (e.message || e)); }
 }
 function viewKids() {
-  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>👧 Kids’ links</h1>' +
-    '<div class="card pad"><p class="helper">Eli and Cece can <b>add</b> events to the family calendar and things to the shopping list. They can’t change or delete anything. You get a phone alert when they add something, and it shows on Today.</p></div>' +
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>👨‍👩‍👧‍👦 Family links</h1>' +
+    '<div class="card pad"><p class="helper">Salvador, Eli and Cece can <b>add</b> events to the family calendar and things to the shopping list. They can’t change or delete anything. You get a phone alert when they add something, and it shows on Today. Each link page shows how to put it on their Home Screen.</p></div>' +
     '<div class="card pad"><h2>🔔 Phone alerts</h2><p class="helper">Turn this on once on each phone or computer you want alerts on. On iPhone, open the Planner from its Home Screen icon first.</p><button type="button" id="alertsOn">Turn on alerts</button></div>' +
     '<div id="kidLinks"><p class="helper">Loading links…</p></div>';
   $('alertsOn').onclick = turnOnAlerts;
   const c = client(); if (!c || !signedIn()) { $('kidLinks').innerHTML = '<p class="helper">Sign in to see the links.</p>'; return; }
-  c.from('kid_links').select('token,name').order('name', { ascending: false }).then(({ data }) => {
+  c.from('kid_links').select('token,name').order('created_at').then(({ data }) => {
     $('kidLinks').innerHTML = (data || []).map(k => '<div class="card pad"><h2>' + esc(k.name) + '’s link</h2><p class="sub" style="word-break:break-all">' + esc(kidLink(k.token)) + '</p><div class="row-actions tight"><button type="button" class="small" data-kshare="' + esc(k.token) + '" data-kname="' + esc(k.name) + '">Send to ' + esc(k.name) + '</button><button type="button" class="small ghost" data-kcopy="' + esc(k.token) + '">Copy</button><a class="button small ghost" href="' + esc(kidLink(k.token)) + '" target="_blank" rel="noopener">See what they see</a></div></div>').join('') || '<p class="helper">No kid links yet.</p>';
     $('kidLinks').querySelectorAll('[data-kcopy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(kidLink(b.dataset.kcopy)); toast('Link copied'); } catch (e) { prompt('Copy this link:', kidLink(b.dataset.kcopy)); } });
     $('kidLinks').querySelectorAll('[data-kshare]').forEach(b => b.onclick = async () => {
@@ -3354,7 +3354,7 @@ function editHealth(who, type, it) {
 function viewMore() {
   $('view').innerHTML = '<h1>More</h1>' +
     '<a class="card pad tip" href="#calendars"><b>Google &amp; Outlook calendars</b><span class="sub">' + (S().calendars.length ? S().calendars.length + ' connected →' : 'Connect →') + '</span></a>' +
-    '<a class="card pad tip" href="#kids"><b>Kids’ links</b><span class="sub">👧 Eli & Cece add events and shopping items · phone alerts →</span></a>' +
+    '<a class="card pad tip" href="#kids"><b>Family links</b><span class="sub">👨‍👩‍👧‍👦 Salvador, Eli & Cece add events and shopping items · phone alerts →</span></a>' +
     '<a class="card pad tip" href="../recipes/"><b>Family recipes</b><span class="sub">📸 Recipe photos to share with family →</span></a>' +
     '<a class="card pad tip" href="#meds"><b>Medicines</b><span class="sub">💊 Medicine & vitamin reminders for everyone →</span></a>' +
     '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
