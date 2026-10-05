@@ -4,6 +4,7 @@
 //  - matching events from Shaana's connected calendars (for Salvador: his work and Shaana's work), alert the night before.
 //  - for a link with a filter (Cece: her events and work days; Eli: his events, music, and Saturday football),
 //    the planner and calendar events that match it,
+//  - their to-dos with a day (pop-up at the reminder time, or 8 AM),
 //  - with period tracking on, a heads-up 3 days before the next expected period (from Shaana's planner tracker).
 // Changes show up on their own when the phone refreshes the calendar.
 // With &list=1 it answers with matching events as JSON (next 3 weeks, or &from=&to= up to 62 days) for the page's calendar.
@@ -160,7 +161,7 @@ const jsonHead = { 'Content-Type': 'application/json', 'Cache-Control': 'no-stor
 
 Deno.serve(async (req) => {
   const params = new URL(req.url).searchParams, token = params.get('t') || '';
-  const { data: k } = await admin.from('kid_links').select('owner,name,reminders,pings,cal_rules,show_rx,show_days,period,period_list,period_open').eq('token', token).maybeSingle();
+  const { data: k } = await admin.from('kid_links').select('owner,name,tell,reminders,pings,cal_rules,show_rx,show_days,period,period_list,period_open').eq('token', token).maybeSingle();
   if (!k || token.length < 20) return new Response('Not found', { status: 404 });
   const rx = k.show_rx ? new RegExp(k.show_rx, 'i') : null, byDay: Rule[] = k.show_days || [];
   const filtered = !!rx || byDay.length > 0;
@@ -213,6 +214,16 @@ Deno.serve(async (req) => {
       events.push('BEGIN:VEVENT', 'UID:fam-item-' + i.id + '@family-planner', 'DTSTAMP:' + stamp,
         ...(timed ? ['DTSTART;TZID=' + TZID + ':' + d + 'T' + i.start_time.replace(':', '') + '00', i.end_time ? 'DTEND;TZID=' + TZID + ':' + d + 'T' + i.end_time.replace(':', '') + '00' : 'DURATION:PT1H']
           : ['DTSTART;VALUE=DATE:' + d, 'DURATION:P1D']), 'SUMMARY:' + esc(i.title), ...alarm(i.title, timed ? '-PT60M' : '-PT4H'), 'END:VEVENT');
+    });
+  }
+  // To-dos with a day: a pop-up at the reminder time (or 8 AM when there's no time) until they're checked off.
+  {
+    const { data: tasks } = await admin.from('family_tasks').select('id,title,due,at,added_by').eq('owner', k.owner).eq('for_who', k.name).eq('done', false).not('due', 'is', null);
+    (tasks || []).forEach((t) => {
+      const d = t.due.replace(/-/g, ''), title = '✅ ' + t.title + (t.added_by && t.added_by !== k.name ? ' (from ' + (t.added_by === 'Shaana' ? (k.tell || 'Mom') : t.added_by) + ')' : '');
+      events.push('BEGIN:VEVENT', 'UID:task-' + t.id + '@family-planner', 'DTSTAMP:' + stamp,
+        ...(t.at ? ['DTSTART;TZID=' + TZID + ':' + d + 'T' + t.at.replace(':', '') + '00', 'DURATION:PT15M', 'SUMMARY:' + esc(title), ...alarm(title, 'PT0M')]
+          : ['DTSTART;VALUE=DATE:' + d, 'DURATION:P1D', 'SUMMARY:' + esc(title), 'TRANSP:TRANSPARENT', ...alarm(title, 'PT8H')]), 'END:VEVENT');
     });
   }
   // A quiet heads-up 3 days before the next expected period. Periods are the start days logged in Shaana's planner

@@ -37,8 +37,8 @@ Deno.serve(async (req) => {
     if (!act || act.pushed) return json({ sent: 0 });
     await admin.from('kid_activity').update({ pushed: true }).eq('id', act.id);
     const sent = await sendTo(link.owner, {
-      title: act.kind === 'event' ? '📅 ' + link.name + ' added to the calendar' : act.kind === 'dinner' ? '🍽️ ' + link.name + ' has a dinner idea' : '🛒 ' + link.name + ' added to the shopping list',
-      body: act.title + (act.kind === 'dinner' ? ' · Tap to say yes or not this time' : ''), url: act.kind === 'shop' ? './#meals/shop' : './#today', tag: 'kid-' + act.id,
+      title: act.kind === 'event' ? '📅 ' + link.name + ' added to the calendar' : act.kind === 'dinner' ? '🍽️ ' + link.name + ' has a dinner idea' : act.kind === 'task' ? '✅ ' + link.name + ' added a to-do for you' : '🛒 ' + link.name + ' added to the shopping list',
+      body: act.title + (act.kind === 'dinner' ? ' · Tap to say yes or not this time' : ''), url: act.kind === 'shop' ? './#meals/shop' : act.kind === 'task' ? './#tasks' : './#today', tag: 'kid-' + act.id,
     });
     return json({ sent });
   } catch (e) { return json({ error: String((e as Error).message || e) }, 500); }

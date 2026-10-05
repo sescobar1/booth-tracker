@@ -500,12 +500,12 @@ function viewToday() {
     '<div class="strip">' + strip + '</div>' +
     '<div class="card pad"><h2 class="section-title">' + (sel === t ? 'Today' : esc(fmtDate(sel, 'rel'))) + ' <small>' + esc(new Date(sel + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</small></h2>' +
     (selList.length ? selList.map(entryRow).join('') : '<p class="helper">Nothing scheduled' + (sel === t ? ' today' : '') + '. <button type="button" class="linkish" id="addHere">Add something</button></p>') + '</div>' +
-    '<div id="bdayBox"></div><div id="kidBox"></div>' + pingCard() + medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
+    '<div id="bdayBox"></div><div id="kidBox"></div><div id="famTodo"></div>' + pingCard() + medCard(sel) + mealsCard(sel) + giftCard() + carDueCard() + cleanCard() +
     '<div class="card pad journal"><h2>Notes</h2><textarea id="dayNote" rows="4" placeholder="Thoughts, reminders, things to remember today…">' + esc(note ? note.notes : '') + '</textarea></div>' +
     '<div class="card pad"><h2>The week ahead</h2>' + (next || '<p class="helper">Nothing coming up.</p>') + '</div>' +
     (S().calendars.length ? '' : '<a class="card pad tip" href="#calendars"><b>Connect your Google and Outlook calendars</b><span class="sub">so everything shows up here →</span></a>');
   wireRows($('view'));
-  loadKidNews(); loadBirthdays(); wirePing($('view'));
+  loadKidNews(); loadBirthdays(); loadFamilyTodos(); wirePing($('view'));
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-sday]').forEach(b => b.onclick = () => { todaySel = b.dataset.sday; viewToday(); });
   $('view').querySelectorAll('[data-tile]').forEach(b => b.onclick = () => {
@@ -1966,7 +1966,7 @@ async function loadKidNews() {
         '<div class="didea"><div><b>' + esc(d.who) + '</b> suggests <b>' + esc(d.title) + '</b><span class="sub">' + esc([d.day ? fmtDate(d.day, 'rel') : 'any night', d.ingredients ? d.ingredients.split('\n').filter(x => x.trim()).length + ' ingredients' : '', d.notes ? '“' + d.notes + '”' : ''].filter(Boolean).join(' · ')) + '</span></div>' +
         '<div class="row-actions tight"><button type="button" class="small" data-dyes="' + n + '">✓ Yes</button><button type="button" class="ghost small" data-dno="' + n + '">Not this time</button></div></div>').join('') + '</div>' : '') +
       (data.length ? '<div class="card pad kidnews"><div class="mini-head"><h2>👨‍👩‍👧‍👦 From the family</h2><button type="button" class="ghost small" id="kidSeen">Got it</button></div>' +
-      data.map(a => '<div class="mini-row"><span>' + (a.kind === 'event' ? '📅 ' : '🛒 ') + '<b>' + esc(a.who) + '</b> added ' + esc(a.title) + '</span><span class="sub">' + esc(fmtDate(a.created_at.slice(0, 10), 'rel')) + '</span></div>').join('') + '</div>' : '');
+      data.map(a => '<div class="mini-row"><span>' + (a.kind === 'event' ? '📅 ' : a.kind === 'task' ? '✅ ' : '🛒 ') + '<b>' + esc(a.who) + '</b> ' + (a.kind === 'task' ? 'added a to-do for you: ' : 'added ') + esc(a.title) + '</span><span class="sub">' + esc(fmtDate(a.created_at.slice(0, 10), 'rel')) + '</span></div>').join('') + '</div>' : '');
     if ($('kidSeen')) $('kidSeen').onclick = async () => { await c.from('kid_activity').update({ seen: true }).in('id', data.map(a => a.id)); loadKidNews(); };
     box.querySelectorAll('[data-dyes]').forEach(b => b.onclick = () => acceptDinner(ideas[+b.dataset.dyes]));
     box.querySelectorAll('[data-dno]').forEach(b => b.onclick = () => declineDinner(ideas[+b.dataset.dno]));
@@ -2017,6 +2017,52 @@ async function answerDinner(d, change) {
   if (error) { toast('Couldn’t send the answer: ' + error.message); return; }
   await c.from('kid_activity').update({ seen: true }).eq('item_id', d.id);
   loadKidNews();
+}
+// ---------- ✅ Family to-dos ----------
+// Each person's to-do list on their family page. Shaana sees them all here and can add to anyone's (with a reminder
+// that pops up on their phone). Tasks the family adds for Shaana go straight into her own Tasks, marked "From Cece".
+const FAM = [['Eli', 'Elisha'], ['Cece', 'Cece'], ['Salvador', 'Salvador']];
+async function loadFamilyTodos() {
+  const box = $('famTodo'), c = client(); if (!box || !c || !signedIn()) return;
+  try {
+    const { data: rows, error } = await c.from('family_tasks').select('*').or('done.eq.false,done_at.gt.' + new Date(Date.now() - 864e5).toISOString()).order('created_at');
+    if (error || !$('famTodo')) return;
+    const when = t => [t.due ? fmtDate(t.due, 'rel') : '', t.at ? fmtTime(t.at) + ' 🔔' : ''].filter(Boolean).join(' ');
+    box.innerHTML = '<div class="card pad famtodo"><div class="mini-head"><h2>✅ Family to-dos</h2><button type="button" class="ghost small" id="ftAdd">＋ Add</button></div>' +
+      FAM.map(([w, label]) => {
+        const mine = (rows || []).filter(t => t.for_who === w);
+        return '<div class="ftp"><div class="day">' + esc(label) + '</div>' + (mine.length ? mine.map(t => '<label class="check ftrow' + (t.done ? ' done' : '') + '"><input type="checkbox" data-ft="' + t.id + '"' + (t.done ? ' checked' : '') + '> <span>' + esc(t.title) +
+          '<span class="sub">' + esc([when(t), t.added_by && t.added_by !== w ? 'from ' + (t.added_by === 'Shaana' ? 'you' : t.added_by) : ''].filter(Boolean).join(' · ')) + '</span></span></label>').join('') : '<p class="helper">Nothing on the list.</p>') + '</div>';
+      }).join('') + '<p class="helper">Tasks the family adds for you go into your Tasks, marked “From …”.</p></div>';
+    box.querySelectorAll('[data-ft]').forEach(cb => cb.onchange = async () => {
+      const { error: e } = await c.from('family_tasks').update({ done: cb.checked, done_at: cb.checked ? new Date().toISOString() : null }).eq('id', cb.dataset.ft);
+      if (e) { cb.checked = !cb.checked; toast('Couldn’t save: ' + e.message); } else loadFamilyTodos();
+    });
+    $('ftAdd').onclick = () => addFamilyTodo();
+  } catch (e) {}
+}
+function addFamilyTodo(who) {
+  openModal('<h2>✅ Add a to-do</h2>' +
+    '<p class="lbl">For</p><div class="segs" id="ftWho">' + FAM.map(([w, l]) => '<button type="button" class="seg' + ((who || 'Eli') === w ? ' on' : '') + '" data-w="' + w + '">' + l + '</button>').join('') + '<button type="button" class="seg" data-w="me">Me</button></div>' +
+    '<label>What<input id="ftTitle" maxlength="120" placeholder="Take out the trash"></label>' +
+    '<div class="grid2"><label>Day (optional)<input id="ftDue" type="date" min="' + today() + '"></label><label>Remind at (optional)<input id="ftAt" type="time"></label></div>' +
+    '<p class="helper">With a day, it pops up on their phone (at the time, or 8 AM) once they’ve turned on pop-ups from their page.</p>' +
+    '<div class="row-actions"><button type="button" id="ftGo">Add</button><button type="button" class="ghost" id="ftCancel">Cancel</button></div>');
+  let w = who || 'Eli';
+  $('ftWho').querySelectorAll('.seg').forEach(b => b.onclick = () => { w = b.dataset.w; $('ftWho').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); });
+  $('ftCancel').onclick = closeModal;
+  $('ftGo').onclick = async () => {
+    const title = $('ftTitle').value.trim(), due = $('ftDue').value || ($('ftAt').value ? today() : ''), at = $('ftAt').value;
+    if (!title) { toast('Type the task.'); return; }
+    if (w === 'me') {
+      data.items.push(newItem({ kind: 'task', title, date: due || null, list: 'Home', remind: at ? -(+at.slice(0, 2) * 60 + +at.slice(3, 5)) : null }));
+      window.save(); closeModal(); route(); toast('✓ Added to your Tasks'); return;
+    }
+    const c = client(); if (!c || !signedIn()) { toast('Sign in first (More → Account).'); return; }
+    const { error } = await c.from('family_tasks').insert({ for_who: w, title, due: due || null, at, added_by: 'Shaana' });
+    if (error) { toast('Couldn’t add: ' + error.message); return; }
+    closeModal(); loadFamilyTodos(); toast('✓ Sent to ' + FAM.find(x => x[0] === w)[1]);
+  };
 }
 const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, ch => ch.charCodeAt(0)); };
 async function turnOnAlerts() {

@@ -121,6 +121,11 @@
     .tabs button.on { background: var(--ink); color: var(--bg); }
     .tabs.three { grid-template-columns: 1fr 1fr 1.2fr; }
     .tabs.three button { font-size: 1.02rem; padding: 10px 4px; }
+    .todo .from { color: var(--muted); font-weight: 400; font-size: 13px; }
+    .todo select { margin-bottom: 2px; }
+    .asked { font-size: 15px; padding: 3px 0; }
+    .asked.done { color: var(--muted); text-decoration: line-through; }
+    .go.small { margin: 0; padding: 11px; }
     .dstat { display: inline-block; margin-top: 4px; font-size: 14px; color: var(--muted); }
     .dstat.yes { color: var(--sage-deep); font-weight: 600; }
     #df { background: var(--card); }
@@ -316,8 +321,8 @@
     return '<div class="card"><h2>⏰ ' + esc(info.name) + '’s reminders</h2>' +
       (r.length ? r.map((x, i) => remEdit === i ? remForm(x, i) : '<div class="rem' + (done.includes(x.at + x.t) ? ' done' : '') + '"><input type="checkbox" aria-label="Done" data-rem="' + esc(x.at + x.t) + '"' + (done.includes(x.at + x.t) ? ' checked' : '') + '><span>' + esc(x.t) + '</span><small>' + niceTime(x.at) + '</small><button type="button" class="link" data-remedit="' + i + '" aria-label="Edit">✏️</button></div>').join('') : '<p class="muted">No reminders yet.</p>') +
       (remEdit === 'new' ? remForm(null, 'new') : '<button type="button" class="link addrem" id="remNew">＋ Add a reminder</button>') +
-      (r.length || (info.pings || []).length || info.hasWork ? (store.get('remSub-' + token.slice(0, 8)) ? '<p class="muted" style="margin:10px 0 0;font-size:14px">✓ Pop-ups are on this phone. Changes show up on their own within about an hour. <a href="' + esc(webcal()) + '" id="remAdd">Set up again</a></p>' :
-        '<a class="addcal" id="remAdd" href="' + esc(ios ? webcal() : icsUrl()) + '">🔔 Get pop-up reminders on my phone</a><ol class="muted" style="font-size:14px;margin:8px 0 0;padding-left:1.2em">' + (ios ? '<li>Tap the button, then tap <b>Subscribe</b>.</li><li>Turn <b>Remove Alerts OFF</b> (important, or nothing pops up).</li><li>Tap <b>Add</b>. Your phone will pop up each reminder every day, and changes made here show up on their own.</li>' : '<li>Tap the button and open it with your <b>Calendar</b> app, then tap <b>Add</b>.</li><li>Your phone will pop up each reminder every day. After changing reminders, tap the button again.</li>') + '</ol>') : '') + '</div>';
+      (store.get('remSub-' + token.slice(0, 8)) ? '<p class="muted" style="margin:10px 0 0;font-size:14px">✓ Pop-ups are on this phone. Changes show up on their own within about an hour. <a href="' + esc(webcal()) + '" id="remAdd">Set up again</a></p>' :
+        '<a class="addcal" id="remAdd" href="' + esc(ios ? webcal() : icsUrl()) + '">🔔 Get pop-up reminders on my phone</a><ol class="muted" style="font-size:14px;margin:8px 0 0;padding-left:1.2em">' + (ios ? '<li>Tap the button, then tap <b>Subscribe</b>.</li><li>Turn <b>Remove Alerts OFF</b> (important, or nothing pops up).</li><li>Tap <b>Add</b>. Your phone will pop up each reminder every day, and changes made here show up on their own.</li>' : '<li>Tap the button and open it with your <b>Calendar</b> app, then tap <b>Add</b>.</li><li>Your phone will pop up each reminder every day. After changing reminders, tap the button again.</li>') + '</ol>') + '</div>';
   };
   // Instructions for putting this page on the Home Screen, hidden once it's opened from there.
   const standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
@@ -400,6 +405,44 @@
     if (!recipesCache) { try { recipesCache = await rpc('kid_recipes', { p_token: token }); } catch (e) { recipesCache = []; } }
     if ($('recipeList')) $('recipeList').innerHTML = recipesCache.map(r => '<option value="' + esc(r.title) + '">').join('');
   }
+  // ---- To-do list: your own tasks to check off, and add a task for yourself or anyone in the family (with a reminder) ----
+  const PEOPLE = [['Shaana', null], ['Eli', 'Elisha'], ['Cece', 'Cece'], ['Salvador', 'Salvador']];
+  const nameOf = w => w === 'Shaana' ? (info.tell === 'Mom' ? 'Mom' : 'Shaana') : w === 'Eli' ? 'Elisha' : w;
+  let taskForm = false;
+  const whenTxt = t => [t.due ? (t.due === today ? 'Today' : niceDate(t.due)) : '', t.at ? niceTime(t.at) : ''].filter(Boolean).join(' ');
+  function todoHtml() {
+    const ts = info.tasks || [], asked = info.asked || [];
+    return '<div class="card todo"><h2>✅ To-do</h2>' +
+      (ts.length ? ts.map(t => '<div class="rem' + (t.done ? ' done' : '') + '"><input type="checkbox" aria-label="Done" data-task="' + esc(t.id) + '"' + (t.done ? ' checked' : '') + '><span>' + esc(t.title) +
+        (t.from && t.from !== info.name ? ' <small class="from">from ' + esc(nameOf(t.from)) + '</small>' : '') + '</span>' + (whenTxt(t) ? '<small>' + esc(whenTxt(t)) + (t.at ? ' 🔔' : '') + '</small>' : '') + '</div>').join('') : '<p class="muted">Nothing to do right now. 🎉</p>') +
+      (taskForm ? '<form class="remform" id="tf"><input id="tt" maxlength="120" placeholder="Feed the dog, sign my form…" required>' +
+        '<label for="tw" style="margin:0">Who is it for?</label><select id="tw"><option value="' + esc(info.name) + '">Me</option>' + PEOPLE.filter(([v]) => v !== info.name).map(([v]) => '<option value="' + v + '">' + esc(nameOf(v)) + '</option>').join('') + '</select>' +
+        '<div class="two"><div><label for="td" style="margin:0 0 4px">Day (optional)</label><input id="td" type="date" min="' + today + '"></div><div><label for="ta" style="margin:0 0 4px">Remind at (optional)</label><input id="ta" type="time"></div></div>' +
+        '<div class="two"><button class="go small">Add task</button><button type="button" class="link" id="tfCancel">Cancel</button></div></form>'
+        : '<button type="button" class="link addrem" id="tfNew">＋ Add a task</button>') +
+      (asked.length ? '<p class="muted" style="margin:10px 0 2px;font-size:14px">You asked:</p>' + asked.map(a => '<div class="asked' + (a.done ? ' done' : '') + '">' + (a.done ? '✓ ' : '• ') + esc(a.title) + ' <span class="muted">→ ' + esc(nameOf(a.for)) + (a.due ? ' · ' + esc(niceDate(a.due)) : '') + '</span></div>').join('') : '') + '</div>';
+  }
+  function wireTodo() {
+    app.querySelectorAll('[data-task]').forEach(c => c.onchange = async () => {
+      try { await rpc('kid_task_done', { p_token: token, p_id: c.dataset.task, p_done: c.checked }); const t = info.tasks.find(x => x.id === c.dataset.task); if (t) t.done = c.checked; redrawTodo(); if (c.checked) toast('✓ Nice job!'); }
+      catch (e) { c.checked = !c.checked; toast('Couldn’t save. Try again.'); }
+    });
+    if ($('tfNew')) $('tfNew').onclick = () => { taskForm = true; redrawTodo(); $('tt').focus(); };
+    if ($('tfCancel')) $('tfCancel').onclick = () => { taskForm = false; redrawTodo(); };
+    if ($('tf')) $('tf').onsubmit = async e => {
+      e.preventDefault();
+      const title = $('tt').value.trim(), who = $('tw').value; if (!title) return;
+      const btn = $('tf').querySelector('.go'); btn.disabled = true;
+      try {
+        const r = await rpc('kid_add_task', { p_token: token, p_for: who, p_title: title, p_due: $('td').value || null, p_at: $('ta').value || '' });
+        if (r.activity) call('/functions/v1/kid-notify', { token, activity: r.activity }).catch(() => {});
+        taskForm = false;
+        toast(who === info.name ? '✓ Added to your list' + ($('ta').value ? ' · your phone will remind you' : '') : '✓ Sent to ' + nameOf(who));
+        const fresh = await rpc('kid_info', { p_token: token }); info.tasks = fresh.tasks; info.asked = fresh.asked; redrawTodo();
+      } catch (err) { btn.disabled = false; toast(/date/i.test(err.message) ? 'Pick a day in the next year.' : /slow/i.test(err.message) ? 'That’s a lot! Try again later.' : 'Couldn’t add that. Try again.'); }
+    };
+  }
+  function redrawTodo() { const el = app.querySelector('.card.todo'); if (el) { el.outerHTML = todoHtml(); wireTodo(); } }
   async function load() {
     try { info = await rpc('kid_info', { p_token: token }); } catch (e) { info = null; }
     if (!info) { app.innerHTML = '<div class="msg"><h1>🙈</h1><p>This link doesn’t work. Ask for a new one.</p></div>'; return; }
@@ -410,7 +453,7 @@
     const hr = new Date().getHours();
     app.innerHTML = '<div class="hello">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', ' + esc(info.name) + ' 💛</span>' +
       '<h1>' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + '</h1>' +
-      '<p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p></div>' + bdayHtml() + periodWarn() + homeHelp() + pingsHtml() + remsHtml() +
+      '<p class="sub">Add things to the family calendar or the shopping list. ' + esc(info.tell || 'Mom') + ' gets a message when you do.</p></div>' + bdayHtml() + periodWarn() + homeHelp() + pingsHtml() + todoHtml() + remsHtml() +
       '<div class="tabs three"><button type="button" data-tab="event" class="' + (tab === 'event' ? 'on' : '') + '">📅 Calendar</button><button type="button" data-tab="shop" class="' + (tab === 'shop' ? 'on' : '') + '">🛒 Shopping</button><button type="button" data-tab="dinner" class="' + (tab === 'dinner' ? 'on' : '') + '">🍽️ Dinner idea</button></div>' +
       (tab === 'dinner' ? dinnerHtml() : tab === 'event' ?
         periodHtml() + '<div class="card" id="cal">' + calHtml() + '</div>' +
@@ -464,6 +507,7 @@
       };
     }
     if ($('ad')) $('ad').onchange = () => { $('times').style.display = $('ad').checked ? 'none' : ''; };
+    wireTodo();
     if (tab === 'dinner') wireDinner();
     if ($('f')) $('f').onsubmit = async e => {
       e.preventDefault();
