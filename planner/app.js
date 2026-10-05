@@ -1930,15 +1930,38 @@ async function turnOnAlerts() {
     toast('🔔 Alerts are on. You should get a test message now.');
   } catch (e) { toast('Couldn’t turn on alerts: ' + (e.message || e)); }
 }
+// Shaana edits anyone's daily reminders (the same list they see and can change on their own page).
+function editFamilyReminders(k) {
+  let list = (k.reminders || []).map(r => Object.assign({}, r));
+  const draw = () => {
+    openModal('<h2>⏰ ' + esc(k.name) + '’s reminders</h2><p class="helper">Every day at these times, ' + esc(k.name) + '’s phone pops up the reminder (once they tap “Get pop-up reminders” on their page).</p>' +
+      '<div id="frList">' + list.map((r, i) => '<div class="grid2 frrow"><input data-frt="' + i + '" value="' + esc(r.t) + '" placeholder="Brush your teeth"><div class="frtime"><input type="time" data-fra="' + i + '" value="' + esc(r.at) + '"><button type="button" class="ghost small" data-frdel="' + i + '" aria-label="Delete">✕</button></div></div>').join('') + '</div>' +
+      '<button type="button" class="ghost small" id="frAdd">＋ Add a reminder</button>' +
+      '<div class="row-actions"><button type="button" id="frSave">Save</button><button type="button" class="ghost" id="frX">Cancel</button></div>');
+    const grab = () => { list = list.map((r, i) => ({ t: $('modalBody').querySelector('[data-frt="' + i + '"]').value.trim(), at: $('modalBody').querySelector('[data-fra="' + i + '"]').value })); };
+    $('frAdd').onclick = () => { grab(); list.push({ t: '', at: '20:00' }); draw(); const f = $('modalBody').querySelector('[data-frt="' + (list.length - 1) + '"]'); if (f) f.focus(); };
+    $('modalBody').querySelectorAll('[data-frdel]').forEach(b => b.onclick = () => { grab(); list.splice(+b.dataset.frdel, 1); draw(); });
+    $('frX').onclick = closeModal;
+    $('frSave').onclick = async () => {
+      grab();
+      const { data, error } = await client().rpc('kid_set_reminders', { p_token: k.token, p_reminders: list.filter(r => r.t && r.at) });
+      if (error) { toast(error.message); return; }
+      k.reminders = data; closeModal(); viewKids(); toast('✓ ' + k.name + '’s reminders saved');
+    };
+  };
+  draw();
+}
 function viewKids() {
   $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>👨‍👩‍👧‍👦 Family links</h1>' +
-    '<div class="card pad"><p class="helper">Salvador, Eli and Cece can <b>add</b> events to the family calendar and things to the shopping list. They can’t change or delete anything. You get a phone alert when they add something, and it shows on Today. Each link page shows how to put it on their Home Screen.</p></div>' +
+    '<div class="card pad"><p class="helper">Salvador, Eli and Cece can <b>add</b> events to the family calendar and things to the shopping list (they can’t change or delete those), and set their own daily reminders. You get a phone alert when they add something, and it shows on Today. Each link page shows how to put it on their Home Screen.</p></div>' +
     '<div class="card pad"><h2>🔔 Phone alerts</h2><p class="helper">Turn this on once on each phone or computer you want alerts on. On iPhone, open the Planner from its Home Screen icon first.</p><button type="button" id="alertsOn">Turn on alerts</button></div>' +
     '<div id="kidLinks"><p class="helper">Loading links…</p></div>';
   $('alertsOn').onclick = turnOnAlerts;
   const c = client(); if (!c || !signedIn()) { $('kidLinks').innerHTML = '<p class="helper">Sign in to see the links.</p>'; return; }
-  c.from('kid_links').select('token,name').order('created_at').then(({ data }) => {
-    $('kidLinks').innerHTML = (data || []).map(k => '<div class="card pad"><h2>' + esc(k.name) + '’s link</h2><p class="sub" style="word-break:break-all">' + esc(kidLink(k.token)) + '</p><div class="row-actions tight"><button type="button" class="small" data-kshare="' + esc(k.token) + '" data-kname="' + esc(k.name) + '">Send to ' + esc(k.name) + '</button><button type="button" class="small ghost" data-kcopy="' + esc(k.token) + '">Copy</button><a class="button small ghost" href="' + esc(kidLink(k.token)) + '" target="_blank" rel="noopener">See what they see</a></div></div>').join('') || '<p class="helper">No kid links yet.</p>';
+  c.from('kid_links').select('token,name,reminders').order('created_at').then(({ data }) => {
+    $('kidLinks').innerHTML = (data || []).map(k => '<div class="card pad"><h2>' + esc(k.name) + '’s link</h2><p class="sub" style="word-break:break-all">' + esc(kidLink(k.token)) + '</p><div class="row-actions tight"><button type="button" class="small" data-kshare="' + esc(k.token) + '" data-kname="' + esc(k.name) + '">Send to ' + esc(k.name) + '</button><button type="button" class="small ghost" data-kcopy="' + esc(k.token) + '">Copy</button><a class="button small ghost" href="' + esc(kidLink(k.token)) + '" target="_blank" rel="noopener">See what they see</a></div>' +
+      '<div class="kidrems"><b>⏰ Reminders</b>' + ((k.reminders || []).length ? (k.reminders || []).map(r => '<span class="sub">' + esc(fmtTime(r.at)) + ' · ' + esc(r.t) + '</span>').join('') : '<span class="sub">None yet</span>') + '<button type="button" class="small ghost" data-krem="' + esc(k.token) + '">Edit reminders</button></div></div>').join('') || '<p class="helper">No kid links yet.</p>';
+    $('kidLinks').querySelectorAll('[data-krem]').forEach(b => b.onclick = () => editFamilyReminders((data || []).find(k => k.token === b.dataset.krem)));
     $('kidLinks').querySelectorAll('[data-kcopy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(kidLink(b.dataset.kcopy)); toast('Link copied'); } catch (e) { prompt('Copy this link:', kidLink(b.dataset.kcopy)); } });
     $('kidLinks').querySelectorAll('[data-kshare]').forEach(b => b.onclick = async () => {
       const url = kidLink(b.dataset.kshare), text = 'Here’s your link to add things to our family calendar and shopping list 💛';
