@@ -1818,10 +1818,20 @@ function snaLink() {
   return new URL('sna.html?t=' + S().snaToken, location.href).href;
 }
 // A printable sheet for counting the closet by hand: every item by kind, with boxes for Have and Order.
+// Pickup details at the top of a printed form: filled in when known, otherwise lines to write on.
+const SNA_STORES = ['Conway, AR', 'Fort Smith, AR'];
+function snaPickupBlock(pk) {
+  pk = pk || {};
+  const line = (label, v, w) => '<div class="pkf"><b>' + label + '</b><span class="pkline" style="min-width:' + (w || 180) + 'px">' + esc(v || '') + '</span></div>';
+  const store = pk.store ? esc(pk.store) + ' Sam’s Club' : SNA_STORES.map(x => '☐ ' + esc(x.replace(', AR', ''))).join(' &nbsp; ') + ' &nbsp; ☐ Other ____________';
+  return '<div class="pkblock"><div class="pkrow">' + line('Name', pk.name, 260) + line('Email', pk.email, 260) + '</div>' +
+    '<div class="pkrow">' + line('Pickup date', pk.date ? fmtDate(pk.date, 'long') : '', 170) + line('Time', pk.time ? fmtTime(pk.time) : '', 110) + '</div>' +
+    '<div class="pkrow"><div class="pkf"><b>Sam’s Club store</b><span class="pkstore">' + store + '</span></div></div></div>';
+}
 // A clean printable copy of the snack list, by category (name, size, price).
 function snaPrintList(list) {
   const items = list.filter(i => !/out of stock/i.test(i.note || ''));
-  const html = '<h2>SNA Snack Closet list</h2><p class="sub">' + items.length + ' snacks · printed ' + esc(fmtDate(today(), 'long')) + '</p>' +
+  const html = '<h2>SNA Snack Closet list</h2><p class="sub">' + items.length + ' snacks · printed ' + esc(fmtDate(today(), 'long')) + '</p>' + snaPickupBlock(snaData().pickup) +
     '<table class="snaform"><thead><tr><th style="width:28px"></th><th>Snack</th><th>Size</th><th>Price</th></tr></thead><tbody>' +
     SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c); return l.length ? '<tr class="cat"><td colspan="4">' + esc(c) + ' (' + l.length + ')</td></tr>' +
       l.map(i => '<tr><td>☐</td><td>' + esc(i.name) + '</td><td>' + esc(i.size || '') + '</td><td>' + (i.price ? money(i.price) : '') + '</td></tr>').join('') : ''; }).join('') + '</tbody></table>';
@@ -1920,20 +1930,30 @@ function snaForm(past) {
   lines.sort((a, b) => SNA_CATS.indexOf(a.cat || 'Other') - SNA_CATS.indexOf(b.cat || 'Other') || pos(a.id) - pos(b.id));
   const table = '<table class="snaform"><thead><tr><th>Qty</th><th>Item</th><th>Aisle</th><th>Price</th><th>Total</th></tr></thead><tbody>' + lines.map(l => '<tr><td>' + l.qty + '</td><td>' + esc(l.name) + (l.size ? ' <small>(' + esc(l.size) + ')</small>' : '') + '</td><td>' + esc(l.aisle || '') + '</td><td>' + money(l.price) + '</td><td>' + money(l.qty * l.price) + '</td></tr>').join('') +
     '</tbody><tfoot><tr><td>' + lines.reduce((s, l) => s + l.qty, 0) + '</td><td colspan="3"><b>Total (before tax)</b></td><td><b>' + money(total) + '</b></td></tr></tfoot></table>';
-  const pk = past ? past.pickup : sn.pickup;
-  const pkLine = pk && (pk.store || pk.date) ? '<p class="pickupbox">🚗 <b>Pickup:</b> ' + esc((pk.store || '') + ' Sam’s Club') + (pk.date ? ' · ' + esc(fmtDate(pk.date, 'long')) : '') + (pk.time ? ' at ' + esc(fmtTime(pk.time)) : '') + '<br>🏷 <b>Name on the order:</b> ' + esc(pk.name || '') + (pk.phone ? ' · 📞 ' + esc(pk.phone) : '') + (pk.email ? ' · ✉️ ' + esc(pk.email) : '') + '</p>' : '';
-  const head = '<h2>SNA Snack Closet order</h2><p class="sub">Arkansas Tech University · ' + esc(fmtDate(date, 'long')) + ' · Sam’s Club · ordered by Shaana Escobar</p>' + pkLine;
-  const text = 'SNA Snack Closet order – ' + fmtDate(date, 'long') + '\nSam’s Club' + (pk && (pk.store || pk.date) ? '\nPickup: ' + (pk.store || '') + ' Sam’s Club' + (pk.date ? ', ' + fmtDate(pk.date, 'long') : '') + (pk.time ? ' at ' + fmtTime(pk.time) : '') + '\nName on the order: ' + (pk.name || '') + (pk.phone ? ' · ' + pk.phone : '') + (pk.email ? ' · ' + pk.email : '') : '') + '\n\n' + lines.map(l => l.qty + ' × ' + l.name + (l.size ? ' (' + l.size + ')' : '') + (l.aisle ? ' – aisle ' + l.aisle : '') + ' – ' + money(l.price) + ' = ' + money(l.qty * l.price)).join('\n') + '\n\nTotal (before tax): ' + money(total) + '\n\nShaana Escobar';
+  // Pickup details at the top: name, email, date, time and store. Type them in; they print, email and save with the order.
+  const pk = Object.assign({}, (past ? past.pickup : sn.pickup) || {});
+  const head = () => '<h2>SNA Snack Closet order</h2><p class="sub">Arkansas Tech University · ' + esc(fmtDate(date, 'long')) + ' · Sam’s Club · ordered by Shaana Escobar</p>' + snaPickupBlock(pk);
+  const text = () => 'SNA Snack Closet order – ' + fmtDate(date, 'long') + '\n\nPickup' +
+    '\nName: ' + (pk.name || '') + '\nEmail: ' + (pk.email || '') + '\nDate: ' + (pk.date ? fmtDate(pk.date, 'long') : '') + '\nTime: ' + (pk.time ? fmtTime(pk.time) : '') + '\nStore: ' + (pk.store ? pk.store + ' Sam’s Club' : '') +
+    '\n\n' + lines.map(l => l.qty + ' × ' + l.name + (l.size ? ' (' + l.size + ')' : '') + (l.aisle ? ' – aisle ' + l.aisle : '') + ' – ' + money(l.price) + ' = ' + money(l.qty * l.price)).join('\n') + '\n\nTotal (before tax): ' + money(total) + '\n\nShaana Escobar';
+  const storeOpts = ['', ...SNA_STORES, ...(pk.store && !SNA_STORES.includes(pk.store) ? [pk.store] : [])];
+  const fields = '<div class="card pad sfpk"><h3>🚗 Pickup</h3><div class="grid2"><label>Name<input id="pkName" value="' + esc(pk.name || '') + '" placeholder="Name on the order"></label><label>Email<input id="pkEmail" type="email" value="' + esc(pk.email || '') + '"></label></div>' +
+    '<div class="grid2"><label>Pickup date<input id="pkDate" type="date" value="' + esc(pk.date || '') + '"></label><label>Time<input id="pkTime" type="time" value="' + esc(pk.time || '') + '"></label></div>' +
+    '<label>Sam’s Club store<select id="pkStore">' + storeOpts.map(x => '<option value="' + esc(x) + '"' + (x === (pk.store || '') ? ' selected' : '') + '>' + (x ? esc(x) : '—') + '</option>').join('') + '</select></label></div>';
   $('modalBody').classList.add('wide');
-  openModal(head + table + '<div class="row-actions"><button type="button" id="sfPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="sfMail">✉️ Email</button><button type="button" class="ghost" id="sfCopy">Copy</button><button type="button" class="ghost" id="sfCsv">Excel (.csv)</button></div>' +
+  openModal('<h2>SNA Snack Closet order</h2><p class="sub">' + esc(fmtDate(date, 'long')) + '</p>' + fields + table + '<div class="row-actions"><button type="button" id="sfPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="sfMail">✉️ Email</button><button type="button" class="ghost" id="sfCopy">Copy</button><button type="button" class="ghost" id="sfCsv">Excel (.csv)</button></div>' +
     (past ? '<div class="row-actions"><button type="button" class="ghost" id="sfX">Close</button></div>' : '<div class="row-actions"><button type="button" id="sfDone">✓ Mark as ordered</button><button type="button" class="ghost" id="sfX">Keep editing</button></div><p class="helper">“Mark as ordered” saves it under Orders and clears the order for next time. When it arrives, tap ✓ Got it.</p>'));
+  [['pkName', 'name'], ['pkEmail', 'email'], ['pkDate', 'date'], ['pkTime', 'time'], ['pkStore', 'store']].forEach(([el, k]) => $(el).addEventListener('change', () => {
+    pk[k] = $(el).value.trim();
+    if (past) { past.pickup = Object.assign({}, pk); snaSave({ orders: sn.orders }); } else snaSave({ pickup: Object.assign({}, snaData().pickup || {}, pk) });
+  }));
   $('sfX').onclick = closeModal;
-  $('sfPrint').onclick = () => { const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = head + table; $('view').appendChild(d); window.print(); setTimeout(() => d.remove(), 1000); };
-  $('sfMail').onclick = () => { location.href = 'mailto:?subject=' + encodeURIComponent('SNA Snack Closet order – ' + fmtDate(date)) + '&body=' + encodeURIComponent(text); };
-  $('sfCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(text).then(() => toast('Copied. Paste it into an email or Teams.'), () => toast('Could not copy.'));
+  $('sfPrint').onclick = () => { const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = head() + table; $('view').appendChild(d); window.print(); setTimeout(() => d.remove(), 1000); };
+  $('sfMail').onclick = () => { location.href = 'mailto:?subject=' + encodeURIComponent('SNA Snack Closet order – ' + fmtDate(date)) + '&body=' + encodeURIComponent(text()); };
+  $('sfCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(text()).then(() => toast('Copied. Paste it into an email or Teams.'), () => toast('Could not copy.'));
   $('sfCsv').onclick = () => download('SNA-order-' + date + '.csv', 'Qty,Item,Size,Aisle,Price,Total,Link\n' + lines.map(l => [l.qty, l.name, l.size || '', l.aisle || '', l.price.toFixed(2), (l.qty * l.price).toFixed(2), l.url || ''].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n') + '\n,Total,,,,' + total.toFixed(2) + ',', 'text/csv');
   if (!past) $('sfDone').onclick = () => {
-    const orders = [{ date, pickup: sn.pickup || null, lines: lines.map(l => ({ id: l.id, name: l.name, size: l.size, aisle: l.aisle, price: l.price, qty: l.qty, url: l.url, cat: l.cat })), total: Math.round(total * 100) / 100 }].concat(sn.orders).slice(0, 52);
+    const orders = [{ date, pickup: Object.keys(pk).some(k => pk[k]) ? Object.assign({}, pk) : null, lines: lines.map(l => ({ id: l.id, name: l.name, size: l.size, aisle: l.aisle, price: l.price, qty: l.qty, url: l.url, cat: l.cat })), total: Math.round(total * 100) / 100 }].concat(sn.orders).slice(0, 52);
     sn.items.forEach(i => { i.order = 0; });
     snaSave({ items: sn.items, orders, pickup: null }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
   };

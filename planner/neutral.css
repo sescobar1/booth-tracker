@@ -581,3 +581,13 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .snarow.gone { background: #f8ece8; border-radius: 10px; }
 .snapickbar { position: sticky; top: 64px; z-index: 5; background: #fff7f4; }
 .snapickbar .sub { display: block; margin: 2px 0 6px; }
+
+/* Pickup details at the top of the SNA order form and printed list */
+.pkblock { border: 1.5px solid #cfc6bc; border-radius: 12px; padding: 10px 14px; margin: 8px 0 14px; }
+.pkrow { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 6px 0; }
+.pkf { display: flex; align-items: flex-end; gap: 8px; }
+.pkf b { white-space: nowrap; font-size: .95rem; }
+.pkline { display: inline-block; border-bottom: 1px solid #8e837b; min-height: 1.3em; padding: 0 4px; }
+.pkstore { font-size: .95rem; }
+.sfpk { background: var(--cream); }
+.sfpk h3 { margin: 0 0 6px; }
