@@ -591,3 +591,7 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .pkstore { font-size: .95rem; }
 .sfpk { background: var(--cream); }
 .sfpk h3 { margin: 0 0 6px; }
+
+/* 🛒 quick shopping-list button on Today */
+.assignbtn.shopbtn { background: #c98a6b; }
+.qsadded { color: var(--sage); font-weight: 600; min-height: 1.2em; margin: 4px 0 8px; }

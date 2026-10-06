@@ -492,6 +492,7 @@ function viewToday() {
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
     '<button type="button" class="tile t-meal" data-tile="meal">' + TILE_ICONS.meal + '<b>Meal</b></button>' +
     '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Write</b></button></div>' +
+    '<button type="button" class="assignbtn shopbtn" id="quickShop">🛒 Add to shopping list</button>' +
     '<button type="button" class="assignbtn" id="assignTask">👨‍👩‍👧‍👦 Assign a task to the family</button>' +
     trackButtons(sel) +
     '<div class="row-actions tight"><a class="button ghost small" href="#brief">☀ Morning briefing</a><button type="button" class="ghost small" id="tdTpl">⚡ Use a template</button></div>' +
@@ -519,6 +520,7 @@ function viewToday() {
   $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
   $('tdTpl').onclick = () => useTemplate(sel);
   $('assignTask').onclick = () => addFamilyTodo();
+  $('quickShop').onclick = () => quickShop();
   wireTrack($('view'), viewToday);
   if ($('addHere')) $('addHere').onclick = () => editItem(null, { kind: 'event', date: sel });
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
@@ -2105,6 +2107,36 @@ async function loadFamilyTodos() {
     $('ftAdd').onclick = () => addFamilyTodo();
   } catch (e) {}
 }
+// 🛒 Quick add from Today: type things, they go on the shopping list in the right aisle. Stays open to add more.
+function quickShop() {
+  const added = [];
+  const draw = () => {
+    const el = $('qsAdded'); if (!el) return;
+    el.innerHTML = added.length ? '✓ Added: ' + added.map(esc).join(', ') : '';
+    $('qsCount').textContent = shopCount() + ' on your list';
+  };
+  openModal('<h2>🛒 Add to shopping list</h2>' +
+    '<div class="quickbar"><input id="qsItem" placeholder="Milk, eggs, 2 lb ground beef…" autocomplete="off" enterkeyhint="done"><button type="button" id="qsGo">Add</button></div>' +
+    '<p class="helper">Add one thing or several with commas. Each goes in its aisle.</p>' +
+    '<p class="qsadded" id="qsAdded"></p>' +
+    '<div class="row-actions"><button type="button" class="ghost" id="qsList">See list · <span id="qsCount"></span></button><button type="button" class="ghost" id="qsDone">Done</button></div>');
+  const add = () => {
+    const v = $('qsItem').value.trim(); if (!v) return;
+    v.split(/\s*,\s*|\n+/).filter(Boolean).forEach(line => {
+      const name = ingredientName(line); if (!name) return;
+      if (data.items.some(i => i.kind === 'shop' && !i.done && i.title.toLowerCase() === name.toLowerCase())) { added.push(name + ' (already on it)'); return; }
+      data.items.push(newItem({ kind: 'shop', title: name, list: aisleOf(line), notes: amountOf(line), location: (S().walmart || {})[name.toLowerCase()] || '' }));
+      added.push(name);
+    });
+    window.save(); $('qsItem').value = ''; $('qsItem').focus(); draw();
+  };
+  draw();
+  setTimeout(() => $('qsItem') && $('qsItem').focus(), 50);
+  $('qsGo').onclick = add; $('qsItem').onkeydown = e => { if (e.key === 'Enter') add(); };
+  $('qsDone').onclick = () => { closeModal(); if (added.length) toast('🛒 ' + added.length + ' added to your shopping list'); };
+  $('qsList').onclick = () => { closeModal(); location.hash = 'meals/shop'; };
+}
+
 function addFamilyTodo(who) {
   openModal('<h2>👨‍👩‍👧‍👦 Assign a task</h2>' +
     '<p class="lbl">For</p><div class="segs" id="ftWho">' + FAM.map(([w, l]) => '<button type="button" class="seg' + ((who || 'Eli') === w ? ' on' : '') + '" data-w="' + w + '">' + l + '</button>').join('') + '<button type="button" class="seg" data-w="me">Me</button></div>' +
