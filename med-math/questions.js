@@ -15,7 +15,7 @@
 
   // Question builders. tol is how far off an answer may be and still count (for rounding differences).
   const num = (q, ans, o = {}) => ({ type: 'num', q: q + (o.places != null && !o.noRound ? ' <span class="rnd">' + ROUND[o.places] + '</span>' : ''), answer: o.places != null ? rnd(ans, o.places) : rnd(ans, 4), tol: o.tol || 0, unit: o.unit || '', explain: o.explain || '' });
-  const frac = (q, n, d, explain) => { const [a, b] = red(n, d); return { type: 'frac', q: q + ' <span class="rnd">Write it in lowest terms (for example 3/4 or 1 1/2).</span>', answer: fs(a, b), n: a, d: b, explain }; };
+  const frac = (q, n, d, explain, improper) => { const [a, b] = red(n, d); return { type: 'frac', q: q + ' <span class="rnd">Write it in lowest terms (for example 3/4 or 1 1/2).</span>', answer: improper && b !== 1 ? a + '/' + b : fs(a, b), n: a, d: b, explain }; };
   const mc = (q, right, wrong, explain) => { const choices = shuffle([right].concat([...new Set(wrong.map(String))].filter(w => w !== String(right)))); return { type: 'mc', q, choices, answer: right, explain: explain || '' }; };
   const bankItem = it => () => mc(it.q, it.a, it.w, it.e);
 
@@ -23,7 +23,7 @@
   const fractions = [
     () => { const d = pick([4, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24]), k = pick([2, 3, 4, 5]); let n = R(1, d - 1); while (gcd(n, d) === 1) n = R(1, d - 1); return frac(`Reduce ${n * k}/${d * k} to lowest terms.`, n, d, `Divide the top and bottom by their greatest common factor: ${n * k}/${d * k} = ${fs(n, d)}.`); },
     () => { const d = pick([2, 3, 4, 5, 6, 8]), w = R(1, 4), r = R(1, d - 1), n = w * d + r; return frac(`Change ${n}/${d} to a mixed number.`, n, d, `${n} ÷ ${d} = ${w} remainder ${r}, so ${n}/${d} = ${fs(n, d)}.`); },
-    () => { const d = pick([3, 4, 5, 8]), w = R(1, 5), r = R(1, d - 1); return frac(`Change ${w} ${fs(r, d)} to an improper fraction. (Give the improper fraction or the mixed number in lowest terms.)`, w * d + r, d, `(${w} × ${d}) + ${r} = ${w * d + r}, so the answer is ${w * d + r}/${d}.`); },
+    () => { const d = pick([3, 4, 5, 8]), w = R(1, 5), r = R(1, d - 1); return frac(`Change ${w} ${fs(r, d)} to an improper fraction.`, w * d + r, d, `(${w} × ${d}) + ${r} = ${w * d + r}, so the answer is ${fs(w * d + r, d).includes(' ') ? red(w * d + r, d).join('/') : fs(w * d + r, d)}.`, true); },
     () => { const a = pick([2, 3, 4, 5, 6, 8]), b = pick([2, 3, 4, 5, 6, 8].filter(x => x !== a)), x = R(1, a - 1), y = R(1, b - 1); return frac(`Add: ${fs(x, a)} + ${fs(y, b)}`, x * b + y * a, a * b, `Use a common denominator of ${a * b / gcd(a, b)}: the sum is ${fs(x * b + y * a, a * b)}.`); },
     () => { let a, b, x, y; do { a = pick([2, 3, 4, 6, 8]); b = pick([3, 4, 5, 6, 8, 12].filter(v => v !== a)); x = R(1, a - 1); y = R(1, b - 1); } while (x / a <= y / b); return frac(`Subtract: ${fs(x, a)} − ${fs(y, b)}`, x * b - y * a, a * b, `Find a common denominator, then subtract the numerators: ${fs(x * b - y * a, a * b)}.`); },
     () => { const a = pick([2, 3, 4, 5, 8]), b = pick([2, 3, 4, 5, 6, 10]), x = R(1, a - 1), y = R(1, b - 1); return frac(`Multiply: ${fs(x, a)} × ${fs(y, b)}`, x * y, a * b, `Multiply across: (${x} × ${y}) / (${a} × ${b}) = ${fs(x * y, a * b)}.`); },
@@ -241,8 +241,8 @@
   ];
 
   const recon = [
-    () => { const vial = pick([500, 1000, 2000]), dil = pick([2, 4, 5, 10]), conc = vial / dil, o = conc * pick([0.5, 0.75, 1.5, 1]); return num(`A vial of drug has ${vial} mg of powder. The label says: add ${dil} mL sterile water to make ${fmt(conc)} mg/mL. The order is ${fmt(o)} mg. How many mL?`, o / conc, { places: 1, unit: 'mL', explain: `${fmt(o)} ÷ ${fmt(conc)} = ${fmt(o / conc)} mL.` }); },
-    () => { const vial = pick([1, 2]), dil = pick([3, 4]), conc = pick([250, 330]), o = pick([250, 500]); return num(`Ceftriaxone ${vial} g vial: add ${dil} mL lidocaine to make about ${conc} mg/mL. Order: ${o} mg IM. How many mL?`, o / conc, { places: 1, unit: 'mL', explain: `${o} ÷ ${conc} = ${fmt(o / conc)} mL.` }); },
+    () => { const vial = pick([500, 1000, 2000]), dil = pick([2, 4, 5, 10]), conc = vial / dil, o = conc * pick([0.5, 0.75, 1.5, 1]); return num(`A vial of drug has ${vial} mg of powder. The label says: add ${dil} mL sterile water to make ${fmt(conc)} mg/mL. The order is ${fmt(o)} mg. How many mL?`, o / conc, { places: syr(o / conc), unit: 'mL', explain: `${fmt(o)} ÷ ${fmt(conc)} = ${fmt(o / conc)} mL.` }); },
+    () => { const vial = pick([1, 2]), dil = pick([3, 4]), conc = pick([250, 330]), o = pick([250, 500]); return num(`Ceftriaxone ${vial} g vial: add ${dil} mL lidocaine to make about ${conc} mg/mL. Order: ${o} mg IM. How many mL?`, o / conc, { places: syr(o / conc), unit: 'mL', explain: `${o} ÷ ${conc} = ${fmt(o / conc)} mL.` }); },
     () => { const g = pick([1, 2, 5]), o = pick([250, 500]); return num(`A vial has ${g} g of drug. How many full ${o} mg doses can you get from it?`, Math.floor(g * 1000 / o), { unit: 'doses', explain: `${g * 1000} mg ÷ ${o} mg = ${fmt(g * 1000 / o)} → ${Math.floor(g * 1000 / o)} full doses.` }); },
     () => { const units = pick([1000000, 5000000]), dil = units === 1000000 ? pick([[9.6, 100000], [4.6, 200000]]) : pick([[18, 250000], [8, 500000]]), o = pick([300000, 400000, 500000]); return num(`Penicillin G ${units.toLocaleString()} units vial. Add ${dil[0]} mL diluent to make ${dil[1].toLocaleString()} units/mL. Order: ${o.toLocaleString()} units. How many mL?`, o / dil[1], { places: 1, unit: 'mL', explain: `${o.toLocaleString()} ÷ ${dil[1].toLocaleString()} = ${fmt(o / dil[1])} mL.` }); },
     () => mc('After reconstituting a multi-dose vial, the nurse labels it with:', 'Date, time, concentration, and nurse\'s initials', ['Only the patient\'s name', 'Nothing; the pharmacy does this', 'Only the expiration date printed on the box'], 'A label makes sure the next nurse knows its strength and when it expires.'),
@@ -257,7 +257,7 @@
     () => { const mlh = pick([2, 3, 4, 5, 6, 8]), conc = 1; return num(`An insulin drip has 100 units regular insulin in 100 mL NS. It runs at ${mlh} mL/hr. How many units/hr is the patient getting?`, mlh * conc, { unit: 'units/hr', explain: `100 units/100 mL = 1 unit/mL; ${mlh} mL/hr × 1 = ${mlh} units/hr.` }); },
     () => { const uh = pick([3, 5, 7, 10]); return num(`An insulin drip has 50 units regular insulin in 250 mL NS. The order is ${uh} units/hr. What is the rate in mL/hr?`, uh / 0.2, { unit: 'mL/hr', explain: `50/250 = 0.2 unit/mL; ${uh} ÷ 0.2 = ${uh / 0.2} mL/hr.` }); },
     () => mc('Which insulin is rapid-acting?', 'Lispro (Humalog)', ['Glargine (Lantus)', 'NPH (Humulin N)', 'Detemir (Levemir)'], 'Lispro, aspart, and glulisine are rapid-acting. Glargine and detemir are long-acting.'),
-    () => mc('Which insulin is the only type given IV?', 'Regular insulin', ['NPH', 'Glargine', '70/30 mix'], 'Only regular (clear, short-acting) insulin is given IV.'),
+    () => mc('Which insulin is usually used for a continuous IV insulin drip?', 'Regular insulin', ['NPH', 'Glargine', '70/30 mix'], 'IV drips use regular insulin. Cloudy (NPH), mixed, and long-acting insulins are never given IV.'),
     () => mc('A U-100 insulin syringe holds 100 units in:', '1 mL', ['100 mL', '10 mL', '0.1 mL'], 'U-100 means 100 units per mL.'),
     () => { const u = pick([15, 25, 35, 40]); return mc(`For a dose of ${u} units, which syringe is the best choice?`, u <= 30 ? '0.3 mL (30-unit) syringe' : '0.5 mL (50-unit) syringe', [u <= 30 ? '1 mL (100-unit) syringe' : '0.3 mL (30-unit) syringe', '3 mL syringe', 'Tuberculin syringe'], 'Use the smallest insulin syringe that holds the dose, for accuracy.'); }
   ];
@@ -453,7 +453,7 @@
       'U-100 insulin = 100 units/mL. Use the matching insulin syringe (30, 50, or 100 units).',
       'Rapid-acting: lispro, aspart. Short: regular. Intermediate: NPH. Long: glargine, detemir.',
       'Mixing: draw <b>clear (regular) before cloudy (NPH)</b>. Total = regular + NPH units.',
-      'Only regular insulin is given IV. Sliding scales give units based on blood glucose.',
+      'IV insulin drips use regular insulin. Never give cloudy (NPH), mixed, or long-acting insulin IV. Sliding scales give units based on blood glucose.',
       'Drip: units/hr = mL/hr × units per mL.'
     ], 'Regular 8 units + NPH 22 units.', ['Draw regular first (8 units).', 'Then NPH to 8 + 22.', 'Total = <b>30 units</b>']) },
 

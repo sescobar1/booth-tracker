@@ -81,6 +81,20 @@ def items(path):
                 yield int(m.group(1)), inner.read(f).decode('utf-8', 'replace')
 
 
+# Answer keys in the publisher's file that are wrong (checked by re-solving every question),
+# and questions to leave out. Applied on every import so a re-import keeps the fixes.
+CORRECTIONS = {
+    '5c26a76f-4b0b-4dad-b804-cb57d52a9602': [['1.4']],                 # Geopen 550 mg at 400 mg/mL = 1.375 -> 1.4 mL (key said 1.1)
+    '126f0d27-4078-4327-8e72-0f6f4a1784ab': [['711.2']],               # 28 in = 711.2 mm (key also accepted 700)
+    '8ab1c113-c192-4ded-87da-e01404e6b6e8': [['4.3']],                 # 9 lb 9 oz = 4.35 -> 4.3 kg (key also accepted 4.4)
+    '12d41d4d-6e14-422a-a09f-2d82aa2a5bae': [['3000000', '3,000,000']],  # 3 g = 3,000,000 mcg (key said 300000)
+    'bde0b114-e84e-4a27-a489-80ecf507cf45': [['75']],                  # 165 lb = 75 kg (key said 3.75)
+    'e78f42ba-bcc3-44f8-8aed-5e013912cade': [['2.2', '2.2 g']],        # 13,230 mg/day / 6 doses = 2.2 g (key said 22 g)
+}
+LEAVE_OUT = {'e844fea2-6a53-429e-a35e-d9bf28871492',                     # "464.1  0.009": the operator is missing
+             'd9434f55-39b4-41d9-acab-9226c380d586'}                     # "Humalog may be given IV" keyed False; current labeling allows IV use
+
+
 def q(s):
     return "'" + s.replace("'", "''") + "'"
 
@@ -100,6 +114,10 @@ def main():
         if not it:
             skipped[why] += 1
             continue
+        if it['id'] in LEAVE_OUT:
+            skipped['question is broken'] += 1
+            continue
+        it['answers'] = CORRECTIONS.get(it['id'], it['answers'])
         mod = 'm%d' % (n - 1)
         if it['id'] in seen:                 # the same question can be in two chapters' banks
             it['id'] += '-' + mod
