@@ -266,11 +266,29 @@
         <div class="caption" id="vCap"></div>
         <div class="prog" aria-hidden="true"><i id="vBar"></i></div>
         <div class="vctl"><button id="vPlay">▶ Play</button><button class="ghost small" id="vBack" aria-label="Back one step">⏮ Back</button><button class="ghost small" id="vNext" aria-label="Next step">Next ⏭</button>
-        <label class="vvoice"><input type="checkbox" id="vVoice"${'speechSynthesis' in window ? (LS.get('Voice', true) ? ' checked' : '') : ' disabled'}> Voice</label></div></div>`;
-      setTimeout(() => player(v));
+        <label class="vvoice"><input type="checkbox" id="vVoice"${LS.get('Voice', true) ? ' checked' : ''}> Voice</label></div></div>`;
+      setTimeout(() => player(Object.assign({ id: m.id }, v)));
     }
     return h;
   }
+
+  // Which sentences have a natural-voice recording (made on GitHub by tools/make-audio.py).
+  let narration = null;
+  fetch('audio/manifest.json').then(r => r.ok ? r.json() : null).then(j => { narration = j; }).catch(() => {});
+
+  // Picks the most natural-sounding English voice the device has (neural / enhanced voices first).
+  function bestVoice() {
+    const synth = window.speechSynthesis; if (!synth) return null;
+    const score = vc => {
+      const n = vc.name;
+      if (!/^en(-|_|$)/i.test(vc.lang)) return -1;
+      return (/natural/i.test(n) ? 60 : 0) + (/neural/i.test(n) ? 55 : 0) + (/premium/i.test(n) ? 50 : 0) + (/enhanced/i.test(n) ? 45 : 0)
+        + (/online/i.test(n) ? 25 : 0) + (/google/i.test(n) ? 20 : 0) + (/\b(aria|jenny|ava|samantha|allison|zoe|emma|michelle|guy|evan|nathan)\b/i.test(n) ? 15 : 0)
+        + (/en[-_]US/i.test(vc.lang) ? 10 : 0) + (vc.localService ? 0 : 5) - (/compact|espeak|fred|zarvox|albert|bad news|bells|boing|bubbles|cellos|whisper|trinoids|junior|ralph|kathy/i.test(n) ? 80 : 0);
+    };
+    return synth.getVoices().filter(vc => score(vc) >= 0).sort((a, b) => score(b) - score(a))[0] || null;
+  }
+  if (window.speechSynthesis) window.speechSynthesis.getVoices();
 
   // Plays a walkthrough: each step writes a line on the board and reads the caption aloud.
   let stopPlayer = () => {};
@@ -278,9 +296,9 @@
     stopPlayer();
     const board = $('vBoard'), cap = $('vCap'), bar = $('vBar'), playBtn = $('vPlay'), voice = $('vVoice');
     if (!board) return;
-    let idx = -1, playing = false, timer = null, utter = null;
+    let idx = -1, playing = false, timer = null, utter = null, audio = null;
     const synth = window.speechSynthesis;
-    const clear = () => { clearTimeout(timer); timer = null; if (synth) synth.cancel(); utter = null; };
+    const clear = () => { clearTimeout(timer); timer = null; if (synth) synth.cancel(); utter = null; if (audio) { audio.pause(); audio = null; } };
     const draw = () => {
       const lines = v.steps.slice(0, idx + 1).filter(st => st.b);
       board.innerHTML = lines.length ? lines.map((st, i) => `<div class="vline${i === lines.length - 1 && st === v.steps[idx] ? ' now' : ''}">${st.b}</div>`).join('') : '<div class="vstart">Press <b>Play</b> to watch a worked problem, step by step.</div>';
@@ -293,13 +311,28 @@
     const go = i => {
       clear(); idx = Math.max(-1, Math.min(v.steps.length - 1, i)); draw();
       if (!playing || idx < 0) return;
-      const text = v.steps[idx].s, wait = Math.max(2600, text.length * 62);
-      if (voice.checked && synth) {
-        utter = new SpeechSynthesisUtterance(text); utter.rate = 0.95; utter.lang = 'en-US';
-        const u = utter; utter.onend = () => { if (u === utter) timer = setTimeout(next, 700); };
-        synth.speak(utter);
-        timer = setTimeout(next, wait * 1.8 + 1500); // in case the browser never reports the end
-      } else timer = setTimeout(next, wait);
+      const text = v.steps[idx].s, wait = Math.max(2600, text.length * 62), key = v.id + '-' + idx;
+      const done = () => { timer = setTimeout(next, 700); };
+      if (!voice.checked) { timer = setTimeout(next, wait); return; }
+      // A recording made with the natural voice, if it says exactly this sentence.
+      if (narration && narration[key] === text) {
+        audio = new Audio('audio/' + key + '.mp3');
+        const a = audio;
+        a.onended = () => { if (a === audio) done(); };
+        a.onerror = () => { if (a === audio) { audio = null; speak(text, wait); } };
+        a.play().catch(() => { if (a === audio) { audio = null; speak(text, wait); } });
+        return;
+      }
+      speak(text, wait);
+    };
+    // The device's most natural built-in voice, for sentences without a recording.
+    const speak = (text, wait) => {
+      if (!synth) { timer = setTimeout(next, wait); return; }
+      utter = new SpeechSynthesisUtterance(text); utter.rate = 0.95; utter.lang = 'en-US';
+      const best = bestVoice(); if (best) utter.voice = best;
+      const u = utter; utter.onend = () => { if (u === utter) timer = setTimeout(next, 700); };
+      synth.speak(utter);
+      timer = setTimeout(next, wait * 1.8 + 1500); // in case the browser never reports the end
     };
     playBtn.onclick = () => {
       if (playing) { playing = false; clear(); draw(); return; }
