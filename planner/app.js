@@ -492,6 +492,7 @@ function viewToday() {
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
     '<button type="button" class="tile t-meal" data-tile="meal">' + TILE_ICONS.meal + '<b>Meal</b></button>' +
     '<button type="button" class="tile t-note" data-tile="note">' + TILE_ICONS.note + '<b>Write</b></button></div>' +
+    '<button type="button" class="assignbtn" id="assignTask">👨‍👩‍👧‍👦 Assign a task to the family</button>' +
     trackButtons(sel) +
     '<div class="row-actions tight"><a class="button ghost small" href="#brief">☀ Morning briefing</a><button type="button" class="ghost small" id="tdTpl">⚡ Use a template</button></div>' +
     (todayRoutines.length ? '<div class="rchips">' + todayRoutines.map(routineChip).join('') + '</div>' : '') +
@@ -517,6 +518,7 @@ function viewToday() {
   });
   $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
   $('tdTpl').onclick = () => useTemplate(sel);
+  $('assignTask').onclick = () => addFamilyTodo();
   wireTrack($('view'), viewToday);
   if ($('addHere')) $('addHere').onclick = () => editItem(null, { kind: 'event', date: sel });
   const go = () => { const v = $('quick').value.trim(); if (v) quickAdd(v); };
@@ -2049,13 +2051,14 @@ async function loadFamilyTodos() {
   } catch (e) {}
 }
 function addFamilyTodo(who) {
-  openModal('<h2>✅ Add a to-do</h2>' +
+  openModal('<h2>👨‍👩‍👧‍👦 Assign a task</h2>' +
     '<p class="lbl">For</p><div class="segs" id="ftWho">' + FAM.map(([w, l]) => '<button type="button" class="seg' + ((who || 'Eli') === w ? ' on' : '') + '" data-w="' + w + '">' + l + '</button>').join('') + '<button type="button" class="seg" data-w="me">Me</button></div>' +
     '<label>What<input id="ftTitle" maxlength="120" placeholder="Take out the trash"></label>' +
     '<div class="grid2"><label>Day (optional)<input id="ftDue" type="date" min="' + today() + '"></label><label>Remind at (optional)<input id="ftAt" type="time"></label></div>' +
     '<p class="helper">With a day, it pops up on their phone (at the time, or 8 AM) once they’ve turned on pop-ups from their page.</p>' +
     '<div class="row-actions"><button type="button" id="ftGo">Add</button><button type="button" class="ghost" id="ftCancel">Cancel</button></div>');
   let w = who || 'Eli';
+  setTimeout(() => $('ftTitle') && $('ftTitle').focus(), 50);
   $('ftWho').querySelectorAll('.seg').forEach(b => b.onclick = () => { w = b.dataset.w; $('ftWho').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); });
   $('ftCancel').onclick = closeModal;
   $('ftGo').onclick = async () => {
@@ -3202,7 +3205,8 @@ function viewBrief() {
   const sec = (title, body) => body ? '<div class="card pad bsec"><h3>' + title + '</h3>' + body + '</div>' : '';
   $('view').innerHTML = '<div class="brief-hero">' + VINE + '<span class="eyebrow">' + (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', Shaana</span><h1>' + esc(fmtDate(t, 'long')) + '</h1>' +
     '<div id="wx" class="wx">' + (w ? wxHtml(w) : '<span class="helper">Checking the weather…</span>') + '</div></div>' +
-    '<div id="bdayBox"></div><div id="kidBox"></div><div class="bgrid">' +
+    cheerCard() + '<button type="button" class="assignbtn" id="assignTask">👨‍👩‍👧‍👦 Assign a task to the family</button>' +
+    '<div id="bdayBox"></div><div id="kidBox"></div><div id="famTodo"></div><div class="bgrid">' +
     sec('Today’s schedule', events.length ? events.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? 'All day' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + (e.location ? ' <small>· ' + esc(e.location) + '</small>' : '') + '</span></div>').join('') : '<p class="helper">A clear day — nothing on the calendar.</p>') +
     sec('Who’s driving', drives.length ? drives.map(e => '<div class="bline2" ' + rowOpen(e) + '><b>' + esc(e.allDay ? '' : fmtTime(e.start)) + '</b><span>' + esc(e.title) + ' — <em>' + esc(e.driver || 'not set') + '</em></span></div>').join('') + (drives.some(e => !e.driver && e.src === 'planner') ? '<p class="helper">Tap one to set who’s driving.</p>' : '') : '') +
     sec('Dinner tonight', dinner ? '<div class="bline2 dinner" data-meal="Dinner" data-mealdate="' + t + '"><b>🍽</b><span>' + esc(dinner.title) + (dinner.notes ? ' <small>· ' + esc(dinner.notes) + '</small>' : '') + '</span></div>' : '<button type="button" class="ghost small" data-meal="Dinner" data-mealdate="' + t + '">Pick dinner</button>') +
@@ -3215,7 +3219,8 @@ function viewBrief() {
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-routine]').forEach(b => b.onclick = () => openRoutine(b.dataset.routine));
   $('bOff').onclick = () => { S().autoBrief = S().autoBrief === false; window.save(); viewBrief(); };
-  loadKidNews(); loadBirthdays();
+  loadKidNews(); loadBirthdays(); loadFamilyTodos();
+  $('assignTask').onclick = () => addFamilyTodo();
   loadWeather().then(v => { const el = $('wx'); if (el && v) el.innerHTML = wxHtml(v); wireWx(); });
   wireWx();
 }
