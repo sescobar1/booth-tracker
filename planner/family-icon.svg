@@ -7,16 +7,14 @@
   </defs>
   <rect width="512" height="512" fill="url(#g)"/>
   <circle cx="420" cy="92" r="120" fill="#ffffff" opacity=".12"/>
-  <g fill="#000" opacity=".12" transform="translate(8 12)">
-    <rect x="150" y="104" width="78" height="304" rx="22"/>
-    <rect x="150" y="104" width="222" height="70" rx="22"/>
-    <rect x="150" y="221" width="190" height="66" rx="22"/>
-    <rect x="150" y="338" width="222" height="70" rx="22"/>
-  </g>
-  <g fill="#ffffff">
-    <rect x="150" y="104" width="78" height="304" rx="22"/>
-    <rect x="150" y="104" width="222" height="70" rx="22"/>
-    <rect x="150" y="221" width="190" height="66" rx="22"/>
-    <rect x="150" y="338" width="222" height="70" rx="22"/>
-  </g>
+  <!-- the calendar page -->
+  <rect x="114" y="136" width="284" height="276" rx="40" fill="#000" opacity=".12" transform="translate(8 12)"/>
+  <rect x="114" y="136" width="284" height="276" rx="40" fill="#ffffff"/>
+  <path d="M154 136h204a40 40 0 0 1 40 40v50H114v-50a40 40 0 0 1 40-40z" fill="#ffe0ef"/>
+  <rect x="176" y="104" width="30" height="72" rx="15" fill="#ffffff" stroke="#ff2f95" stroke-width="10"/>
+  <rect x="306" y="104" width="30" height="72" rx="15" fill="#ffffff" stroke="#ff2f95" stroke-width="10"/>
+  <rect x="150" y="262" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="204" y="262" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="258" y="262" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="312" y="262" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="150" y="316" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="204" y="316" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="312" y="316" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="150" y="370" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="204" y="370" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="258" y="370" width="40" height="36" rx="9" fill="#ffc2e0"/><rect x="312" y="370" width="40" height="36" rx="9" fill="#ffc2e0"/>
+  <!-- today, with a heart -->
+  <rect x="258" y="316" width="40" height="36" rx="9" fill="#ff1f8e"/>
+  <path d="M278 345c-9-6-14-11-14-17a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 17z" fill="#ffffff"/>
 </svg>
