@@ -1732,7 +1732,9 @@ function viewAtu() {
   wireRows($('view'));
 }
 // The snack closet catalog (Sam's Club), counts, order quantities and past orders live in settings.sna.
-const SNA_CATS = ['Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Bars & breakfast', 'Candy', 'Quick meals', 'Drinks', 'Other'];
+// Snack kinds in the order of a student's day: breakfast, lunch, snacks, sweets, drinks. Within each kind, the list keeps
+// the order it's saved in, so look-alikes (all the Pop-Tarts, all the Lance crackers…) stay together.
+const SNA_CATS = ['Bars & breakfast', 'Quick meals', 'Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Candy', 'Drinks', 'Other'];
 const snaData = () => { const s = S().sna || {}; return { items: s.items || [], orders: s.orders || [], budget: s.budget || 0, pickup: s.pickup || null }; };
 const snaSave = d => { S().sna = Object.assign({}, S().sna || {}, d); window.save(); };
 const money = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
@@ -1821,7 +1823,7 @@ function snaPrintList(list) {
   const items = list.filter(i => !/out of stock/i.test(i.note || ''));
   const html = '<h2>SNA Snack Closet list</h2><p class="sub">' + items.length + ' snacks · printed ' + esc(fmtDate(today(), 'long')) + '</p>' +
     '<table class="snaform"><thead><tr><th style="width:28px"></th><th>Snack</th><th>Size</th><th>Price</th></tr></thead><tbody>' +
-    SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c).sort((a, b) => a.name.localeCompare(b.name)); return l.length ? '<tr class="cat"><td colspan="4">' + esc(c) + ' (' + l.length + ')</td></tr>' +
+    SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c); return l.length ? '<tr class="cat"><td colspan="4">' + esc(c) + ' (' + l.length + ')</td></tr>' +
       l.map(i => '<tr><td>☐</td><td>' + esc(i.name) + '</td><td>' + esc(i.size || '') + '</td><td>' + (i.price ? money(i.price) : '') + '</td></tr>').join('') : ''; }).join('') + '</tbody></table>';
   const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = html; $('view').appendChild(d);
   window.print(); setTimeout(() => d.remove(), 1000);
@@ -1830,7 +1832,7 @@ function snaCountSheet() {
   const sn = snaData(), items = sn.items.filter(i => !/out of stock/i.test(i.note || ''));
   const head = '<h2>SNA Snack Closet count sheet</h2><p class="sub">Counted by: ______________________ &nbsp; Date: ____________ &nbsp; · Count packs/boxes on the shelf, then enter them in the planner (Tasks → ATU → 🍿 SNA Snack Closet → Have).</p>';
   const table = '<table class="snaform countsheet"><thead><tr><th>Item</th><th>Aisle</th><th>Keep</th><th>Have</th><th>Order</th></tr></thead><tbody>' +
-    SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c).sort((a, b) => a.name.localeCompare(b.name)); return l.length ? '<tr class="cat"><td colspan="5">' + esc(c) + '</td></tr>' + l.map(i => '<tr><td>' + esc(i.name) + (i.size ? ' <small>' + esc(i.size) + '</small>' : '') + '</td><td>' + esc(i.aisle || '') + '</td><td>' + (i.par || '') + '</td><td class="box"></td><td class="box"></td></tr>').join('') : ''; }).join('') +
+    SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c); return l.length ? '<tr class="cat"><td colspan="5">' + esc(c) + '</td></tr>' + l.map(i => '<tr><td>' + esc(i.name) + (i.size ? ' <small>' + esc(i.size) + '</small>' : '') + '</td><td>' + esc(i.aisle || '') + '</td><td>' + (i.par || '') + '</td><td class="box"></td><td class="box"></td></tr>').join('') : ''; }).join('') +
     '</tbody></table><p class="sub">Notes / new snack ideas: _____________________________________________________________</p>';
   $('modalBody').classList.add('wide');
   openModal(head + table + '<div class="row-actions"><button type="button" id="csPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="csX">Close</button></div><p class="helper">After counting, type each number in the <b>Have</b> box on the SNA page and tap <b>✨ Fill from counts</b> to build the order.</p>');
@@ -1899,7 +1901,13 @@ function editSna(id) {
   $('seSave').onclick = () => {
     const name = $('seN').value.trim(); if (!name) { toast('Type the name.'); return; }
     Object.assign(it, { name, size: $('seS').value.trim(), price: +$('seP').value || 0, aisle: $('seA').value.trim(), cat: $('seC').value, url: $('seU').value.trim(), note: $('seNo').value.trim() });
-    if (!id) { it.id = 'sna-' + uid().slice(0, 8); it.order = 0; sn.items.push(it); }
+    if (!id) {
+      // A new snack goes next to its look-alikes: after the last one of the same brand in its kind, else at the end of its kind.
+      it.id = 'sna-' + uid().slice(0, 8); it.order = 0;
+      const brand = name.toLowerCase().split(/[\s’']+/)[0], same = sn.items.map((x, k) => [x, k]).filter(([x]) => (x.cat || 'Other') === it.cat);
+      const near = same.filter(([x]) => x.name.toLowerCase().split(/[\s’']+/)[0] === brand).pop() || same.pop();
+      if (near) sn.items.splice(near[1] + 1, 0, it); else sn.items.push(it);
+    }
     snaSave({ items: sn.items }); closeModal(); viewSna();
   };
   if (id) $('seDel').onclick = () => { if (!confirm('Delete ' + it.name + '?')) return; snaSave({ items: sn.items.filter(x => x !== it) }); closeModal(); viewSna(); };
@@ -1908,7 +1916,8 @@ function editSna(id) {
 function snaForm(past) {
   const sn = snaData(), lines = past ? past.lines : sn.items.filter(i => (i.order || 0) > 0).map(i => ({ id: i.id, name: i.name, size: i.size, aisle: i.aisle, price: i.price || 0, qty: i.order, url: i.url, cat: i.cat }));
   const total = lines.reduce((s, l) => s + l.qty * l.price, 0), date = past ? past.date : today();
-  lines.sort((a, b) => SNA_CATS.indexOf(a.cat || 'Other') - SNA_CATS.indexOf(b.cat || 'Other') || a.name.localeCompare(b.name));
+  const pos = id => snaData().items.findIndex(i => i.id === id);
+  lines.sort((a, b) => SNA_CATS.indexOf(a.cat || 'Other') - SNA_CATS.indexOf(b.cat || 'Other') || pos(a.id) - pos(b.id));
   const table = '<table class="snaform"><thead><tr><th>Qty</th><th>Item</th><th>Aisle</th><th>Price</th><th>Total</th></tr></thead><tbody>' + lines.map(l => '<tr><td>' + l.qty + '</td><td>' + esc(l.name) + (l.size ? ' <small>(' + esc(l.size) + ')</small>' : '') + '</td><td>' + esc(l.aisle || '') + '</td><td>' + money(l.price) + '</td><td>' + money(l.qty * l.price) + '</td></tr>').join('') +
     '</tbody><tfoot><tr><td>' + lines.reduce((s, l) => s + l.qty, 0) + '</td><td colspan="3"><b>Total (before tax)</b></td><td><b>' + money(total) + '</b></td></tr></tfoot></table>';
   const pk = past ? past.pickup : sn.pickup;
