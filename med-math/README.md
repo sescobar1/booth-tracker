@@ -3,11 +3,12 @@
 Dosage-calculation practice for nursing students, following the book's 24 chapters (plus the Unit One pre-test and post-test).
 
 - **Students** open `index.html`: https://sescobar1.github.io/booth-tracker/med-math/
-  Each chapter has a short **lesson** (key points + a worked example), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name, class, and the **class code**.
+  Each chapter has a short **lesson** (key points + a worked example), a **Watch how to do it** video (an animated whiteboard that works one problem step by step, with spoken narration and captions; scripts are in `walkthroughs.js`), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name, class, and the **class code**.
 - **The instructor** opens `teacher.html` and signs in with the Booth Tracker email and password:
   - **Best scores**: one row per student, one column per chapter, with each student's best score. Tap a score to see their answers.
   - **Every submission**: date, student, chapter, score, and time taken. Filter by class, chapter, or student. **Download CSV** for a gradebook.
   - **Test bank**: every question with its answer key. Untick a question to leave it out of tests.
+  - **Videos**: paste a YouTube or Vimeo link for any chapter. It shows at the top of that chapter as **Video from your instructor**.
   - **Class code**: change the code each term, and choose whether students see the right answers after they hand in a test.
 
 ## How tests work

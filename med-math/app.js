@@ -66,6 +66,7 @@
     } else {
       html += `<div class="card"><p style="margin:0">${esc(m.blurb)}</p></div>`;
     }
+    html += videoCards(m);
     const going = mode => current && current.id === id && current.mode === mode && !current.done;
     const testMode = usesBank(m) ? 'bank' : 'gen';
     html += `<div class="card"><b>Practice drill</b><p class="muted" style="margin:4px 0 12px">${m.count || 10} questions with new numbers each time. You see the answers and how to work them out. Practice isn't sent to your instructor.</p>
@@ -244,6 +245,72 @@
     return html;
   }
 
+  // ---------- videos ----------
+  // A YouTube or Vimeo link the instructor added on teacher.html, turned into a safe embed address.
+  function embedUrl(u) {
+    let m = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return 'https://www.youtube-nocookie.com/embed/' + m[1] + '?rel=0';
+    m = String(u || '').match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    return m ? 'https://player.vimeo.com/video/' + m[1] : null;
+  }
+  window.MedMathEmbedUrl = embedUrl;
+
+  function videoCards(m) {
+    let h = '';
+    const url = embedUrl((info.videos || {})[m.id]);
+    if (url) h += `<div class="card"><b>🎬 Video from your instructor</b><div class="embed"><iframe src="${esc(url)}" title="Video: ${esc(m.title)}" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div></div>`;
+    const v = (window.MedMathVideos || {})[m.id];
+    if (v) {
+      h += `<div class="card video"><div class="vhead"><b>▶ Watch how to do it</b><span class="muted">${esc(v.title)} · ${v.steps.length} steps</span></div>
+        <div class="board" id="vBoard" aria-live="polite"><div class="vstart">Press <b>Play</b> to watch a worked problem, step by step.</div></div>
+        <div class="caption" id="vCap"></div>
+        <div class="prog" aria-hidden="true"><i id="vBar"></i></div>
+        <div class="vctl"><button id="vPlay">▶ Play</button><button class="ghost small" id="vBack" aria-label="Back one step">⏮ Back</button><button class="ghost small" id="vNext" aria-label="Next step">Next ⏭</button>
+        <label class="vvoice"><input type="checkbox" id="vVoice"${'speechSynthesis' in window ? (LS.get('Voice', true) ? ' checked' : '') : ' disabled'}> Voice</label></div></div>`;
+      setTimeout(() => player(v));
+    }
+    return h;
+  }
+
+  // Plays a walkthrough: each step writes a line on the board and reads the caption aloud.
+  let stopPlayer = () => {};
+  function player(v) {
+    stopPlayer();
+    const board = $('vBoard'), cap = $('vCap'), bar = $('vBar'), playBtn = $('vPlay'), voice = $('vVoice');
+    if (!board) return;
+    let idx = -1, playing = false, timer = null, utter = null;
+    const synth = window.speechSynthesis;
+    const clear = () => { clearTimeout(timer); timer = null; if (synth) synth.cancel(); utter = null; };
+    const draw = () => {
+      const lines = v.steps.slice(0, idx + 1).filter(st => st.b);
+      board.innerHTML = lines.length ? lines.map((st, i) => `<div class="vline${i === lines.length - 1 && st === v.steps[idx] ? ' now' : ''}">${st.b}</div>`).join('') : '<div class="vstart">Press <b>Play</b> to watch a worked problem, step by step.</div>';
+      board.scrollTop = board.scrollHeight;
+      cap.textContent = idx >= 0 ? v.steps[idx].s : '';
+      bar.style.width = ((idx + 1) / v.steps.length * 100) + '%';
+      playBtn.textContent = playing ? '⏸ Pause' : idx >= v.steps.length - 1 ? '↺ Watch again' : idx >= 0 ? '▶ Resume' : '▶ Play';
+    };
+    const next = () => { if (!playing) return; if (idx >= v.steps.length - 1) { playing = false; draw(); return; } go(idx + 1); };
+    const go = i => {
+      clear(); idx = Math.max(-1, Math.min(v.steps.length - 1, i)); draw();
+      if (!playing || idx < 0) return;
+      const text = v.steps[idx].s, wait = Math.max(2600, text.length * 62);
+      if (voice.checked && synth) {
+        utter = new SpeechSynthesisUtterance(text); utter.rate = 0.95; utter.lang = 'en-US';
+        const u = utter; utter.onend = () => { if (u === utter) timer = setTimeout(next, 700); };
+        synth.speak(utter);
+        timer = setTimeout(next, wait * 1.8 + 1500); // in case the browser never reports the end
+      } else timer = setTimeout(next, wait);
+    };
+    playBtn.onclick = () => {
+      if (playing) { playing = false; clear(); draw(); return; }
+      playing = true; go(idx < 0 || idx >= v.steps.length - 1 ? 0 : idx); // start, restart, or resume this step
+    };
+    $('vBack').onclick = () => go(idx - 1);
+    $('vNext').onclick = () => go(idx + 1);
+    voice.onchange = () => { LS.set('Voice', voice.checked); if (playing) go(idx); };
+    stopPlayer = () => { playing = false; clear(); };
+  }
+
   // ---------- hand in a generated test ----------
   const sending = new Set();
   async function send(entry) {
@@ -262,6 +329,7 @@
 
   // ---------- router ----------
   function render() {
+    stopPlayer();
     const [view, id] = location.hash.replace(/^#/, '').split('/');
     const html = view === 'm' ? moduleView(id) : view === 'practice' ? quizView(id, 'practice') : view === 'test' ? quizView(id, 'test') : view === 'result' ? resultView(id) : view === 'me' ? meView() : home();
     $('view').innerHTML = html;

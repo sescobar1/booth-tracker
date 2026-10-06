@@ -41,7 +41,7 @@
       sb.from('med_math_settings').select('*').maybeSingle()
     ]);
     bank = b.data || [];
-    settings = st.data || { owner: session.user.id, class_code: '', show_answers: true };
+    settings = st.data || { owner: session.user.id, class_code: '', show_answers: true, videos: {} };
     render();
   }
 
@@ -62,10 +62,11 @@
         <button class="${tab === 'book' ? '' : 'ghost'} small" data-tab="book">Best scores</button>
         <button class="${tab === 'all' ? '' : 'ghost'} small" data-tab="all">Every submission</button>
         <button class="${tab === 'bank' ? '' : 'ghost'} small" data-tab="bank">Test bank</button>
+        <button class="${tab === 'videos' ? '' : 'ghost'} small" data-tab="videos">Videos</button>
         <button class="${tab === 'settings' ? '' : 'ghost'} small" data-tab="settings">Class code</button>
         <button class="ghost small" id="csv">Download CSV</button><button class="ghost small" onclick="print()">Print</button><button class="ghost small" id="refresh">Refresh</button>
       </div></div>`;
-    html += tab === 'book' ? bookTable(list) : tab === 'all' ? allTable(list) : tab === 'bank' ? bankView() : settingsView();
+    html += tab === 'book' ? bookTable(list) : tab === 'all' ? allTable(list) : tab === 'bank' ? bankView() : tab === 'videos' ? videosView() : settingsView();
     $('view').innerHTML = html;
     $('fCls').onchange = e => { filt.cls = e.target.value; render(); };
     $('fMod').onchange = e => { filt.module = e.target.value; render(); };
@@ -77,6 +78,8 @@
     document.querySelectorAll('[data-q]').forEach(c => c.onchange = () => setActive(c.dataset.q, c.checked));
     const sv = $('saveSettings');
     if (sv) sv.onclick = saveSettings;
+    const vs = $('saveVideos');
+    if (vs) vs.onclick = saveVideos;
   }
 
   // The private test bank: every question with its answer key, and a switch to leave it out of tests.
@@ -98,6 +101,25 @@
     const q = bank.find(x => x.id === id); if (q) q.active = on;
   }
 
+  // A YouTube or Vimeo link per chapter, shown at the top of that chapter for students.
+  const embedOk = u => /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)[\w-]{11}|vimeo\.com\/(?:video\/)?\d+/.test(u);
+  function videosView() {
+    const v = settings.videos || {};
+    return `<div class="card"><p style="margin:0">Paste a YouTube or Vimeo link for any chapter, and it shows at the top of that chapter as <b>Video from your instructor</b>, above the built-in <b>Watch how to do it</b> walkthrough. Leave a box empty for none.</p></div>
+      <div class="card">${MM.MODULES.filter(m => m.lesson).map(m => `<label class="f" for="v_${m.id}">${m.ch}. ${esc(m.title)}</label>
+        <input type="text" id="v_${m.id}" data-v="${m.id}" inputmode="url" value="${esc(v[m.id] || '')}" placeholder="https://www.youtube.com/watch?v=…">`).join('')}
+      <div class="row" style="margin-top:14px"><button id="saveVideos">Save videos</button><span class="muted" id="vidMsg"></span></div></div>`;
+  }
+
+  async function saveVideos() {
+    const videos = {}, bad = [];
+    document.querySelectorAll('[data-v]').forEach(i => { const u = i.value.trim(); if (!u) return; if (embedOk(u)) videos[i.dataset.v] = u; else bad.push((MM.byId(i.dataset.v) || {}).ch); });
+    if (bad.length) { $('vidMsg').textContent = 'Not a YouTube or Vimeo link: chapter ' + bad.join(', ') + '. Nothing saved.'; return; }
+    const { error } = await sb.from('med_math_settings').upsert({ owner: settings.owner, class_code: settings.class_code, show_answers: settings.show_answers, videos, updated_at: new Date().toISOString() });
+    if (!error) settings.videos = videos;
+    $('vidMsg').textContent = error ? error.message : 'Saved. Students see them the next time they open the chapter.';
+  }
+
   function settingsView() {
     return `<div class="card" style="max-width:520px"><label class="f" for="code">Class code</label>
       <input type="text" id="code" value="${esc(settings.class_code)}" autocapitalize="characters" placeholder="Leave blank to let anyone with the link take tests">
@@ -109,7 +131,7 @@
   async function saveSettings() {
     settings.class_code = $('code').value.trim();
     settings.show_answers = $('showAns').checked;
-    const { error } = await sb.from('med_math_settings').upsert({ owner: settings.owner, class_code: settings.class_code, show_answers: settings.show_answers, updated_at: new Date().toISOString() });
+    const { error } = await sb.from('med_math_settings').upsert({ owner: settings.owner, class_code: settings.class_code, show_answers: settings.show_answers, videos: settings.videos || {}, updated_at: new Date().toISOString() });
     $('setMsg').textContent = error ? error.message : 'Saved.';
   }
 
