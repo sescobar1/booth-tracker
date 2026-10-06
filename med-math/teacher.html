@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Med Math Gradebook</title>
+  <meta name="description" content="Instructor gradebook for Med Math practice tests.">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <style>main { max-width: 1100px; }</style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="index.html"><img src="icon.svg" alt=""> <span>Med Math Gradebook</span></a>
+    <button class="ghost small no-print" id="signOut" hidden>Sign out</button>
+  </header>
+  <main id="view"><p class="muted">Loading…</p></main>
+  <script src="../vendor/supabase.js"></script>
+  <script src="config.js"></script>
+  <script src="questions.js"></script>
+  <script src="teacher.js"></script>
+</body>
+</html>

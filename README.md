@@ -61,6 +61,10 @@ computer in sync, connect a free [Supabase](https://supabase.com) project:
 Changes appear on the other devices within a couple of seconds. Receipt photos stay on the device they were taken on.
 The anon key is meant to be public; Row Level Security keeps each person's data private to their sign-in.
 
+## Med Math practice
+
+`med-math/` is a separate practice site for nursing students: a lesson, practice drill, and test for each chapter of the dosage-calculation book, with grades sent to the instructor's gradebook (`med-math/teacher.html`). See `med-math/README.md`.
+
 ## Selling smarts
 
 **More → Selling smarts** (or **🔍 Should I buy it?** on the dashboard):
