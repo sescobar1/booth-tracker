@@ -569,3 +569,7 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .cheer { background: var(--cream); text-align: center; }
 .cheer h2 { color: var(--sage); font-size: 1.3rem; margin-bottom: 4px; }
 .cheer .q { font-family: 'Patrick Hand', 'Comic Sans MS', cursive; font-size: 1.3rem; line-height: 1.35; margin: 0; color: var(--ink); }
+
+/* The main "Assign a task to the family" button on Today */
+.assignbtn { display: block; width: 100%; margin: 0 0 12px; padding: 15px 18px; border: 0; border-radius: 22px; background: var(--sage); color: #fff; font-family: 'Patrick Hand', 'Comic Sans MS', cursive; font-size: 1.3rem; font-weight: 400; letter-spacing: .3px; box-shadow: var(--shadow); }
+.assignbtn:active { transform: scale(.98); }
