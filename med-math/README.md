@@ -3,7 +3,7 @@
 Dosage-calculation practice for nursing students, following the book's 24 chapters (plus the Unit One pre-test and post-test).
 
 - **Students** open `index.html`: https://sescobar1.github.io/booth-tracker/med-math/
-  Each chapter has a short **lesson** (key points + a worked example), a **Watch how to do it** video (an animated whiteboard that works one problem step by step, with spoken narration and captions; scripts are in `walkthroughs.js`), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name, class, and the **class code**.
+  Each chapter has a short **lesson** (key points + a worked example), a **Watch how to do it** video (an animated whiteboard that works one problem step by step, with natural-voice narration and captions; scripts are in `walkthroughs.js`), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name, class, and the **class code**.
 - **The instructor** opens `teacher.html` and signs in with the Booth Tracker email and password:
   - **Best scores**: one row per student, one column per chapter, with each student's best score. Tap a score to see their answers.
   - **Every submission**: date, student, chapter, score, and time taken. Filter by class, chapter, or student. **Download CSV** for a gradebook.
@@ -32,3 +32,7 @@ Accepted answers: `7.5`, `7.5 mL`, `1,500`, `1/2` for 0.5, and fractions like `3
 The import skips the bank's Module 1 (Roman numerals, not in the book's table of contents), questions that need a picture, and "select all that apply" and essay questions. Bank Module 2 (Fractions) becomes Chapter 1, and so on through Module 25, which becomes Chapter 24. Four questions with wrong answer keys in the publisher's file were turned off; you can see them unticked under **Test bank**.
 
 Files: `index.html` + `app.js` (students), `teacher.html` + `teacher.js` (gradebook), `questions.js` (lessons and practice-question generators), `config.js` (Supabase project, instructor account, passing score), `app.css`.
+
+## Narration
+
+The walkthrough narration is recorded with **Kokoro**, a free neural voice, by the GitHub Action `.github/workflows/med-math-audio.yml`. It runs whenever `walkthroughs.js` changes and commits MP3s to `med-math/audio/`, re-recording only the sentences that changed. If a sentence has no recording yet, the page reads it with the device's most natural built-in voice.

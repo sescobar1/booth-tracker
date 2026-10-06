@@ -1,0 +1,50 @@
+# Records the Med Math "Watch how to do it" narration with a natural neural voice (Kokoro)
+# whenever the walkthrough scripts change, and commits the MP3s back to the same branch.
+name: Med Math narration
+on:
+  push:
+    paths:
+      - med-math/walkthroughs.js
+      - med-math/tools/make-audio.py
+      - .github/workflows/med-math-audio.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: med-math-audio-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the voice
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q kokoro-onnx soundfile
+      - name: Cache the voice model
+        uses: actions/cache@v4
+        with:
+          path: kokoro-model
+          key: kokoro-v1.0
+      - name: Download the voice model
+        run: |
+          mkdir -p kokoro-model && cd kokoro-model
+          base=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
+          [ -f kokoro-v1.0.onnx ] || curl -fsSL -o kokoro-v1.0.onnx $base/kokoro-v1.0.onnx
+          [ -f voices-v1.0.bin ] || curl -fsSL -o voices-v1.0.bin $base/voices-v1.0.bin
+      - name: Record narration
+        run: |
+          node -e "global.window={};require('./med-math/walkthroughs.js');console.log(JSON.stringify(window.MedMathVideos))" > "$RUNNER_TEMP/steps.json"
+          python med-math/tools/make-audio.py "$RUNNER_TEMP/steps.json" kokoro-model/kokoro-v1.0.onnx kokoro-model/voices-v1.0.bin
+      - name: Commit recordings
+        run: |
+          git add med-math/audio
+          if git diff --cached --quiet; then echo "Narration is up to date."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Med Math: record walkthrough narration"
+          git pull --rebase -q && git push
