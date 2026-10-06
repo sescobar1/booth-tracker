@@ -22,6 +22,7 @@ create table if not exists public.med_math_settings (
   owner uuid primary key references auth.users on delete cascade default auth.uid(),
   class_code text not null default '',     -- students type this to open a test
   show_answers boolean not null default true,
+  videos jsonb not null default '{}'::jsonb,   -- chapter id -> a YouTube or Vimeo link the instructor picked
   updated_at timestamptz not null default now()
 );
 alter table public.med_math_settings enable row level security;
@@ -70,11 +71,12 @@ begin
   return s;
 end $$;
 
--- What the practice page needs before a test: is a code needed, and how many bank questions each chapter has.
+-- What the practice page needs: is a code needed, the instructor's video links, and how many bank questions each chapter has.
 create or replace function public.med_math_info(p_owner uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'code_required', coalesce((select class_code <> '' from public.med_math_settings where owner = p_owner), false),
+    'videos', coalesce((select videos from public.med_math_settings where owner = p_owner), '{}'::jsonb),
     'counts', coalesce((select jsonb_object_agg(module, n) from (select module, count(*) n from public.med_math_bank where owner = p_owner and active group by module) c), '{}'::jsonb))
 $$;
 
@@ -138,3 +140,6 @@ revoke all on function public.med_math_turn_in(uuid, text, text, text, text, tex
 grant execute on function public.med_math_info(uuid) to anon, authenticated;
 grant execute on function public.med_math_quiz(uuid, text, text) to anon, authenticated;
 grant execute on function public.med_math_turn_in(uuid, text, text, text, text, text, text, integer, jsonb) to anon, authenticated;
+
+-- Added later: instructor video links (safe to re-run).
+alter table public.med_math_settings add column if not exists videos jsonb not null default '{}'::jsonb;
