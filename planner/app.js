@@ -1736,13 +1736,14 @@ const SNA_CATS = ['Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastrie
 const snaData = () => { const s = S().sna || {}; return { items: s.items || [], orders: s.orders || [], budget: s.budget || 0, pickup: s.pickup || null }; };
 const snaSave = d => { S().sna = Object.assign({}, S().sna || {}, d); window.save(); };
 const money = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
-let snaEdit = false, snaFind = '';
+let snaEdit = false, snaFind = '', snaPick = null;   // snaPick: a Set of item ids checked to remove, while picking
 function viewSna() {
   const sn = snaData(), items = sn.items, q = snaFind.trim().toLowerCase();
   const lines = items.filter(i => (i.order || 0) > 0), total = lines.reduce((s, i) => s + (i.order || 0) * (i.price || 0), 0), count = lines.reduce((s, i) => s + (i.order || 0), 0);
   const shown = items.filter(i => !q || (i.name + ' ' + i.cat).toLowerCase().includes(q));
-  const row = i => '<div class="snarow' + ((i.order || 0) > 0 ? ' on' : '') + '" data-sid="' + i.id + '"><div class="snainfo"><a href="' + esc(i.url || '#') + '" target="_blank" rel="noopener">' + esc(i.name) + '</a><small>' + [i.size, i.price ? money(i.price) : 'price?', i.aisle ? 'Aisle ' + i.aisle : '', i.note].filter(Boolean).map(esc).join(' · ') + '</small></div>' +
-    (snaEdit ? '<div class="snaedit"><button type="button" class="ghost small" data-snaed="' + i.id + '">Edit</button></div>' :
+  const row = i => '<div class="snarow' + ((i.order || 0) > 0 && !snaPick ? ' on' : '') + (snaPick && snaPick.has(i.id) ? ' gone' : '') + '" data-sid="' + i.id + '">' +
+    (snaPick ? '<label class="snapick"><input type="checkbox" data-pick="' + i.id + '"' + (snaPick.has(i.id) ? ' checked' : '') + ' aria-label="Remove ' + esc(i.name) + '"></label>' : '') + '<div class="snainfo"><a href="' + esc(i.url || '#') + '" target="_blank" rel="noopener">' + esc(i.name) + '</a><small>' + [i.size, i.price ? money(i.price) : 'price?', i.aisle ? 'Aisle ' + i.aisle : '', i.note].filter(Boolean).map(esc).join(' · ') + '</small></div>' +
+    (snaPick ? '' : snaEdit ? '<div class="snaedit"><button type="button" class="ghost small" data-snaed="' + i.id + '">Edit</button></div>' :
     '<div class="snanums"><label>Have<input type="number" min="0" inputmode="numeric" data-have="' + i.id + '" value="' + (i.have != null && i.have !== '' ? i.have : '') + '" placeholder="–"></label><label>Keep<input type="number" min="0" inputmode="numeric" data-par="' + i.id + '" value="' + (i.par || '') + '" placeholder="–"></label>' +
     '<label class="ord">Order<span class="ordq"><button type="button" class="ghost small" data-om="' + i.id + '">−</button><b>' + (i.order || 0) + '</b><button type="button" class="ghost small" data-op="' + i.id + '">＋</button></span></label></div>') + '</div>';
   $('view').innerHTML = '<h1>ATU</h1>' + atuTabs('sna') +
@@ -1752,7 +1753,11 @@ function viewSna() {
       '<div class="row-actions tight"><button type="button" id="snaForm"' + (count ? '' : ' disabled') + '>📄 Order form</button><button type="button" class="ghost small" id="snaSheet">🖨 Count sheet</button><button type="button" class="ghost small" id="snaFill">✨ Fill from counts</button><button type="button" class="ghost small" id="snaLast"' + (sn.orders.length ? '' : ' disabled') + '>↺ Same as last order</button><button type="button" class="ghost small" id="snaClear"' + (count ? '' : ' disabled') + '>Clear</button></div></div>' +
     '<div class="card pad snareq"><div class="mini-head"><h2>📨 Student requests</h2><span><button type="button" class="small" id="snaShare">📤 Share link</button></span></div><div id="snaReqs"><p class="helper">' + (signedIn() ? 'Loading…' : 'Sign in to see requests.') + '</p></div></div>' +
     '<p class="helper">Count what’s in the closet (<b>Have</b>), set how many you like to keep on the shelf (<b>Keep</b>), then tap <b>✨ Fill from counts</b> and the order fills itself. Or tap ＋ to order. Tap a name to open it at Sam’s Club.</p>' +
-    '<div class="row-actions tight"><input id="snaFind" type="search" placeholder="Search snacks" value="' + esc(snaFind) + '"><button type="button" class="ghost small" id="snaEditT">' + (snaEdit ? '✓ Done editing' : '✎ Edit items') + '</button>' + (snaEdit ? '<button type="button" class="small" id="snaNew">＋ New item</button>' : '') + '</div>' +
+    '<div class="row-actions tight"><input id="snaFind" type="search" placeholder="Search snacks" value="' + esc(snaFind) + '">' +
+      (snaPick ? '' : '<button type="button" class="ghost small" id="snaEditT">' + (snaEdit ? '✓ Done editing' : '✎ Edit items') + '</button>' + (snaEdit ? '<button type="button" class="small" id="snaNew">＋ New item</button>' : '') +
+      '<button type="button" class="ghost small" id="snaPickT">☑ Pick items to remove</button><button type="button" class="ghost small" id="snaPrintList">🖨 Print list</button>') + '</div>' +
+    (snaPick ? '<div class="card pad snapickbar"><b>Check the snacks you want to remove</b><span class="sub">' + snaPick.size + ' checked · ' + (items.length - snaPick.size) + ' will stay</span>' +
+      '<div class="row-actions tight"><button type="button" class="danger" id="snaPickGo"' + (snaPick.size ? '' : ' disabled') + '>🗑 Remove ' + snaPick.size + ' checked</button><button type="button" class="ghost small" id="snaPickPrint">🖨 Print what stays</button><button type="button" class="ghost small" id="snaPickX">Cancel</button></div></div>' : '') +
     SNA_CATS.map(c => { const l = shown.filter(i => (i.cat || 'Other') === c); return l.length ? '<div class="card pad"><h3>' + esc(c) + ' <small>' + l.length + '</small></h3>' + l.map(row).join('') + '</div>' : ''; }).join('') +
     '<div class="card pad"><div class="mini-head"><h2>Orders</h2><label class="budget">Budget $<input type="number" min="0" inputmode="decimal" id="snaBudget" value="' + (sn.budget || '') + '" placeholder="none"></label></div>' +
       (sn.orders.length ? sn.orders.slice(0, 10).map((o, k) => '<div class="mini-row"><span><b>' + esc(fmtDate(o.date)) + '</b> · ' + o.lines.reduce((s, l) => s + l.qty, 0) + ' packs · ' + money(o.total) + ' <small class="sub">' + (o.received ? '✓ received' : 'ordered') + '</small></span><span>' + (o.received ? '' : '<button type="button" class="ghost small" data-orec="' + k + '">✓ Got it</button>') + '<button type="button" class="ghost small" data-oview="' + k + '">View</button></span></div>').join('') : '<p class="helper">No orders yet.</p>') +
@@ -1763,7 +1768,18 @@ function viewSna() {
   v.querySelectorAll('[data-op],[data-om]').forEach(b => b.onclick = () => { const it = find(b.dataset.op || b.dataset.om); it.order = Math.max(0, (it.order || 0) + (b.dataset.op ? 1 : -1)); put(); redraw(); });
   v.querySelectorAll('[data-snaed]').forEach(b => b.onclick = () => editSna(b.dataset.snaed));
   $('snaFind').oninput = e => { snaFind = e.target.value; clearTimeout(viewSna.t); viewSna.t = setTimeout(() => { viewSna(); const f = $('snaFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
-  $('snaEditT').onclick = () => { snaEdit = !snaEdit; viewSna(); };
+  if ($('snaEditT')) $('snaEditT').onclick = () => { snaEdit = !snaEdit; viewSna(); };
+  // Pick several snacks to remove at once (checkboxes), then remove them, or print what stays.
+  if ($('snaPickT')) $('snaPickT').onclick = () => { snaPick = new Set(); snaEdit = false; viewSna(); };
+  if ($('snaPrintList')) $('snaPrintList').onclick = () => snaPrintList(items);
+  v.querySelectorAll('[data-pick]').forEach(c => c.onchange = () => { if (c.checked) snaPick.add(c.dataset.pick); else snaPick.delete(c.dataset.pick); redraw(); });
+  if ($('snaPickX')) $('snaPickX').onclick = () => { snaPick = null; viewSna(); };
+  if ($('snaPickPrint')) $('snaPickPrint').onclick = () => snaPrintList(items.filter(i => !snaPick.has(i.id)));
+  if ($('snaPickGo')) $('snaPickGo').onclick = () => {
+    const n = snaPick.size; if (!n || !confirm('Remove ' + n + ' snack' + (n === 1 ? '' : 's') + ' from the list?')) return;
+    const keep = items.filter(i => !snaPick.has(i.id)); snaPick = null; snaSave({ items: keep }); viewSna();
+    toast('🗑 Removed ' + n + ' · ' + keep.length + ' snacks left. Tap 🖨 Print list for a copy.');
+  };
   if ($('snaNew')) $('snaNew').onclick = () => editSna(null);
   $('snaFill').onclick = () => {
     let n = 0, skipped = 0;
@@ -1800,6 +1816,16 @@ function snaLink() {
   return new URL('sna.html?t=' + S().snaToken, location.href).href;
 }
 // A printable sheet for counting the closet by hand: every item by kind, with boxes for Have and Order.
+// A clean printable copy of the snack list, by category (name, size, price).
+function snaPrintList(list) {
+  const items = list.filter(i => !/out of stock/i.test(i.note || ''));
+  const html = '<h2>SNA Snack Closet list</h2><p class="sub">' + items.length + ' snacks · printed ' + esc(fmtDate(today(), 'long')) + '</p>' +
+    '<table class="snaform"><thead><tr><th style="width:28px"></th><th>Snack</th><th>Size</th><th>Price</th></tr></thead><tbody>' +
+    SNA_CATS.map(c => { const l = items.filter(i => (i.cat || 'Other') === c).sort((a, b) => a.name.localeCompare(b.name)); return l.length ? '<tr class="cat"><td colspan="4">' + esc(c) + ' (' + l.length + ')</td></tr>' +
+      l.map(i => '<tr><td>☐</td><td>' + esc(i.name) + '</td><td>' + esc(i.size || '') + '</td><td>' + (i.price ? money(i.price) : '') + '</td></tr>').join('') : ''; }).join('') + '</tbody></table>';
+  const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = html; $('view').appendChild(d);
+  window.print(); setTimeout(() => d.remove(), 1000);
+}
 function snaCountSheet() {
   const sn = snaData(), items = sn.items.filter(i => !/out of stock/i.test(i.note || ''));
   const head = '<h2>SNA Snack Closet count sheet</h2><p class="sub">Counted by: ______________________ &nbsp; Date: ____________ &nbsp; · Count packs/boxes on the shelf, then enter them in the planner (Tasks → ATU → 🍿 SNA Snack Closet → Have).</p>';
