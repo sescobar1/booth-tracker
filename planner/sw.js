@@ -1,6 +1,6 @@
 // Offline support: serve the latest files when online, fall back to the cache when not.
-const CACHE = 'planner-v63';
-const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'planner.css', 'theme.css', 'neutral.css', 'db.js', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'family-icon.svg', 'family-icon-180.png', 'family-icon-192.png', 'family-icon-512.png'];
+const CACHE = 'planner-v64';
+const ASSETS = ['./', 'index.html', 'app.js', 'app.css', 'planner.css', 'theme.css', 'neutral.css', 'db.js', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'family-icon.svg', 'family-icon-180.png', 'family-icon-192.png', 'family-icon-512.png', 'rainbow-icon.svg', 'rainbow-icon-180.png', 'rainbow-icon-192.png', 'rainbow-icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -29,7 +29,7 @@ self.addEventListener('fetch', e => {
 // Phone alerts (for example when Eli or Cece add something).
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: 'Planner', body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Planner', { body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag, data: { url: d.url || './' } }));
+  e.waitUntil(self.registration.showNotification(d.title || 'Planner', { body: d.body || '', icon: 'rainbow-icon-192.png', badge: 'rainbow-icon-192.png', tag: d.tag, data: { url: d.url || './' } }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
