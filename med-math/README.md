@@ -29,7 +29,7 @@ Accepted answers: `7.5`, `7.5 mL`, `1,500`, `1/2` for 0.5, and fractions like `3
    Paste `bank.sql` into the SQL Editor and run it. Running it again updates questions without making duplicates.
 3. Set the class code on `teacher.html` → **Class code**.
 
-The import skips the bank's Module 1 (Roman numerals, not in the book's table of contents), questions that need a picture, and "select all that apply" and essay questions. Bank Module 2 (Fractions) becomes Chapter 1, and so on through Module 25, which becomes Chapter 24. Four questions with wrong answer keys in the publisher's file were turned off; you can see them unticked under **Test bank**.
+The import skips the bank's Module 1 (Roman numerals, not in the book's table of contents), questions that need a picture, and "select all that apply" and essay questions. Bank Module 2 (Fractions) becomes Chapter 1, and so on through Module 25, which becomes Chapter 24. Every question was re-solved by hand: six wrong or too-lenient answer keys are corrected in `tools/import-bank.py` (CORRECTIONS), and one broken question is left out.
 
 Files: `index.html` + `app.js` (students), `teacher.html` + `teacher.js` (gradebook), `questions.js` (lessons and practice-question generators), `config.js` (Supabase project, instructor account, passing score), `app.css`.
 
