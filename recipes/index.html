@@ -37,6 +37,22 @@
     .chip { flex: none; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-weight: 500; font-size: 15px; }
     .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
     .rcwrap { display: flex; flex-direction: column; gap: 6px; }
+    .rlist { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+    .rrwrap + .rrwrap { border-top: 1px solid var(--line); }
+    .rrwrap { display: flex; align-items: center; gap: 8px; padding-right: 10px; }
+    .rrow { flex: 1; display: flex; align-items: baseline; gap: 10px; padding: 14px 16px; color: inherit; text-decoration: none; min-width: 0; }
+    .rrow .rname { font-size: 1.08rem; font-weight: 600; }
+    .rrow small { color: var(--muted); }
+    .rrow .go { margin-left: auto; color: var(--muted); font-size: 1.4rem; line-height: 1; }
+    .rrwrap .fpick { max-width: 40%; }
+    .dish { margin: 6px 0 14px; }
+    .dish img { width: 100%; max-height: 420px; object-fit: cover; border-radius: 18px; display: block; }
+    .dish figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .dish figcaption a { color: inherit; }
+    .cardh { font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; margin: 22px 0 8px; color: var(--accent); }
+    .dres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
+    .dhit { padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--bg); aspect-ratio: 1; }
+    .dhit img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fpick { padding: 7px 10px; font-size: 14px; border-radius: 10px; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
     .rc { background: var(--card); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); cursor: pointer; text-align: left; padding: 0; color: inherit; display: block; text-decoration: none; width: 100%; font-weight: 400; }
@@ -163,7 +179,7 @@
     const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
     if (error) { toast(error.message); return false; }
     share = sh;
-    book = { title: (sh && sh.title) || 'Our family cookbook', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at })) };
+    book = { title: (sh && sh.title) || 'Our family cookbook', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at, dish: r.dish_photo })) };
     book.recipes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     return true;
   }
@@ -211,7 +227,7 @@
     const rs = book.recipes.filter(r => inFolder(r, f));
     app.innerHTML = '<a class="back" href="#">‹ All recipes</a><h1 class="rtitle">' + f.icon + ' ' + esc(f.name) + '</h1><p class="meta">' + rs.length + ' recipe' + (rs.length === 1 ? '' : 's') + '</p>' +
       (owner() ? '<div class="actions noprint"><a class="btn" href="#new/' + f.id + '">＋ Add a recipe here</a><button type="button" class="ghost" id="fPick">☑️ Choose recipes for this folder</button><button type="button" class="ghost" id="fEdit">✏️ Rename</button></div>' : '') +
-      (rs.length ? '<div class="grid">' + rs.map(recipeCard).join('') + '</div>' : '<p class="empty">Nothing in this folder yet.' + (owner() ? ' Tap <b>Choose recipes</b> to put some in.' : '') + '</p>');
+      (rs.length ? '<div class="rlist">' + rs.map(recipeCard).join('') + '</div>' : '<p class="empty">Nothing in this folder yet.' + (owner() ? ' Tap <b>Choose recipes</b> to put some in.' : '') + '</p>');
     window.scrollTo(0, 0);
     if (owner()) {
       $('fEdit').onclick = () => folderForm(f, () => folderView(book.folders.find(x => x.id === f.id)));
@@ -239,7 +255,8 @@
     };
   }
   // Each recipe card; Shaana also gets a folder drop-down under it (pick a folder to put it in or take it out).
-  const recipeCard = r => '<div class="rcwrap">' + '<a class="rc" href="#' + r.id + '"><div class="pic"' + (r.photos && r.photos[0] ? ' style="background-image:url(\'' + esc(photoUrl(r.photos[0].path)) + '\')">' : '>' + (ICON[sectionOf(r)] || '🍽')) + '</div><div class="txt"><b>' + esc(r.title) + '</b><small>' + esc([r.from ? 'From ' + r.from : '', r.servings ? 'Serves ' + r.servings.replace(/^serves\s*/i, '') : ''].filter(Boolean).join(' · ')) + '</small></div></a>' + (owner() && book.folders.length ? '<select class="fpick noprint" data-fpick="' + r.id + '" aria-label="Folders for ' + esc(r.title) + '"><option value="">📁 ' + ((r.folders || []).length ? book.folders.filter(f => inFolder(r, f)).map(f => f.icon + ' ' + f.name).join(', ') : 'Add to a folder…') + '</option>' + book.folders.map(f => '<option value="' + f.id + '">' + (inFolder(r, f) ? '✓ ' : '＋ ') + f.icon + ' ' + esc(f.name) + (inFolder(r, f) ? ' (tap to remove)' : '') + '</option>').join('') + '</select>' : '') + '</div>';
+  // The first page is a plain list of names, like a cookbook's table of contents; tap one for the photo and recipe.
+  const recipeCard = r => '<div class="rrwrap">' + '<a class="rrow" href="#' + r.id + '"><span class="rname">' + esc(r.title) + '</span>' + (r.from ? '<small>From ' + esc(r.from) + '</small>' : '') + '<span class="go">›</span></a>' + (owner() && book.folders.length ? '<select class="fpick noprint" data-fpick="' + r.id + '" aria-label="Folders for ' + esc(r.title) + '"><option value="">📁 ' + ((r.folders || []).length ? book.folders.filter(f => inFolder(r, f)).map(f => f.icon + ' ' + f.name).join(', ') : 'Add to a folder…') + '</option>' + book.folders.map(f => '<option value="' + f.id + '">' + (inFolder(r, f) ? '✓ ' : '＋ ') + f.icon + ' ' + esc(f.name) + (inFolder(r, f) ? ' (tap to remove)' : '') + '</option>').join('') + '</select>' : '') + '</div>';
   function wireFolderPicks(redraw) {
     app.querySelectorAll('[data-fpick]').forEach(sel => sel.onchange = async () => {
       const r = book.recipes.find(x => x.id === sel.dataset.fpick), fid = sel.value; if (!r || !fid) return;
@@ -270,7 +287,7 @@
     const folders = book.folders.filter(f => owner() || book.recipes.some(r => inFolder(r, f)));
     const folderRow = folders.length ? '<h2 class="secth">📁 Folders</h2><div class="folders">' + folders.map(f => { const n = book.recipes.filter(r => inFolder(r, f)).length; return '<a class="folder" href="#folder/' + f.id + '"><span class="fi">' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + n + ' recipe' + (n === 1 ? '' : 's') + '</small></a>'; }).join('') + (owner() ? '<button type="button" class="folder add noprint" id="fNew"><span class="fi">＋</span><b>New folder</b><small>Grandma’s, Christmas…</small></button>' : '') + '</div>' : '';
     // Like a cookbook: one section after another, unless searching or one section is picked.
-    const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="grid">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="grid">' + rs.map(card).join('') + '</div>';
+    const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="rlist">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="rlist">' + rs.map(card).join('') + '</div>';
     app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
       (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' : '') +
       (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see the recipes and photos (they can’t change anything).</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
@@ -300,20 +317,53 @@
       '<h1 class="rtitle">' + esc(r.title) + '</h1><p class="meta">' + esc([r.from ? 'From ' + r.from : '', ICON[sectionOf(r)] + ' ' + sectionOf(r)].filter(Boolean).join(' · ')) + '</p>' +
       (book.folders.some(f => inFolder(r, f)) ? '<div class="chips noprint">' + book.folders.filter(f => inFolder(r, f)).map(f => '<a class="chip" href="#folder/' + f.id + '">' + f.icon + ' ' + esc(f.name) + '</a>').join('') + '</div>' : '') +
       ([['Serves', r.servings], ['Prep', r.prep], ['Cook', r.cook], ['Oven', r.temp]].some(x => x[1]) ? '<div class="facts">' + [['Serves', r.servings], ['Prep', r.prep], ['Cook', r.cook], ['Oven', r.temp]].filter(x => x[1]).map(([k, v]) => '<span><b>' + k + '</b>' + esc(v) + '</span>').join('') + '</div>' : '') +
-      ((r.photos || []).length ? '<div class="gallery">' + r.photos.map((p, k) => '<img src="' + esc(photoUrl(p.path)) + '" alt="' + esc(r.title) + ' photo ' + (k + 1) + '" data-zoom="' + k + '" loading="lazy">').join('') + '</div>' + (r.photos.length > 1 ? '<p class="hint noprint">Swipe for more photos · tap one to see it big</p>' : '<p class="hint noprint">Tap the photo to see it big</p>') : '') +
+      dishHtml(r) +
       (ing.length || steps.length || r.notes ? '<div class="cols">' +
         (ing.length ? '<div class="card"><h2>Ingredients</h2><ul class="ing">' + ing.map(x => /:$/.test(x) ? '<li class="subhead">' + esc(x) + '</li>' : '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
         (steps.length ? '<div class="card"><h2>Directions</h2><ol class="steps">' + steps.map(x => '<li>' + esc(x) + '</li>').join('') + '</ol></div>' : '') +
         (r.notes ? '<div class="card" style="grid-column:1/-1"><h2>Notes</h2><div class="notes">' + esc(r.notes) + '</div></div>' : '') + '</div>' : '') +
+      ((r.photos || []).length ? '<h2 class="cardh">📸 The original recipe card</h2><div class="gallery">' + r.photos.map((p, k) => '<img src="' + esc(photoUrl(p.path)) + '" alt="' + esc(r.title) + ' photo ' + (k + 1) + '" data-zoom="' + k + '" loading="lazy">').join('') + '</div>' + (r.photos.length > 1 ? '<p class="hint noprint">Swipe for more photos · tap one to see it big</p>' : '<p class="hint noprint">Tap the card to see it big</p>') : '') +
       '<div class="actions"><button type="button" class="ghost" id="pr">🖨 Print</button><button type="button" class="ghost" id="sh">📤 Send this recipe</button>' + (owner() ? '<a class="btn" href="#edit/' + r.id + '">✏️ Edit</a>' : '') + '</div>';
     window.scrollTo(0, 0);
     app.querySelectorAll('.ing li:not(.subhead)').forEach(li => li.onclick = () => li.classList.toggle('got'));
     app.querySelectorAll('[data-zoom]').forEach(img => img.onclick = () => zoom(img.src));
+    if ($('dishPick')) $('dishPick').onclick = () => dishPicker(r);
     $('pr').onclick = () => window.print();
     $('sh').onclick = async () => {
       const url = (token ? location.href.split('#')[0] : shareLink()) + '#' + r.id;
       if (navigator.share) { try { await navigator.share({ title: r.title, url }); } catch (e) {} } else { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch (e) { prompt('Copy this link:', url); } }
     };
+  }
+  // A picture of the finished dish (free photos from Wikimedia Commons, with credit), shown above the recipe.
+  function dishHtml(r) {
+    const d = r.dish;
+    return (d && d.url ? '<figure class="dish"><img src="' + esc(d.url) + '" alt="' + esc(r.title) + '" loading="lazy"><figcaption>A dish like ours · photo' + (d.credit ? ' by ' + esc(d.credit) : '') + (d.license ? ' (' + esc(d.license) + ')' : '') + ', <a href="' + esc(d.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a></figcaption></figure>' : '') +
+      (owner() ? '<p class="noprint"><button type="button" class="small ghost" id="dishPick">🔍 ' + (d && d.url ? 'Change the dish photo' : 'Find a photo of this dish') + '</button></p>' : '');
+  }
+  // Shaana searches free photos and taps the one that looks like her dish.
+  function dishPicker(r) {
+    const box = document.createElement('div'); box.className = 'fdlg';
+    box.innerHTML = '<div class="card fform"><h2>🔍 Photo for ' + esc(r.title) + '</h2><p class="hint">Free photos from Wikimedia Commons. Tap one to use it.</p><div class="tools"><input id="dq" type="search" value="' + esc(r.title.replace(/^(crockpot|easy|paula deen|hidden valley)\s+/i, '')) + '"></div><div id="dres" class="dres"><p class="hint">Searching…</p></div><div class="actions">' + (r.dish && r.dish.url ? '<button type="button" class="ghost" id="dnone">Remove photo</button>' : '') + '<button type="button" class="ghost" id="dx">Cancel</button></div></div>';
+    document.body.appendChild(box);
+    const save = async dish => {
+      const { error } = await sb.from('family_recipes').update({ dish_photo: dish }).eq('id', r.id); if (error) return toast(error.message);
+      r.dish = dish; box.remove(); show(r); toast(dish ? '✓ Photo saved' : 'Photo removed');
+    };
+    let hits = [];
+    const search = async () => {
+      const q = $('dq').value.trim(); if (!q) return; $('dres').innerHTML = '<p class="hint">Searching…</p>';
+      try {
+        const u = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=24&gsrsearch=' + encodeURIComponent(q + ' filetype:bitmap') + '&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=800&iiextmetadatafilter=LicenseShortName|Artist';
+        const j = await (await fetch(u)).json();
+        hits = Object.values((j.query || {}).pages || {}).sort((a, b) => a.index - b.index).map(pg => { const ii = (pg.imageinfo || [])[0] || {}, m = ii.extmetadata || {}; return { url: ii.thumburl, page: ii.descriptionurl, license: (m.LicenseShortName || {}).value || '', credit: String((m.Artist || {}).value || '').replace(/<[^>]+>/g, '').trim().slice(0, 60) }; }).filter(h => h.url);
+        $('dres').innerHTML = hits.length ? hits.map((h, k) => '<button type="button" class="dhit" data-k="' + k + '"><img src="' + esc(h.url) + '" alt="" loading="lazy"></button>').join('') : '<p class="hint">No photos found. Try fewer words, like “banana bread”.</p>';
+        $('dres').querySelectorAll('[data-k]').forEach(b => b.onclick = () => save(hits[+b.dataset.k]));
+      } catch (e) { $('dres').innerHTML = '<p class="hint">Couldn’t search right now. Try again.</p>'; }
+    };
+    $('dq').onkeydown = e => { if (e.key === 'Enter') search(); };
+    $('dx').onclick = () => box.remove();
+    if ($('dnone')) $('dnone').onclick = () => save(null);
+    search();
   }
   function zoom(src) {
     const z = document.createElement('div'); z.id = 'zoom'; z.innerHTML = '<img alt=""><button type="button">Close ✕</button>'; z.querySelector('img').src = src;
