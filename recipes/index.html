@@ -3,16 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Family Recipes</title>
+  <title>Our family cookbook</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#fbf6ee">
   <link rel="icon" href="cook-icon.svg">
   <link rel="apple-touch-icon" href="cook-icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="apple-mobile-web-app-title" content="Recipes">
+  <meta name="apple-mobile-web-app-title" content="Cookbook">
   <style>
     /* Family recipe book: Shaana adds photos of recipes; family opens the share link to read them. */
-    @font-face { font-family: 'Pacifico'; src: url(../fonts/pacifico.woff2) format('woff2'); font-display: swap; }
     :root { --bg: #fbf6ee; --card: #fffdf9; --ink: #3d2c24; --muted: #8c766a; --line: #eadfd2; --accent: #b5543c; --accent-soft: #f6e1d8; --sage: #7d9b76; --shadow: 0 1px 2px rgba(61,44,36,.06), 0 6px 18px rgba(61,44,36,.07); }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1e1916; --card: #2a2420; --ink: #f3ebe4; --muted: #ad9a8e; --line: #3d342e; --accent: #e08a6f; --accent-soft: #3f2a22; --sage: #93b28b; --shadow: 0 1px 2px rgba(0,0,0,.3); } }
     :root[data-theme="dark"] { --bg: #1e1916; --card: #2a2420; --ink: #f3ebe4; --muted: #ad9a8e; --line: #3d342e; --accent: #e08a6f; --accent-soft: #3f2a22; --sage: #93b28b; --shadow: 0 1px 2px rgba(0,0,0,.3); }
@@ -21,7 +20,7 @@
     body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
     main { max-width: 960px; margin: 0 auto; padding: 14px 16px 90px; }
     header.top { text-align: center; padding: 18px 0 6px; }
-    header.top h1 { font-family: Pacifico, Georgia, serif; font-weight: 400; font-size: clamp(2rem, 7vw, 3rem); margin: 0; color: var(--accent); line-height: 1.25; }
+    header.top h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; letter-spacing: -.3px; font-size: clamp(2rem, 7vw, 3rem); margin: 0; color: var(--accent); line-height: 1.25; }
     header.top p { margin: 4px 0 0; color: var(--muted); }
     .tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 16px 0 8px; }
     .tools input { flex: 1 1 220px; }
@@ -67,7 +66,7 @@
     .pick input { width: 20px; height: 20px; flex: none; }
     .pick small { color: var(--muted); margin-left: auto; font-weight: 400; }
     .sect { margin: 8px 0 26px; scroll-margin-top: 12px; }
-    .secth { font-family: Pacifico, Georgia, serif; font-weight: 400; color: var(--accent); font-size: 1.5rem; margin: 6px 0 10px; border-bottom: 2px dotted var(--line); padding-bottom: 4px; }
+    .secth { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; color: var(--accent); font-size: 1.5rem; margin: 6px 0 10px; border-bottom: 2px dotted var(--line); padding-bottom: 4px; }
     .secth small { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; color: var(--muted); }
     .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
     .facts span { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; font-size: 14px; }
@@ -84,7 +83,7 @@
     .share code { flex: 1 1 100%; font-size: 13px; background: var(--bg); border: 1px dashed var(--line); padding: 8px 10px; border-radius: 10px; word-break: break-all; }
     /* Recipe page */
     .back { display: inline-block; margin: 8px 0; color: var(--muted); text-decoration: none; font-weight: 600; background: none; padding: 4px 0; }
-    .rtitle { font-size: clamp(1.7rem, 6vw, 2.4rem); margin: 4px 0 2px; line-height: 1.2; }
+    .rtitle { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(1.7rem, 6vw, 2.4rem); margin: 4px 0 2px; line-height: 1.2; }
     .meta { color: var(--muted); margin: 0 0 12px; }
     .gallery { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
     .gallery img { height: min(70vh, 460px); max-width: 92%; flex: none; scroll-snap-align: start; border-radius: 14px; object-fit: contain; background: var(--card); border: 1px solid var(--line); cursor: zoom-in; }
@@ -152,7 +151,7 @@
   // Uploaded photos live in the recipes bucket; card photos added with the website are plain paths like cards/x.jpg.
   const photoUrl = p => /^(https?:|cards\/)/.test(p) ? p : P.url + '/storage/v1/object/public/' + BUCKET + '/' + p.split('/').map(encodeURIComponent).join('/');
   const lines = s => String(s || '').split('\n').map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean);
-  let user = null, book = { title: 'Family Recipes', folders: [], recipes: [] }, share = null, cat = 'All', q = '';
+  let user = null, book = { title: 'Our family cookbook', folders: [], recipes: [] }, share = null, cat = 'All', q = '';
   function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); }
 
   async function load() {
@@ -164,7 +163,7 @@
     const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
     if (error) { toast(error.message); return false; }
     share = sh;
-    book = { title: (sh && sh.title) || 'Family Recipes', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at })) };
+    book = { title: (sh && sh.title) || 'Our family cookbook', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at })) };
     book.recipes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     return true;
   }
@@ -288,7 +287,7 @@
     wireFolderPicks(list);
     if (owner()) {
       $('shCopy').onclick = async () => { try { await navigator.clipboard.writeText(shareLink()); toast('Link copied'); } catch (e) { prompt('Copy this link:', shareLink()); } };
-      $('shShare').onclick = async () => { const text = 'Here’s our family recipe book 🍽💛 ' + shareLink(); if (navigator.share) { try { await navigator.share({ title: book.title, text: 'Here’s our family recipe book 🍽💛', url: shareLink() }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text); };
+      $('shShare').onclick = async () => { const text = 'Here’s our family cookbook 🍽💛 ' + shareLink(); if (navigator.share) { try { await navigator.share({ title: book.title, text: 'Here’s our family cookbook 🍽💛', url: shareLink() }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text); };
       $('shName').onclick = async () => { const n = prompt('Name of the recipe book:', book.title); if (!n || !n.trim()) return; const { error } = await sb.from('family_recipe_share').update({ title: n.trim() }).eq('owner', user.id); if (error) return toast(error.message); book.title = share.title = n.trim(); list(); };
       $('out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
     }
@@ -469,7 +468,7 @@
   }
 
   function signIn() {
-    app.innerHTML = '<header class="top"><h1>Family Recipes</h1><p>Sign in with your Planner email and password to add recipes.</p></header>' +
+    app.innerHTML = '<header class="top"><h1>Our family cookbook</h1><p>Sign in with your Planner email and password to add recipes.</p></header>' +
       '<form class="card signin" id="si"><label for="em">Email</label><input id="em" type="email" autocomplete="email" required><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required><div class="actions"><button>Sign in</button></div><p class="hint">Family members don’t sign in. Send them the share link instead.</p></form>';
     $('si').onsubmit = async e => {
       e.preventDefault();
