@@ -50,6 +50,8 @@
     .dish figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
     .dish figcaption a { color: inherit; }
     .cardh { font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; margin: 22px 0 8px; color: var(--accent); }
+    .upl { display: block; text-align: center; margin: 10px 0 4px; cursor: pointer; }
+    .orh { font-size: 1rem; margin: 16px 0 0; }
     .dres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
     .dhit { padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--bg); aspect-ratio: 1; }
     .dhit img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -337,16 +339,19 @@
   // A picture of the finished dish (free photos from Wikimedia Commons, with credit), shown above the recipe.
   function dishHtml(r) {
     const d = r.dish;
-    return (d && d.url ? '<figure class="dish"><img src="' + esc(d.url) + '" alt="' + esc(r.title) + '" loading="lazy"><figcaption>A dish like ours · photo' + (d.credit ? ' by ' + esc(d.credit) : '') + (d.license ? ' (' + esc(d.license) + ')' : '') + ', <a href="' + esc(d.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a></figcaption></figure>' : '') +
-      (owner() ? '<p class="noprint"><button type="button" class="small ghost" id="dishPick">🔍 ' + (d && d.url ? 'Change the dish photo' : 'Find a photo of this dish') + '</button></p>' : '');
+    return (d && d.url ? '<figure class="dish"><img src="' + esc(d.url) + '" alt="' + esc(r.title) + '" loading="lazy"><figcaption>' + (d.own ? '📷 Our photo' : 'A dish like ours · photo' + ((d.credit ? ' by ' + esc(d.credit) : '') + (d.license ? ' (' + esc(d.license) + ')' : '') + ', <a href="' + esc(d.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a>')) + '</figcaption></figure>' : '') +
+      (owner() ? '<p class="noprint"><button type="button" class="small ghost" id="dishPick">📷 ' + (d && d.url ? 'Change the dish photo' : 'Add a photo of this dish') + '</button></p>' : '');
   }
   // Shaana searches free photos and taps the one that looks like her dish.
   function dishPicker(r) {
     const box = document.createElement('div'); box.className = 'fdlg';
-    box.innerHTML = '<div class="card fform"><h2>🔍 Photo for ' + esc(r.title) + '</h2><p class="hint">Free photos from Wikimedia Commons. Tap one to use it.</p><div class="tools"><input id="dq" type="search" value="' + esc(r.title.replace(/^(crockpot|easy|paula deen|hidden valley)\s+/i, '')) + '"></div><div id="dres" class="dres"><p class="hint">Searching…</p></div><div class="actions">' + (r.dish && r.dish.url ? '<button type="button" class="ghost" id="dnone">Remove photo</button>' : '') + '<button type="button" class="ghost" id="dx">Cancel</button></div></div>';
+    box.innerHTML = '<div class="card fform"><h2>📷 Photo for ' + esc(r.title) + '</h2>' +
+      '<label class="btn upl">📷 Upload my own photo<input type="file" accept="image/*" id="dup" hidden></label><p class="hint">Take a picture or pick one from your phone.</p>' +
+      '<h3 class="orh">…or use a free photo from the internet</h3><p class="hint">From Wikimedia Commons. Tap one to use it.</p><div class="tools"><input id="dq" type="search" value="' + esc(r.title.replace(/^(crockpot|easy|paula deen|hidden valley)\s+/i, '')) + '"></div><div id="dres" class="dres"><p class="hint">Searching…</p></div><div class="actions">' + (r.dish && r.dish.url ? '<button type="button" class="ghost" id="dnone">Remove photo</button>' : '') + '<button type="button" class="ghost" id="dx">Cancel</button></div></div>';
     document.body.appendChild(box);
     const save = async dish => {
       const { error } = await sb.from('family_recipes').update({ dish_photo: dish }).eq('id', r.id); if (error) return toast(error.message);
+      if (r.dish && r.dish.path && (!dish || dish.path !== r.dish.path)) sb.storage.from(BUCKET).remove([r.dish.path]);
       r.dish = dish; box.remove(); show(r); toast(dish ? '✓ Photo saved' : 'Photo removed');
     };
     let hits = [];
@@ -361,6 +366,16 @@
       } catch (e) { $('dres').innerHTML = '<p class="hint">Couldn’t search right now. Try again.</p>'; }
     };
     $('dq').onkeydown = e => { if (e.key === 'Enter') search(); };
+    $('dup').onchange = async () => {
+      const f = $('dup').files[0]; if (!f) return;
+      const lab = box.querySelector('.upl'); lab.firstChild.textContent = '⏳ Uploading…';
+      try {
+        const { blob } = await shrink(f, 1600), path = user.id + '/dish-' + crypto.randomUUID() + '.jpg';
+        const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+        if (error) throw error;
+        await save({ url: photoUrl(path), path, own: true });
+      } catch (e) { lab.firstChild.textContent = '📷 Upload my own photo'; toast('Couldn’t upload: ' + (e.message || e)); }
+    };
     $('dx').onclick = () => box.remove();
     if ($('dnone')) $('dnone').onclick = () => save(null);
     search();
