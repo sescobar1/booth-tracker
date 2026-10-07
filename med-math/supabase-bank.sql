@@ -97,6 +97,17 @@ begin
           order by random() limit public.med_math_test_size(p_owner, p_module)) q), '[]'::jsonb);
 end $$;
 
+-- A question as plain text for the gradebook: "6<sup>3</sup>/<sub>4</sub>" reads "6 3/4", "D<sub>5</sub>W" reads "D5W".
+create or replace function public.med_math_plain(h text) returns text
+language sql immutable set search_path = public as $$
+  select btrim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(coalesce(h, ''),
+    '<sup>\s*([^<]*?)\s*</sup>\s*/\s*<sub>\s*([^<]*?)\s*</sub>', ' \1/\2', 'g'),   -- fractions
+    '</?(sub|sup)>', '', 'g'),                                                              -- D<sub>5</sub>W -> D5W
+    '<[^>]+>', ' ', 'g'),
+    '([.?])([A-Z][a-z])', '\1 \2', 'g'),                                                  -- "D5W.How" -> "D5W. How"
+    '\s+', ' ', 'g'))
+$$;
+
 -- Grade a test, save it in the gradebook, and return the results.
 create or replace function public.med_math_turn_in(
   p_owner uuid, p_code text, p_student text, p_email text, p_class text, p_module text, p_title text,
@@ -123,7 +134,7 @@ begin
     if ok then score := score + 1; end if;
     key := (select string_agg(a->>0, ', ') from jsonb_array_elements(b.answers) a);
     given := left((select string_agg(coalesce(g, ''), ', ') from jsonb_array_elements_text(r.given) g), 120);
-    detail := detail || jsonb_build_object('q', left(btrim(regexp_replace(regexp_replace(b.prompt, '<[^>]+>', ' ', 'g'), '\s+', ' ', 'g')), 400), 'given', coalesce(given, ''), 'correct', key, 'ok', ok);
+    detail := detail || jsonb_build_object('q', left(public.med_math_plain(b.prompt), 400), 'given', coalesce(given, ''), 'correct', key, 'ok', ok);
     results := results || jsonb_build_object('id', b.id, 'ok', ok, 'correct', case when s.show_answers then key end);
   end loop;
   pct := round(score * 100.0 / total, 1);
