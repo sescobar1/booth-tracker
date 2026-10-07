@@ -3,7 +3,8 @@
 // - Test: questions come from the instructor's private test bank in Supabase (opened with the
 //   class code) and are graded there, so the answer key never reaches the browser first. The grade
 //   goes straight into the instructor's gradebook. A chapter with no bank questions uses a
-//   generated test instead, handed in with med_math_submit.
+//   generated test instead, handed in with med_math_submit_class. Every test needs a class code;
+//   the code decides which of the instructor's classes the grade goes to.
 (function () {
   const CFG = window.MEDMATH_CONFIG || {};
   const MM = window.MedMath;
@@ -16,7 +17,7 @@
     get: (k, d) => { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: (k, v) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} }
   };
-  let profile = LS.get('Profile', { name: '', email: '', cls: '', code: '' });
+  let profile = LS.get('Profile', { name: '', email: '', code: '', className: '' });
   let history = LS.get('History', []);
   let current = LS.get('Current', null);            // the test or drill in progress, so a refresh doesn't lose it
   let info = LS.get('Info', { counts: {}, code_required: true }); // bank sizes per chapter (no questions)
@@ -78,14 +79,20 @@
     return html;
   }
 
-  function nameFields(withCode) {
+  // Who is taking the test, and which class (the class comes from the code the instructor gave out).
+  function nameFields() {
     return `<div class="card"><div class="row" style="gap:12px;align-items:flex-end">
       <div style="flex:1;min-width:180px"><label class="f" for="pName">Your name</label><input type="text" id="pName" autocomplete="name" value="${esc(profile.name)}" placeholder="First and last name"></div>
-      <div style="flex:1;min-width:140px"><label class="f" for="pCls">Class or section</label><input type="text" id="pCls" value="${esc(profile.cls)}" placeholder="Optional"></div>
-      ${withCode ? `<div style="flex:1;min-width:140px"><label class="f" for="pCode">Class code</label><input type="text" id="pCode" autocapitalize="characters" value="${esc(profile.code)}" placeholder="From your instructor"></div>` : ''}
-    </div></div>`;
+      <div style="flex:1;min-width:140px"><label class="f" for="pCode">Class code</label><input type="text" id="pCode" autocapitalize="characters" autocomplete="off" value="${esc(profile.code)}" placeholder="From your instructor"></div>
+    </div>${profile.className && profile.code ? `<p class="muted" style="margin:8px 0 0">Class: <b>${esc(profile.className)}</b></p>` : ''}</div>`;
   }
-  const readProfile = () => { ['Name', 'Cls', 'Code'].forEach(k => { const el = $('p' + k); if (el) profile[k.toLowerCase()] = el.value.trim(); }); LS.set('Profile', profile); };
+  const readProfile = () => { ['Name', 'Code'].forEach(k => { const el = $('p' + k); if (el) profile[k.toLowerCase()] = el.value.trim(); }); LS.set('Profile', profile); };
+  // Checks the class code and remembers the class name it opens.
+  async function joinClass() {
+    const r = await rpc('med_math_join', { p_owner: CFG.ownerId, p_code: profile.code });
+    profile.className = r.name; LS.set('Profile', profile);
+    return r.name;
+  }
 
   function questionCard(q, i, a) {
     let h = `<div class="card q" id="q${i}"><div class="text"><span class="num">${i + 1}.</span>${q.prompt}</div>`;
@@ -102,33 +109,39 @@
     if (!m) return home();
     if (mode === 'test') mode = usesBank(m) ? 'bank' : 'gen';
     if (!current || current.id !== id || current.mode !== mode || current.done) {
-      if (mode === 'bank') return startBank(m);
+      if (mode !== 'practice') return startTest(m, mode);
       current = { id, mode, started: Date.now(), questions: MM.buildTest(id).map(fromGen), answers: {} };
       saveCurrent();
     }
     const isTest = mode !== 'practice';
     let html = `<p class="muted" style="margin:0"><a href="#m/${id}">← Back to the lesson</a></p><h1>${esc(m.title)} · ${isTest ? 'Test' : 'Practice'}</h1>`;
-    if (isTest) html += nameFields(false);
+    if (isTest) html += `<p class="sub">${esc(profile.name)}${profile.className ? ' · ' + esc(profile.className) : ''}</p>`;
     html += '<form id="quizForm" novalidate>' + current.questions.map((q, i) => questionCard(q, i, current.answers[i] || [])).join('');
     html += `<div class="bar"><span class="muted" id="answered"></span><span class="row"><span class="status err" id="sendErr"></span><button type="submit" id="submitBtn">${isTest ? 'Hand in my test' : 'Check my answers'}</button></span></div></form>`;
     setTimeout(() => wireQuiz(m));
     return html;
   }
 
-  function startBank(m) {
-    const html = `<p class="muted" style="margin:0"><a href="#m/${m.id}">← Back to the lesson</a></p><h1>${esc(m.title)} · Test</h1>${nameFields(true)}
-      <div class="card"><p style="margin:0 0 12px">${testSize(m)} questions from your instructor's test bank. When you hand it in, your grade goes to your instructor.</p>
+  // Before a test: name and class code, checked with the server before any questions are shown.
+  function startTest(m, mode) {
+    const html = `<p class="muted" style="margin:0"><a href="#m/${m.id}">← Back to the lesson</a></p><h1>${esc(m.title)} · Test</h1>${nameFields()}
+      <div class="card"><p style="margin:0 0 12px">${testSize(m)} questions${mode === 'bank' ? " from your instructor's test bank" : ''}. When you hand it in, your grade goes to your instructor.</p>
       <div class="row"><button id="go">Start the test</button><span class="status err" id="goErr"></span></div></div>`;
     setTimeout(() => {
       $('go').onclick = async () => {
         readProfile();
         if (!profile.name) { $('goErr').textContent = 'Please enter your name.'; $('pName').focus(); return; }
-        if (info.code_required && !profile.code) { $('goErr').textContent = 'Please enter the class code.'; $('pCode').focus(); return; }
+        if (!profile.code) { $('goErr').textContent = 'Please enter the class code from your instructor.'; $('pCode').focus(); return; }
         $('go').disabled = true; $('goErr').textContent = '';
         try {
-          const qs = await rpc('med_math_quiz', { p_owner: CFG.ownerId, p_code: profile.code, p_module: m.id });
-          if (!qs.length) throw new Error('This test has no questions yet.');
-          current = { id: m.id, mode: 'bank', started: Date.now(), questions: qs, answers: {} };
+          await joinClass();
+          mode = usesBank(m) ? 'bank' : 'gen';   // decided now, once the chapter's bank size is known
+          let questions;
+          if (mode === 'bank') {
+            questions = await rpc('med_math_quiz', { p_owner: CFG.ownerId, p_code: profile.code, p_module: m.id });
+            if (!questions.length) throw new Error('This test has no questions yet.');
+          } else questions = MM.buildTest(m.id).map(fromGen);
+          current = { id: m.id, mode, started: Date.now(), questions, answers: {}, code: profile.code };
           saveCurrent(); render();
         } catch (e) { $('goErr').textContent = e.message; $('go').disabled = false; }
       };
@@ -150,10 +163,6 @@
     });
     form.addEventListener('submit', async e => {
       e.preventDefault();
-      if (current.mode !== 'practice') {
-        readProfile();
-        if (!profile.name) { $('pName').focus(); alert('Please enter your name so your instructor gets your grade.'); return; }
-      }
       const blank = current.questions.filter((q, i) => !filled(i)).length;
       if (blank && !confirm(`${blank} question${blank > 1 ? 's are' : ' is'} not answered and will be marked wrong. ${current.mode === 'practice' ? 'Check anyway?' : 'Hand it in anyway?'}`)) return;
       if (current.mode === 'bank') return turnInBank(m);
@@ -166,7 +175,7 @@
     try {
       const seconds = Math.round((Date.now() - current.started) / 1000);
       const r = await rpc('med_math_turn_in', {
-        p_owner: CFG.ownerId, p_code: profile.code, p_student: profile.name, p_email: profile.email || '', p_class: profile.cls || '',
+        p_owner: CFG.ownerId, p_code: current.code || profile.code, p_student: profile.name, p_email: profile.email || '', p_class: profile.className || '',
         p_module: m.id, p_title: m.title, p_seconds: seconds,
         p_responses: current.questions.map((q, i) => ({ id: q.id, given: (current.answers[i] || []).map(v => String(v || '').slice(0, 60)) }))
       });
@@ -187,7 +196,7 @@
     const score = results.filter(r => r.ok).length, total = results.length, pct = Math.round(score / total * 1000) / 10;
     current.results = results; current.done = true;
     if (current.mode === 'gen') {
-      const entry = { uid: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), module: m.id, title: m.title, score, total, pct, seconds: Math.round((Date.now() - current.started) / 1000), at: new Date().toISOString(), sent: false,
+      const entry = { uid: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), code: current.code || profile.code, module: m.id, title: m.title, score, total, pct, seconds: Math.round((Date.now() - current.started) / 1000), at: new Date().toISOString(), sent: false,
         answers: current.questions.map((q, i) => ({ q: plain(q.prompt).slice(0, 400), given: results[i].given.slice(0, 60), correct: String(q.gen.answer), ok: results[i].ok })) };
       history.push(entry); LS.set('History', history);
       current.entryUid = entry.uid;
@@ -230,16 +239,22 @@
     let html = `<p class="muted" style="margin:0"><a href="#">← All chapters</a></p><h1>My grades</h1>
       <div class="card"><label class="f" for="mName">Your name</label><input type="text" id="mName" autocomplete="name" value="${esc(profile.name)}" placeholder="First and last name">
       <label class="f" for="mEmail">School email</label><input type="email" id="mEmail" autocomplete="email" value="${esc(profile.email)}" placeholder="Optional">
-      <label class="f" for="mCls">Class or section</label><input type="text" id="mCls" value="${esc(profile.cls)}" placeholder="Optional, e.g. NUR 101 Fall">
-      <label class="f" for="mCode">Class code</label><input type="text" id="mCode" autocapitalize="characters" value="${esc(profile.code)}" placeholder="From your instructor">
-      <div class="row" style="margin-top:14px"><button id="saveMe">Save</button><span class="muted" id="savedMsg"></span></div></div>`;
+      <label class="f" for="mCode">Class code</label><input type="text" id="mCode" autocapitalize="characters" autocomplete="off" value="${esc(profile.code)}" placeholder="From your instructor">
+      <div class="row" style="margin-top:14px"><button id="saveMe">Save</button><span class="muted" id="savedMsg">${profile.className && profile.code ? 'Class: ' + esc(profile.className) : ''}</span></div></div>`;
     const unsent = history.filter(h => !h.sent).length;
     if (unsent) html += `<div class="card"><b>${unsent} grade${unsent > 1 ? 's' : ''} not sent yet.</b> <button class="small" id="resend">Send now</button> <span id="resendMsg" class="muted"></span></div>`;
     html += '<h2>Best test score by chapter</h2><div class="card scroll"><table><tr><th>Chapter</th><th>Best</th><th>Tries</th></tr>';
     MM.MODULES.forEach(m => { const t = history.filter(h => h.module === m.id); html += `<tr><td>${m.ch ? m.ch + '. ' : ''}${esc(m.title)}</td><td>${t.length ? pill(m.id) : '<span class="muted">—</span>'}</td><td>${t.length || ''}</td></tr>`; });
     html += '</table></div><p class="muted">Your grades are saved on this device and handed in to your instructor. If you change devices, your instructor still has every test you handed in.</p>';
     setTimeout(() => {
-      $('saveMe').onclick = () => { profile = { name: $('mName').value.trim(), email: $('mEmail').value.trim(), cls: $('mCls').value.trim(), code: $('mCode').value.trim() }; LS.set('Profile', profile); $('savedMsg').textContent = 'Saved.'; };
+      $('saveMe').onclick = async () => {
+        const code = $('mCode').value.trim();
+        profile = Object.assign(profile, { name: $('mName').value.trim(), email: $('mEmail').value.trim(), code, className: code === profile.code ? profile.className : '' });
+        LS.set('Profile', profile);
+        if (!code) { $('savedMsg').textContent = 'Saved.'; return; }
+        $('savedMsg').textContent = 'Checking the class code…';
+        try { $('savedMsg').textContent = 'Saved. Class: ' + await joinClass(); } catch (e) { $('savedMsg').textContent = e.message; }
+      };
       const r = $('resend'); if (r) r.onclick = async () => { $('resendMsg').textContent = 'Sending…'; for (const h of history.filter(x => !x.sent)) await send(h); render(); };
     });
     return html;
@@ -352,7 +367,7 @@
     if (entry.sent || !entry.answers || sending.has(entry.uid)) return;
     sending.add(entry.uid);
     try {
-      await rpc('med_math_submit', { p_owner: CFG.ownerId, p_student: profile.name || 'Unknown', p_email: profile.email || '', p_class: profile.cls || '', p_module: entry.module, p_title: entry.title, p_score: entry.score, p_total: entry.total, p_seconds: entry.seconds, p_answers: entry.answers });
+      await rpc('med_math_submit_class', { p_owner: CFG.ownerId, p_code: entry.code || profile.code, p_student: profile.name || 'Unknown', p_email: profile.email || '', p_module: entry.module, p_title: entry.title, p_score: entry.score, p_total: entry.total, p_seconds: entry.seconds, p_answers: entry.answers });
       entry.sent = true; LS.set('History', history);
       if (st) st.innerHTML = '<span class="status ok">✓ Handed in to your instructor</span>';
     } catch (err) {
@@ -374,7 +389,7 @@
   if (CFG.sync && CFG.ownerId) rpc('med_math_info', { p_owner: CFG.ownerId }).then(r => {
     const changed = JSON.stringify(r) !== JSON.stringify(info);
     info = r; LS.set('Info', info);
-    if (changed && !/^#(practice|test)\//.test(location.hash)) render();
+    if (changed && !$('quizForm')) render();   // never redraw over a test or drill in progress
   }).catch(() => {});
   // Retry any generated-test grades that didn't go through last time.
   setTimeout(() => history.filter(h => !h.sent).forEach(h => send(h)), 1500);

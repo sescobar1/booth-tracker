@@ -3,13 +3,13 @@
 Dosage-calculation practice for nursing students, following the book's 24 chapters (plus the Unit One pre-test and post-test).
 
 - **Students** open `index.html`: https://sescobar1.github.io/booth-tracker/med-math/
-  Each chapter has a short **lesson** (key points + a worked example), a **Watch how to do it** video (an animated whiteboard that works one problem step by step, with natural-voice narration and captions; scripts are in `walkthroughs.js`), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name, class, and the **class code**.
+  Each chapter has a short **lesson** (key points + a worked example), a **Watch how to do it** video (an animated whiteboard that works one problem step by step, with natural-voice narration and captions; scripts are in `walkthroughs.js`), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name and the **class code**, which puts their grades in the right class.
 - **The instructor** opens `teacher.html` and signs in with the Booth Tracker email and password:
   - **Best scores**: one row per student, one column per chapter, with each student's best score. Tap a score to see their answers.
   - **Every submission**: date, student, chapter, score, and time taken. Filter by class, chapter, or student. **Download CSV** for a gradebook.
   - **Test bank**: every question with its answer key. Untick a question to leave it out of tests.
   - **Videos**: paste a YouTube or Vimeo link for any chapter. It shows at the top of that chapter as **Video from your instructor**.
-  - **Class code**: change the code each term, and choose whether students see the right answers after they hand in a test.
+  - **Classes**: start a new class (name + code) each term or section, rename it, change its code, or close it when the term ends (its code stops working; its grades stay). **Grades** opens that class in the gradebook. Also here: whether students see the right answers after a test.
 
 ## How tests work
 
@@ -27,7 +27,7 @@ Accepted answers: `7.5`, `7.5 mL`, `1,500`, `1/2` for 0.5, and fractions like `3
        python3 -I med-math/tools/import-bank.py TestBank.zip YOUR-ACCOUNT-ID > bank.sql
 
    Paste `bank.sql` into the SQL Editor and run it. Running it again updates questions without making duplicates.
-3. Set the class code on `teacher.html` → **Class code**.
+3. Create a class on `teacher.html` → **Classes**, and give students its code.
 
 The import skips the bank's Module 1 (Roman numerals, not in the book's table of contents), questions that need a picture, and "select all that apply" and essay questions. Bank Module 2 (Fractions) becomes Chapter 1, and so on through Module 25, which becomes Chapter 24. Every question was re-solved by hand: six wrong or too-lenient answer keys are corrected in `tools/import-bank.py` (CORRECTIONS), and one broken question is left out.
 
