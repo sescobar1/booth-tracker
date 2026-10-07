@@ -4,11 +4,12 @@ Dosage-calculation practice for nursing students, following the book's 24 chapte
 
 - **Students** open `index.html`: https://sescobar1.github.io/booth-tracker/med-math/
   Each chapter has a short **lesson** (key points + a worked example), a **Watch how to do it** video (an animated whiteboard that works one problem step by step, with natural-voice narration and captions; scripts are in `walkthroughs.js`), a **practice drill** with new numbers every time (graded on the spot with explanations, not sent anywhere), and a **test** that hands the grade in to the instructor. No account needed: they type their name and the **class code**, which puts their grades in the right class.
-- **The instructor** opens `teacher.html` and signs in with the Booth Tracker email and password:
+- **Instructors** open `teacher.html`. Each has their own account (**Create an instructor account**), which the administrator approves. An instructor sees only their own classes and grades:
   - **Best scores**: one row per student, one column per chapter, with each student's best score. Tap a score to see their answers.
   - **Every submission**: date, student, chapter, score, and time taken. Filter by class, chapter, or student. **Download CSV** for a gradebook.
   - **Test bank**: every question with its answer key. Untick a question to leave it out of tests.
-  - **Videos**: paste a YouTube or Vimeo link for any chapter. It shows at the top of that chapter as **Video from your instructor**.
+  - **Instructors** (administrator only): approve or decline new instructors, or remove access (their codes stop working; grades are kept).
+  - **Videos** (administrator only): paste a YouTube or Vimeo link for any chapter. It shows at the top of that chapter as **Video from your instructor**.
   - **Classes**: start a new class (name + code) each term or section, rename it, change its code, or close it when the term ends (its code stops working; its grades stay). **Grades** opens that class in the gradebook. Also here: whether students see the right answers after a test.
 
 ## How tests work
