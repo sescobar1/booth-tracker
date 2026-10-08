@@ -241,7 +241,7 @@ begin
   end loop;
   pct := round(score * 100.0 / total, 1);
   insert into public.med_math_grades (owner, student, email, class_code, class_id, module, module_title, score, total, percent, seconds, answers)
-  values (p_owner, btrim(p_student), btrim(coalesce(p_email, '')), c.name, c.id, p_module, coalesce(p_title, ''), score, total, pct, p_seconds, detail);
+  values (c.owner, btrim(p_student), btrim(coalesce(p_email, '')), c.name, c.id, p_module, coalesce(p_title, ''), score, total, pct, p_seconds, detail);
   return jsonb_build_object('score', score, 'total', total, 'percent', pct, 'results', results, 'class', c.name);
 end $$;
 
@@ -259,7 +259,7 @@ begin
   if length(p_student) > 120 or length(coalesce(p_email,'')) > 200 or length(p_module) > 40 or length(coalesce(p_title,'')) > 200
      or length(coalesce(p_answers::text,'')) > 60000 then raise exception 'Too long'; end if;
   insert into public.med_math_grades (owner, student, email, class_code, class_id, module, module_title, score, total, percent, seconds, answers)
-  values (p_owner, btrim(p_student), btrim(coalesce(p_email,'')), c.name, c.id, p_module, coalesce(p_title,''),
+  values (c.owner, btrim(p_student), btrim(coalesce(p_email,'')), c.name, c.id, p_module, coalesce(p_title,''),
           p_score, p_total, round(p_score * 100.0 / p_total, 1), p_seconds, coalesce(p_answers, '[]'::jsonb))
   returning id into new_id;
   return new_id;
@@ -269,3 +269,82 @@ grant execute on function public.med_math_submit_class(uuid, text, text, text, t
 
 -- The old hand-in without a class code is retired.
 drop function if exists public.med_math_submit(uuid, text, text, text, text, text, integer, integer, integer, jsonb);
+
+-- ===== Instructors (added later; safe to re-run) =====
+-- Each instructor has their own login. The administrator (the test bank's owner) approves them.
+-- Approved instructors create their own classes, see only their own grades, and can read the test bank.
+create table if not exists public.med_math_instructors (
+  user_id uuid primary key references auth.users on delete cascade default auth.uid(),
+  name text not null default '' check (length(name) <= 120),
+  email text not null default '' check (length(email) <= 200),
+  approved boolean not null default false,
+  is_admin boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table public.med_math_instructors enable row level security;
+-- The administrator: replace the id with your own account's id.
+insert into public.med_math_instructors (user_id, name, email, approved, is_admin)
+select id, 'Administrator', email, true, true from auth.users where id = '2bce50b8-9628-4c3d-9bb1-c69fdc5d32da'
+on conflict (user_id) do update set approved = true, is_admin = true;
+
+create or replace function public.med_math_is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select is_admin and approved from public.med_math_instructors where user_id = auth.uid()), false)
+$$;
+create or replace function public.med_math_is_instructor() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select approved from public.med_math_instructors where user_id = auth.uid()), false)
+$$;
+revoke all on function public.med_math_is_admin() from public, anon;
+revoke all on function public.med_math_is_instructor() from public, anon;
+grant execute on function public.med_math_is_admin() to authenticated;
+grant execute on function public.med_math_is_instructor() to authenticated;
+
+drop policy if exists "See self, admin sees all" on public.med_math_instructors;
+create policy "See self, admin sees all" on public.med_math_instructors for select to authenticated
+  using (user_id = (select auth.uid()) or public.med_math_is_admin());
+drop policy if exists "Sign up as waiting" on public.med_math_instructors;
+create policy "Sign up as waiting" on public.med_math_instructors for insert to authenticated
+  with check (user_id = (select auth.uid()) and not approved and not is_admin);
+drop policy if exists "Admin approves" on public.med_math_instructors;
+create policy "Admin approves" on public.med_math_instructors for update to authenticated
+  using (public.med_math_is_admin()) with check (public.med_math_is_admin());
+drop policy if exists "Admin removes" on public.med_math_instructors;
+create policy "Admin removes" on public.med_math_instructors for delete to authenticated
+  using (public.med_math_is_admin() and not is_admin);
+drop policy if exists "Instructors read" on public.med_math_bank;
+create policy "Instructors read" on public.med_math_bank for select to authenticated using (public.med_math_is_instructor());
+
+-- Class codes are unique across all instructors; only approved instructors add or change classes.
+create unique index if not exists med_math_classes_code_global_idx on public.med_math_classes (lower(code));
+drop policy if exists "Only approved instructors add classes" on public.med_math_classes;
+create policy "Only approved instructors add classes" on public.med_math_classes as restrictive for insert to authenticated
+  with check (public.med_math_is_instructor());
+drop policy if exists "Only approved instructors change classes" on public.med_math_classes;
+create policy "Only approved instructors change classes" on public.med_math_classes as restrictive for update to authenticated
+  using (public.med_math_is_instructor()) with check (public.med_math_is_instructor());
+
+-- A code finds its class across all instructors (the instructor must still be approved).
+create or replace function public.med_math_class_for(p_owner uuid, p_code text) returns public.med_math_classes
+language plpgsql stable security definer set search_path = public as $$
+declare c public.med_math_classes;
+begin
+  select * into c from public.med_math_classes where lower(code) = lower(btrim(coalesce(p_code, '')));
+  if not found or not exists (select 1 from public.med_math_instructors i where i.user_id = c.owner and i.approved) then
+    raise exception 'That class code is not right. Ask your instructor for it.';
+  end if;
+  if not c.active then raise exception 'This class is closed. Ask your instructor for your new class code.'; end if;
+  return c;
+end $$;
+-- "Show right answers" comes from the class's instructor.
+create or replace function public.med_math_check_code(p_owner uuid, p_code text) returns public.med_math_settings
+language plpgsql stable security definer set search_path = public as $$
+declare s public.med_math_settings; c public.med_math_classes;
+begin
+  c := public.med_math_class_for(p_owner, p_code);
+  select * into s from public.med_math_settings where owner = c.owner;
+  if not found then s.owner := c.owner; s.class_code := ''; s.show_answers := true; end if;
+  return s;
+end $$;
+-- med_math_turn_in and med_math_submit_class (above) save the grade to the class's instructor (c.owner);
+-- p_owner still picks the test bank.

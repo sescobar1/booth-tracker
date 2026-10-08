@@ -1,4 +1,6 @@
-// Instructor gradebook: sign in with the owner account to see every grade students handed in.
+// Instructor gradebook. Each instructor signs in with their own account (approved by the site's
+// administrator) and sees only their own classes and grades. The administrator also approves
+// instructors, sets chapter videos, and can switch test-bank questions on or off.
 (function () {
   const CFG = window.MEDMATH_CONFIG || {};
   const MM = window.MedMath;
@@ -9,41 +11,85 @@
   const mins = s => s == null ? '' : (s >= 60 ? Math.round(s / 60) + ' min' : s + ' sec');
   const short = id => { const m = MM.byId(id); return m ? (m.ch ? 'Ch ' + m.ch : m.id === 'pre' ? 'Pre' : 'Post') : id; };
   const sb = window.supabase.createClient(CFG.sync.url, CFG.sync.key, { auth: { storageKey: (CFG.storageKey || 'medMath') + 'TeacherAuth', persistSession: true, autoRefreshToken: true } });
-  let rows = [], bank = [], classes = [], settings = null, tab = 'book', filt = { cls: '', student: '', module: '' };
+  let rows = [], bank = [], classes = [], instructors = [], me = null, isAdmin = false, settings = null, tab = 'book', filt = { cls: '', student: '', module: '' };
 
   function signInView(msg) {
     $('signOut').hidden = true;
-    $('view').innerHTML = `<h1>Instructor sign in</h1><p class="sub">Use the same email and password as the Booth Tracker. Students don't need an account; they take tests at <a href="index.html">the practice page</a>.</p>
+    $('view').innerHTML = `<h1>Instructor sign in</h1><p class="sub">Students don't need an account; they take tests at <a href="index.html">the practice page</a> with the class code you give them.</p>
       <form class="card" id="signIn" style="max-width:420px"><label class="f" for="em">Email</label><input type="email" id="em" autocomplete="email" required>
       <label class="f" for="pw">Password</label><input type="password" id="pw" autocomplete="current-password" required>
-      <div class="row" style="margin-top:14px"><button type="submit">Sign in</button><span class="muted" id="msg">${esc(msg || '')}</span></div></form>`;
+      <div class="row" style="margin-top:14px"><button type="submit">Sign in</button><span class="muted" id="msg">${esc(msg || '')}</span></div>
+      <p style="margin:14px 0 0">New instructor? <a href="#" id="toSignUp">Create an instructor account</a></p></form>`;
     $('signIn').onsubmit = async e => {
       e.preventDefault(); $('msg').textContent = 'Signing in…';
       const { error } = await sb.auth.signInWithPassword({ email: $('em').value.trim(), password: $('pw').value });
-      if (error) $('msg').textContent = error.message; else load();
+      if (error) $('msg').textContent = /confirm/i.test(error.message) ? 'Please confirm your email first (check your inbox), then sign in.' : error.message; else load();
     };
+    $('toSignUp').onclick = e => { e.preventDefault(); signUpView(); };
+  }
+
+  function signUpView() {
+    $('view').innerHTML = `<h1>Create an instructor account</h1><p class="sub">After you confirm your email, the site's administrator approves your account. Then you can create classes and see your students' grades.</p>
+      <form class="card" id="signUp" style="max-width:420px"><label class="f" for="nm">Your name</label><input type="text" id="nm" autocomplete="name" required maxlength="120">
+      <label class="f" for="em">School email</label><input type="email" id="em" autocomplete="email" required>
+      <label class="f" for="pw">Password (at least 8 characters)</label><input type="password" id="pw" autocomplete="new-password" required minlength="8">
+      <div class="row" style="margin-top:14px"><button type="submit">Create account</button><span class="muted" id="msg"></span></div>
+      <p style="margin:14px 0 0"><a href="#" id="toSignIn">Back to sign in</a></p></form>`;
+    $('toSignIn').onclick = e => { e.preventDefault(); signInView(); };
+    $('signUp').onsubmit = async e => {
+      e.preventDefault();
+      const name = $('nm').value.trim(), email = $('em').value.trim(), password = $('pw').value;
+      if (password.length < 8) { $('msg').textContent = 'Use at least 8 characters.'; return; }
+      $('msg').textContent = 'Creating your account…';
+      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: location.href.split('#')[0] } });
+      if (error) { $('msg').textContent = error.message; return; }
+      if (data.session) return load();   // email confirmation is off: signed in already
+      $('view').innerHTML = `<div class="card" style="max-width:520px"><b>Check your email.</b><p>We sent a confirmation link to <b>${esc(email)}</b>. Open it, then come back and sign in. The administrator will then approve your account.</p><button id="back">Back to sign in</button></div>`;
+      $('back').onclick = () => signInView();
+    };
+  }
+
+  // Signed in, but not approved yet (or removed).
+  function waitingView() {
+    $('view').innerHTML = `<div class="card" style="max-width:560px"><h1 style="margin-top:0">Waiting for approval</h1>
+      <p>Thanks, ${esc(me.name || me.email)}. Your instructor account has been created. The site's administrator needs to approve it before you can create classes and see grades.</p>
+      <p class="muted">Let the administrator know you've signed up, then press Check again.</p><button id="again">Check again</button></div>`;
+    $('again').onclick = load;
   }
 
   async function load() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return signInView();
     $('signOut').hidden = false;
+    $('view').innerHTML = '<p class="muted">Loading…</p>';
+    const u = session.user;
+    let r = await sb.from('med_math_instructors').select('*').eq('user_id', u.id).maybeSingle();
+    if (!r.data && !r.error) {   // first sign-in: add this person to the instructor list as waiting
+      await sb.from('med_math_instructors').insert({ user_id: u.id, name: (u.user_metadata && u.user_metadata.name) || '', email: u.email || '' });
+      r = await sb.from('med_math_instructors').select('*').eq('user_id', u.id).maybeSingle();
+    }
+    if (r.error) { $('view').innerHTML = `<div class="card"><b>Couldn't load your account.</b> ${esc(r.error.message)}</div>`; return; }
+    me = r.data || { name: '', email: u.email, approved: false };
+    isAdmin = !!(me.approved && me.is_admin);
+    if (!me.approved) return waitingView();
     $('view').innerHTML = '<p class="muted">Loading grades…</p>';
     rows = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await sb.from('med_math_grades').select('*').order('submitted_at', { ascending: false }).range(from, from + 999);
+      const { data, error } = await sb.from('med_math_grades').select('*').eq('owner', session.user.id).order('submitted_at', { ascending: false }).range(from, from + 999);
       if (error) { $('view').innerHTML = `<div class="card"><b>Couldn't load grades.</b> ${esc(error.message)}<p class="muted">If the table is missing, run <code>med-math/supabase-setup.sql</code> in Supabase (SQL Editor → New query → Run).</p></div>`; return; }
       rows = rows.concat(data);
       if (data.length < 1000) break;
     }
-    const [b, st, cl] = await Promise.all([
+    const [b, st, cl, ins] = await Promise.all([
       sb.from('med_math_bank').select('id, module, kind, prompt, choices, answers, active').order('module'),
       sb.from('med_math_settings').select('*').maybeSingle(),
-      sb.from('med_math_classes').select('*').order('created_at')
+      sb.from('med_math_classes').select('*').eq('owner', u.id).order('created_at'),
+      isAdmin ? sb.from('med_math_instructors').select('*').order('created_at') : Promise.resolve({ data: [] })
     ]);
+    instructors = ins.data || [];
     classes = cl.data || [];
     bank = b.data || [];
-    settings = st.data || { owner: session.user.id, class_code: '', show_answers: true, videos: {} };
+    settings = st.data || { owner: u.id, class_code: '', show_answers: true, videos: {} };
     render();
   }
 
@@ -67,11 +113,12 @@
         <button class="${tab === 'book' ? '' : 'ghost'} small" data-tab="book">Best scores</button>
         <button class="${tab === 'all' ? '' : 'ghost'} small" data-tab="all">Every submission</button>
         <button class="${tab === 'bank' ? '' : 'ghost'} small" data-tab="bank">Test bank</button>
-        <button class="${tab === 'videos' ? '' : 'ghost'} small" data-tab="videos">Videos</button>
+        ${isAdmin ? `<button class="${tab === 'videos' ? '' : 'ghost'} small" data-tab="videos">Videos</button>` : ''}
         <button class="${tab === 'classes' ? '' : 'ghost'} small" data-tab="classes">Classes</button>
+        ${isAdmin ? `<button class="${tab === 'instructors' ? '' : 'ghost'} small" data-tab="instructors">Instructors${instructors.some(i => !i.approved) ? ' •' : ''}</button>` : ''}
         <button class="ghost small" id="csv">Download CSV</button><button class="ghost small" onclick="print()">Print</button><button class="ghost small" id="refresh">Refresh</button>
       </div></div>`;
-    html += tab === 'book' ? bookTable(list) : tab === 'all' ? allTable(list) : tab === 'bank' ? bankView() : tab === 'videos' ? videosView() : classesView();
+    html += tab === 'book' ? bookTable(list) : tab === 'all' ? allTable(list) : tab === 'bank' ? bankView() : tab === 'videos' && isAdmin ? videosView() : tab === 'instructors' && isAdmin ? instructorsView() : classesView();
     $('view').innerHTML = html;
     $('fCls').onchange = e => { filt.cls = e.target.value; render(); };
     $('fMod').onchange = e => { filt.module = e.target.value; render(); };
@@ -82,6 +129,7 @@
     document.querySelectorAll('[data-open]').forEach(a => a.onclick = e => { e.preventDefault(); detail(a.dataset.open); });
     document.querySelectorAll('[data-q]').forEach(c => c.onchange = () => setActive(c.dataset.q, c.checked));
     if (tab === 'classes') wireClasses();
+    if (tab === 'instructors' && isAdmin) wireInstructors();
     const vs = $('saveVideos');
     if (vs) vs.onclick = saveVideos;
   }
@@ -90,11 +138,11 @@
   function bankView() {
     if (!bank.length) return '<div class="card"><b>No test bank yet.</b><p class="muted">Load one with <code>med-math/tools/import-bank.py</code> (see the README). Until then each test uses generated questions.</p></div>';
     const mods = MM.MODULES.filter(m => !m.kind && (!filt.module || m.id === filt.module || ((MM.byId(filt.module) || {}).from || []).includes(m.id)));
-    let h = `<div class="card"><p style="margin:0">${bank.filter(q => q.active).length} of ${bank.length} questions are in use. Untick a question to leave it out of tests (for example, if its answer key is wrong). Students never see this page or the answers before they hand in a test.</p></div>`;
+    let h = `<div class="card"><p style="margin:0">${bank.filter(q => q.active).length} of ${bank.length} questions are in use. ${isAdmin ? 'Untick a question to leave it out of tests (for example, if its answer key is wrong).' : 'The administrator manages which questions are used.'} Students never see this page or the answers before they hand in a test.</p></div>`;
     mods.forEach(m => {
       const qs = bank.filter(q => q.module === m.id);
       h += `<h2>${m.ch}. ${esc(m.title)} <span class="muted">(${qs.filter(q => q.active).length} in use${qs.length ? '' : ' · tests use generated questions'})</span></h2>`;
-      if (qs.length) h += `<div class="card scroll"><table><tr><th>Use</th><th>Question</th><th>Answer</th></tr>${qs.map(q => `<tr><td><input type="checkbox" data-q="${esc(q.id)}"${q.active ? ' checked' : ''} aria-label="Use this question"></td><td>${q.prompt}${q.kind === 'mc' ? `<br><small class="muted">Choices: ${q.choices.map(esc).join(' · ')}</small>` : ''}</td><td><b>${q.answers.map(a => a.map(esc).join(' or ')).join('; ')}</b></td></tr>`).join('')}</table></div>`;
+      if (qs.length) h += `<div class="card scroll"><table><tr><th>Use</th><th>Question</th><th>Answer</th></tr>${qs.map(q => `<tr><td><input type="checkbox" data-q="${esc(q.id)}"${q.active ? ' checked' : ''}${isAdmin ? '' : ' disabled'} aria-label="Use this question"></td><td>${q.prompt}${q.kind === 'mc' ? `<br><small class="muted">Choices: ${q.choices.map(esc).join(' · ')}</small>` : ''}</td><td><b>${q.answers.map(a => a.map(esc).join(' or ')).join('; ')}</b></td></tr>`).join('')}</table></div>`;
     });
     return h;
   }
@@ -147,7 +195,7 @@
   function wireClasses() {
     const save = async (c, patch) => {
       const { data, error } = await sb.from('med_math_classes').update(patch).eq('id', c.id).select().single();
-      if (error) { alert(/duplicate|unique/i.test(error.message) ? 'Another of your classes already uses that code.' : error.message); return; }
+      if (error) { alert(/duplicate|unique/i.test(error.message) ? 'That code is already used by another class. Pick a different code.' : error.message); return; }
       Object.assign(c, data); render();
     };
     $('cAdd').onclick = async () => {
@@ -155,7 +203,7 @@
       if (!name) { $('cMsg').textContent = 'Give the class a name.'; return; }
       if (!/^[A-Z0-9-]{4,20}$/.test(code)) { $('cMsg').textContent = 'Codes are 4–20 letters, numbers or dashes.'; return; }
       const { data, error } = await sb.from('med_math_classes').insert({ owner: settings.owner, name, code }).select().single();
-      if (error) { $('cMsg').textContent = /duplicate|unique/i.test(error.message) ? 'Another of your classes already uses that code.' : error.message; return; }
+      if (error) { $('cMsg').textContent = /duplicate|unique/i.test(error.message) ? 'That code is already used by another class. Pick a different code.' : error.message; return; }
       classes.push(data); render();
     };
     document.querySelectorAll('[data-cview]').forEach(bt => bt.onclick = () => { filt.cls = bt.dataset.cview; tab = 'book'; render(); });
@@ -181,6 +229,36 @@
 
 
   // One row per student, one column per chapter, showing the best score.
+  // Administrator only: approve new instructors, or remove access.
+  function instructorsView() {
+    const waiting = instructors.filter(i => !i.approved), active = instructors.filter(i => i.approved);
+    const row = (i, btns) => `<tr><td><b>${esc(i.name || '(no name)')}</b>${i.is_admin ? ' <span class="pill pass">Administrator</span>' : ''}</td><td>${esc(i.email)}</td><td>${when(i.created_at)}</td><td class="row" style="gap:6px">${btns}</td></tr>`;
+    return `<div class="card"><p style="margin:0">Instructors sign up at <a href="${esc(location.href.split('#')[0])}">this page</a> with <b>Create an instructor account</b>. Approve only people you know: approved instructors can see the test bank and its answers. Each instructor sees only their own classes and grades.</p></div>
+      <h2>Waiting for approval (${waiting.length})</h2><div class="card scroll"><table><tr><th>Name</th><th>Email</th><th>Signed up</th><th></th></tr>${waiting.length ? waiting.map(i => row(i, `<button class="small" data-approve="${i.user_id}">Approve</button><button class="ghost small" data-remove="${i.user_id}">Decline</button>`)).join('') : '<tr><td colspan="4" class="muted">No one is waiting.</td></tr>'}</table></div>
+      <h2>Instructors (${active.length})</h2><div class="card scroll"><table><tr><th>Name</th><th>Email</th><th>Signed up</th><th></th></tr>${active.map(i => row(i, i.is_admin ? '' : `<button class="ghost small" data-revoke="${i.user_id}">Remove access</button>`)).join('')}</table></div>
+      <p class="muted">Removing access stops an instructor from signing in to the gradebook, and their class codes stop working. Their grades are kept.</p>`;
+  }
+
+  function wireInstructors() {
+    const find = id => instructors.find(i => i.user_id === id);
+    document.querySelectorAll('[data-approve]').forEach(bt => bt.onclick = async () => {
+      const i = find(bt.dataset.approve), { error } = await sb.from('med_math_instructors').update({ approved: true }).eq('user_id', i.user_id);
+      if (error) return alert(error.message); i.approved = true; render();
+    });
+    document.querySelectorAll('[data-revoke]').forEach(bt => bt.onclick = async () => {
+      const i = find(bt.dataset.revoke);
+      if (!confirm(`Remove ${i.name || i.email}'s access? Their class codes will stop working. Their grades are kept.`)) return;
+      const { error } = await sb.from('med_math_instructors').update({ approved: false }).eq('user_id', i.user_id);
+      if (error) return alert(error.message); i.approved = false; render();
+    });
+    document.querySelectorAll('[data-remove]').forEach(bt => bt.onclick = async () => {
+      const i = find(bt.dataset.remove);
+      if (!confirm(`Decline ${i.name || i.email}?`)) return;
+      const { error } = await sb.from('med_math_instructors').delete().eq('user_id', i.user_id);
+      if (error) return alert(error.message); instructors = instructors.filter(x => x !== i); render();
+    });
+  }
+
   function bookTable(list) {
     if (!list.length) return '<div class="card muted">No grades yet. Share the practice page with your students.</div>';
     const by = {};
