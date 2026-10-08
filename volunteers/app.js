@@ -228,6 +228,7 @@ async function copy(text, what) {
 }
 
 // ---------- texting ----------
+const MY_PHONE = '4797479972'; // Shaana: copied on every group text
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 function smsHref(numbers, body) {
   const b = encodeURIComponent(body || '');
@@ -722,7 +723,7 @@ function openTexter(evId) {
     '<div class="segs" id="tWho"><button type="button" class="seg on" data-w="all">Everyone</button><button type="button" class="seg" data-w="adult">Adults</button><button type="button" class="seg" data-w="student">Students</button><button type="button" class="seg" data-w="out">Not checked in</button></div>' +
     '<label>Message<select id="tTpl">' + tplOpts + '<option value="">(blank)</option></select></label>' +
     '<textarea id="tText" rows="4"></textarea>' +
-    '<p class="helper">{first} becomes each person\'s first name when you text one at a time, and “everyone” in a group text.</p>' +
+    '<p class="helper">{first} becomes each person\'s first name when you text one at a time, and “everyone” in a group text. Group texts also go to you (' + fmtPhone(MY_PHONE) + ') so you can see they were sent.</p>' +
     '<div id="tPick" class="pick"></div>' +
     '<div class="row-actions stack"><button type="button" id="tOne">Text one at a time (personal, recommended)</button><div id="tGroups"></div>' +
     '<button type="button" class="ghost" id="tCopyNums">Copy phone numbers</button><button type="button" class="ghost" id="tCopyMsg">Copy message</button><button type="button" class="ghost" id="tClose">Close</button></div>');
@@ -739,9 +740,10 @@ function openTexter(evId) {
     drawGroups();
   }
   // Carriers cap group texts around 20 people, so big lists go out in batches.
+  // Shaana's own number rides along on every group text so she sees it went out.
   function drawGroups() {
-    const nums = chosen().map(x => digits(x.p.phone));
-    const batches = []; for (let i = 0; i < nums.length; i += 20) batches.push(nums.slice(i, i + 20));
+    const nums = chosen().map(x => digits(x.p.phone)).filter(n => n !== MY_PHONE);
+    const batches = []; for (let i = 0; i < nums.length; i += 19) batches.push(nums.slice(i, i + 19).concat(MY_PHONE));
     $('tGroups').innerHTML = batches.map((b, i) => '<button type="button" class="ghost" data-batch="' + i + '">Open group text' + (batches.length > 1 ? ' ' + (i + 1) + ' of ' + batches.length : '') + ' (' + b.length + ')</button>').join('');
     $('tGroups').querySelectorAll('button').forEach(btn => btn.onclick = () => {
       location.href = smsHref(batches[Number(btn.dataset.batch)], fillMessage($('tText').value, ev, null, null));
