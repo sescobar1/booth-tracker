@@ -179,15 +179,44 @@
       if (error || !data) { app.innerHTML = '<div class="empty"><h1>🍽</h1><p>This recipe link doesn’t work. Ask for a new one.</p></div>'; return false; }
       book = data; book.folders = []; return true;
     }
-    const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
+    const [{ data: rs, error }, { data: sh }] = await Promise.all([sb.from('family_recipes').select('*').is('deleted_at', null).order('title'), sb.from('family_recipe_share').select('*').maybeSingle()]);
     if (error) { toast(error.message); return false; }
     share = sh;
-    book = { title: (sh && sh.title) || 'Our family cookbook', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at, dish: r.dish_photo })) };
+    book = { title: (sh && sh.title) || 'Our family cookbook', folders: [], recipes: (rs || []).map(r => ({ id: r.id, title: r.title, category: r.category, from: r.from_who, ingredients: r.ingredients, steps: r.steps, notes: r.notes, photos: r.photos, servings: r.servings, prep: r.prep_time, cook: r.cook_time, temp: r.oven_temp, folders: r.folders || [], added: r.created_at, dish: r.dish_photo, by: r.edited_by })) };
     book.recipes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
     return true;
   }
   const shareLink = () => share ? location.origin + location.pathname + '?t=' + share.token : '';
   const owner = () => !token && user;
+  // Family with the share link can add, change and delete recipes too (deletes go to Shaana's "Recently deleted").
+  const canEdit = () => owner() || !!token;
+  function myName() {
+    if (owner()) return 'Shaana';
+    let n = ''; try { n = localStorage.getItem('cookbookName') || ''; } catch (e) {}
+    if (!n) { n = (prompt('What’s your name? (So everyone knows who added or changed a recipe.)') || '').trim().slice(0, 40); if (n) try { localStorage.setItem('cookbookName', n); } catch (e) {} }
+    return n || 'Family';
+  }
+  // Photos: Shaana uploads to her folder; family get one-time upload slots from recipe-upload (checks the link).
+  async function uploadBlobs(blobs) {
+    if (owner()) return Promise.all(blobs.map(async b => { const path = user.id + '/' + crypto.randomUUID() + '.jpg'; const { error } = await sb.storage.from(BUCKET).upload(path, b, { contentType: 'image/jpeg', upsert: false }); if (error) throw error; return path; }));
+    const { data, error } = await sb.functions.invoke('recipe-upload', { body: { token, count: blobs.length } });
+    if (error || !data || !data.slots) throw new Error((data && data.error) || 'Couldn’t upload right now.');
+    return Promise.all(blobs.map(async (b, i) => { const sl = data.slots[i]; const { error: e } = await sb.storage.from(BUCKET).uploadToSignedUrl(sl.path, sl.token, b, { contentType: 'image/jpeg' }); if (e) throw e; return sl.path; }));
+  }
+  // Save a recipe (new when id is empty); row uses the table's column names. Returns its id.
+  async function saveRecipe(id, row) {
+    if (owner()) {
+      row = Object.assign({}, row, { updated_at: new Date().toISOString(), edited_by: 'Shaana' });
+      const res = id ? await sb.from('family_recipes').update(row).eq('id', id).select('id').single() : await sb.from('family_recipes').insert(row).select('id').single();
+      if (res.error) throw res.error; return res.data.id;
+    }
+    const { data, error } = await sb.rpc('family_recipe_save', { p_token: token, p_id: id || null, p_row: row, p_by: myName() });
+    if (error) throw error; return data;
+  }
+  async function deleteRecipe(id) {
+    const { error } = owner() ? await sb.from('family_recipes').update({ deleted_at: new Date().toISOString(), edited_by: 'Shaana' }).eq('id', id) : await sb.rpc('family_recipe_delete', { p_token: token, p_id: id, p_by: myName() });
+    if (error) throw error;
+  }
 
   // ---- Folders: Shaana's own groups ("Grandma’s recipes", "Christmas"…). A recipe can be in several. ----
   const FOLDER_ICONS = ['📁', '⭐', '👵', '👴', '🎄', '🦃', '🎂', '👧', '👦', '⏱', '🎉', '💛', '🌮', '🍝', '🥘', '🧁', '🏈', '🙏', '🌱', '❄️'];
@@ -275,9 +304,10 @@
 
   function route() {
     const id = decodeURIComponent(location.hash.slice(1));
-    if (id === 'new' || id.startsWith('new/')) return owner() ? edit(null, id.slice(4)) : list();
+    if (id === 'new' || id.startsWith('new/')) return canEdit() ? edit(null, id.slice(4)) : list();
+    if (id === 'trash') return owner() ? trash() : list();
     if (id.startsWith('folder/')) { const f = book.folders.find(x => x.id === id.slice(7)); return f ? folderView(f) : list(); }
-    if (id.startsWith('edit/')) return owner() ? edit(id.slice(5)) : list();
+    if (id.startsWith('edit/')) return canEdit() ? edit(id.slice(5)) : list();
     const r = book.recipes.find(x => x.id === id);
     r ? show(r) : list();
   }
@@ -293,13 +323,13 @@
     const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="rlist">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="rlist">' + rs.map(card).join('') + '</div>';
     app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
       (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' : '') +
-      (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see the recipes and photos (they can’t change anything).</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
+      (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see, add, change and delete recipes. Deleted ones go to <a href="#trash">🗑 Recently deleted</a> so you can bring them back.</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
       (book.recipes.length ?
         (!q && cat === 'All' ? folderRow : '') +
         (cats.length > 1 ? '<div class="chips">' + ['All'].concat(cats).map(c => '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + (ICON[c] ? ICON[c] + ' ' : '') + esc(c) + '</button>').join('') + '</div>' : '') +
         body
         : (owner() ? folderRow : '') + '<div class="empty"><p style="font-size:3rem;margin:0">📸</p><p>' + (owner() ? 'No recipes yet. Tap <b>＋ Add a recipe</b> and take a picture of a recipe card, a cookbook page or the finished dish.' : 'No recipes yet. Check back soon!') + '</p></div>') +
-      (owner() ? '<a class="btn fab" href="#new">＋ Add a recipe</a>' : '') +
+      (canEdit() ? '<a class="btn fab" href="#new">＋ Add a recipe</a>' : '') +
       '<footer>Made with love by the Escobar family 💛' + (owner() ? ' · <button type="button" class="small ghost" id="out">Sign out</button>' : '') + '</footer>';
     if ($('q')) $('q').oninput = e => { q = e.target.value; const pos = e.target.selectionStart; list(); $('q').focus(); $('q').setSelectionRange(pos, pos); };
     app.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { cat = b.dataset.cat; list(); });
@@ -326,7 +356,8 @@
         (steps.length ? '<div class="card"><h2>Directions</h2><ol class="steps">' + steps.map(x => '<li>' + esc(x) + '</li>').join('') + '</ol></div>' : '') +
         (r.notes ? '<div class="card" style="grid-column:1/-1"><h2>Notes</h2><div class="notes">' + esc(r.notes) + '</div></div>' : '') + '</div>' : '') +
       ((r.photos || []).length ? '<h2 class="cardh">📸 The original recipe card</h2><div class="gallery">' + r.photos.map((p, k) => '<img src="' + esc(photoUrl(p.path)) + '" alt="' + esc(r.title) + ' photo ' + (k + 1) + '" data-zoom="' + k + '" loading="lazy">').join('') + '</div>' + (r.photos.length > 1 ? '<p class="hint noprint">Swipe for more photos · tap one to see it big</p>' : '<p class="hint noprint">Tap the card to see it big</p>') : '') +
-      '<div class="actions"><button type="button" class="ghost" id="pr">🖨 Print</button><button type="button" class="ghost" id="sh">📤 Send this recipe</button>' + (owner() ? '<a class="btn" href="#edit/' + r.id + '">✏️ Edit</a>' : '') + '</div>';
+      '<div class="actions"><button type="button" class="ghost" id="pr">🖨 Print</button><button type="button" class="ghost" id="sh">📤 Send this recipe</button>' + (canEdit() ? '<a class="btn" href="#edit/' + r.id + '">✏️ Edit</a>' : '') + '</div>' +
+      (r.by && r.by !== 'Shaana' ? '<p class="hint noprint">Last added or changed by ' + esc(r.by) + '</p>' : '');
     window.scrollTo(0, 0);
     app.querySelectorAll('.ing li:not(.subhead)').forEach(li => li.onclick = () => li.classList.toggle('got'));
     app.querySelectorAll('[data-zoom]').forEach(img => img.onclick = () => zoom(img.src));
@@ -342,7 +373,7 @@
   function dishHtml(r) {
     const d = r.dish;
     return (d && d.url ? '<figure class="dish"><img src="' + esc(d.url) + '" alt="' + esc(r.title) + '" loading="lazy"><figcaption>' + (d.own ? (d.link ? '📷 Photo from the web' : '📷 Our photo') : 'A dish like ours · photo' + ((d.credit ? ' by ' + esc(d.credit) : '') + (d.license ? ' (' + esc(d.license) + ')' : '') + ', <a href="' + esc(d.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a>')) + '</figcaption></figure>' : '') +
-      (owner() ? '<p class="noprint"><button type="button" class="small ghost" id="dishPick">📷 ' + (d && d.url ? 'Change the dish photo' : 'Add a photo of this dish') + '</button></p>' : '');
+      (canEdit() ? '<p class="noprint"><button type="button" class="small ghost" id="dishPick">📷 ' + (d && d.url ? 'Change the dish photo' : 'Add a photo of this dish') + '</button></p>' : '');
   }
   // Shaana searches free photos and taps the one that looks like her dish.
   function dishPicker(r) {
@@ -353,8 +384,8 @@
       '<h3 class="orh">…or use a free photo from the internet</h3><p class="hint">From Wikimedia Commons. Tap one to use it.</p><div class="tools"><input id="dq" type="search" value="' + esc(r.title.replace(/^(crockpot|easy|paula deen|hidden valley)\s+/i, '')) + '"></div><div id="dres" class="dres"><p class="hint">Searching…</p></div><div class="actions">' + (r.dish && r.dish.url ? '<button type="button" class="ghost" id="dnone">Remove photo</button>' : '') + '<button type="button" class="ghost" id="dx">Cancel</button></div></div>';
     document.body.appendChild(box);
     const save = async dish => {
-      const { error } = await sb.from('family_recipes').update({ dish_photo: dish }).eq('id', r.id); if (error) return toast(error.message);
-      if (r.dish && r.dish.path && (!dish || dish.path !== r.dish.path)) sb.storage.from(BUCKET).remove([r.dish.path]);
+      try { await saveRecipe(r.id, { dish_photo: dish }); } catch (e) { return toast(e.message || String(e)); }
+      if (owner() && r.dish && r.dish.path && (!dish || dish.path !== r.dish.path)) sb.storage.from(BUCKET).remove([r.dish.path]);
       document.removeEventListener('paste', onPaste);
       r.dish = dish; box.remove(); show(r); toast(dish ? '✓ Photo saved' : 'Photo removed');
     };
@@ -374,9 +405,7 @@
     const upload = async f => {
       lab.firstChild.textContent = '⏳ Uploading…';
       try {
-        const { blob } = await shrink(f, 1600), path = user.id + '/dish-' + crypto.randomUUID() + '.jpg';
-        const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-        if (error) throw error;
+        const { blob } = await shrink(f, 1600), [path] = await uploadBlobs([blob]);
         await save({ url: photoUrl(path), path, own: true });
       } catch (e) { lab.firstChild.textContent = '📷 Upload my own photo'; toast('Couldn’t upload: ' + (e.message || e)); }
     };
@@ -542,26 +571,42 @@
           const p = pics[k];
           if (p.path) { out.push({ path: p.path, w: p.w, h: p.h }); continue; }
           btn.textContent = 'Uploading photo ' + (k + 1) + ' of ' + pics.length + '…';
-          const { blob, w, h } = await shrink(p.file), path = user.id + '/' + crypto.randomUUID() + '.jpg';
-          const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-          if (error) throw error;
+          const { blob, w, h } = await shrink(p.file), [path] = await uploadBlobs([blob]);
           p.path = path; out.push({ path, w, h });
         }
         btn.textContent = 'Saving…';
-        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), folders: r ? r.folders || [] : [], photos: out, updated_at: new Date().toISOString() };
-        const res = r ? await sb.from('family_recipes').update(row).eq('id', r.id).select().single() : await sb.from('family_recipes').insert(row).select().single();
-        if (res.error) throw res.error;
-        const gone = removed.filter(x => !/^(https?:|cards\/)/.test(x)); if (gone.length) await sb.storage.from(BUCKET).remove(gone);
-        await load(); location.hash = '#' + res.data.id; route(); toast('✓ Saved');
+        const row = { title, category: $('eC').value, from_who: $('eF').value.trim(), servings: $('eSv').value.trim(), prep_time: $('eP').value.trim(), cook_time: $('eK').value.trim(), oven_temp: $('eO').value.trim(), ingredients: $('eI').value.trim(), steps: $('eS').value.trim(), notes: $('eN').value.trim(), photos: out };
+        if (owner() && !r) row.folders = inFolderId ? [inFolderId] : [];
+        const savedId = await saveRecipe(r ? r.id : null, row);
+        const gone = removed.filter(x => !/^(https?:|cards\/)/.test(x)); if (owner() && gone.length) await sb.storage.from(BUCKET).remove(gone);
+        await load(); location.hash = '#' + savedId; route(); toast('✓ Saved');
       } catch (e) { toast('Couldn’t save: ' + (e.message || e)); btn.disabled = false; btn.textContent = 'Save recipe'; }
     };
     if (r) $('del').onclick = async () => {
-      if (!confirm('Delete ' + r.title + ' and its photos?')) return;
-      const { error } = await sb.from('family_recipes').delete().eq('id', r.id);
-      if (error) return toast(error.message);
-      const paths = (r.photos || []).map(p => p.path).filter(x => x && !/^(https?:|cards\/)/.test(x)); if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+      if (!confirm('Delete ' + r.title + '?' + (owner() ? ' It goes to Recently deleted, so you can bring it back.' : ' Shaana can bring it back if it was a mistake.'))) return;
+      try { await deleteRecipe(r.id); } catch (e) { return toast(e.message || String(e)); }
       await load(); location.hash = ''; list(); toast('Deleted');
     };
+  }
+
+  // 🗑 Recently deleted (Shaana only): bring a recipe back, or delete it for good with its photos.
+  async function trash() {
+    document.title = 'Recently deleted · ' + book.title;
+    app.innerHTML = '<a class="back" href="#">‹ All recipes</a><h1 class="rtitle">🗑 Recently deleted</h1><div id="tr"><p class="hint">Loading…</p></div>';
+    const { data, error } = await sb.from('family_recipes').select('id,title,deleted_at,edited_by,photos,dish_photo').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
+    if (error) { $('tr').innerHTML = '<p class="hint">' + esc(error.message) + '</p>'; return; }
+    $('tr').innerHTML = data.length ? '<div class="rlist">' + data.map(x => '<div class="rrwrap"><div class="rrow"><span class="rname">' + esc(x.title) + '</span><small>' + esc((x.edited_by ? 'by ' + x.edited_by + ' · ' : '') + new Date(x.deleted_at).toLocaleDateString()) + '</small></div><button type="button" class="small" data-back="' + x.id + '">↩ Bring back</button><button type="button" class="small ghost" data-gone="' + x.id + '" title="Delete forever">✕</button></div>').join('') + '</div>' : '<p class="empty">Nothing deleted.</p>';
+    app.querySelectorAll('[data-back]').forEach(b => b.onclick = async () => {
+      const { error: e } = await sb.from('family_recipes').update({ deleted_at: null }).eq('id', b.dataset.back); if (e) return toast(e.message);
+      await load(); toast('✓ Brought back'); trash();
+    });
+    app.querySelectorAll('[data-gone]').forEach(b => b.onclick = async () => {
+      const x = data.find(y => y.id === b.dataset.gone); if (!confirm('Delete ' + x.title + ' forever? This can’t be undone.')) return;
+      const { error: e } = await sb.from('family_recipes').delete().eq('id', x.id); if (e) return toast(e.message);
+      const paths = (x.photos || []).map(p => p.path).concat(x.dish_photo && x.dish_photo.path ? [x.dish_photo.path] : []).filter(p => p && !/^(https?:|cards\/)/.test(p));
+      if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+      toast('Deleted for good'); trash();
+    });
   }
 
   function signIn() {
