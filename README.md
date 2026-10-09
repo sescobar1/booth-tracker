@@ -46,6 +46,12 @@ Everything lives on the device you use, so back up regularly: **Import & backup 
 - `booth-tracker-starter.zip` is a kit a friend can upload to their own GitHub Pages site (steps are in the guide).
 - After changing `index.html`, `mobile.js`, `mobile.css`, or `sw.js`, run `python3 tools/build-starter.py` to rebuild the starter and kit.
 
+## Family Cookbook kit for friends
+
+- `recipes/friends.html` is the setup guide to share: `https://sescobar1.github.io/booth-tracker/recipes/friends.html`.
+- `cookbook-kit.zip` is the cookbook with no personal details, plus `setup.sql` (database), the two Supabase functions, and a blank `config.js`. Its sources are `recipes/index.html`, `recipes/functions/*` and `tools/cookbook-kit/`.
+- After changing any of those, run `python3 tools/build-cookbook-kit.py` to rebuild the zip.
+
 ## Sync between devices (Supabase)
 
 Everything saves on the device first, so the app works without signal. To keep a phone and a
