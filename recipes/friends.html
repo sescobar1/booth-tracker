@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Make Your Own Family Cookbook</title>
+  <link rel="icon" href="cook-icon.svg">
+  <style>
+    :root { --bg: #fbf6ee; --card: #fffdf9; --ink: #3d2c24; --muted: #7d685c; --line: #eadfd2; --accent: #b5543c; --soft: #f6e1d8; --green: #4f7a46; --greensoft: #e8f1e4; --gold: #9a6a12; --goldsoft: #fff3d6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    header { background: linear-gradient(135deg, #e8452c, #ffb347); color: #fff; padding: 30px 16px 26px; }
+    header div, main { max-width: 760px; margin: 0 auto; }
+    header img { width: 64px; height: 64px; border-radius: 16px; float: right; margin-left: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+    h1 { font-family: Georgia, 'Times New Roman', serif; margin: 0; font-size: clamp(1.8rem, 6vw, 2.5rem); line-height: 1.15; }
+    header p { margin: 8px 0 0; font-size: 1.05rem; }
+    main { padding: 18px 16px 70px; }
+    h2 { font-family: Georgia, 'Times New Roman', serif; color: var(--accent); font-size: 1.45rem; margin: 34px 0 6px; }
+    h3 { font-size: 1.05rem; margin: 18px 0 4px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin: 12px 0; box-shadow: 0 3px 12px rgba(61,44,36,.06); }
+    .quick { border: 3px solid var(--accent); }
+    .quick h2 { margin-top: 4px; }
+    .quick ol { font-size: 1.08rem; }
+    .quick li { margin: 10px 0; }
+    .big { display: block; text-align: center; background: var(--accent); color: #fff; text-decoration: none; font-weight: 800; font-size: 1.15rem; padding: 16px; border-radius: 14px; margin: 14px 0 4px; }
+    ol { padding-left: 24px; margin: 6px 0; }
+    li { margin: 8px 0; }
+    .step { display: inline-block; background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 11px; font-size: .8rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle; }
+    .step.opt { background: var(--gold); }
+    .note { background: var(--greensoft); border-left: 4px solid var(--green); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+    .warn { background: var(--goldsoft); border-left: 4px solid var(--gold); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+    b.ui { background: #f3ede6; border: 1px solid #e0d5c8; border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+    code { background: var(--soft); border-radius: 6px; padding: 1px 6px; font-size: .92em; word-break: break-all; }
+    .muted { color: var(--muted); font-size: .94rem; }
+    a { color: var(--accent); }
+    table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+    td { border-top: 1px solid var(--line); padding: 8px 6px; vertical-align: top; }
+    td:first-child { font-weight: 700; width: 38%; }
+  </style>
+</head>
+<body>
+<header><div>
+  <img src="cook-icon-180.png" alt="">
+  <h1>Make your own Family Cookbook</h1>
+  <p>A free recipe website for your family. Snap photos of recipe cards, and everyone you share it with can read, add and fix recipes.</p>
+</div></header>
+<main>
+
+  <div class="card quick">
+    <h2>🍳 The short version</h2>
+    <p class="muted">One-time setup, about 30 minutes. A computer makes it much easier than a phone.</p>
+    <ol>
+      <li><b>Download the kit</b> (button below) and unzip it.</li>
+      <li><b>GitHub</b>: make a free account and upload the kit. This becomes your website.</li>
+      <li><b>Supabase</b>: make a free account and paste in <code>setup.sql</code>. This is where your recipes and photos are saved.</li>
+      <li><b>Connect them</b>: copy 2 codes from Supabase into <code>config.js</code> on GitHub.</li>
+      <li><b>Turn on family photos</b>: paste one small file into Supabase.</li>
+      <li><b>Open your cookbook</b>, sign in, add recipes, and tap <b class="ui">Send link</b> to share with family.</li>
+    </ol>
+    <a class="big" href="../cookbook-kit.zip" download>⬇ Download the cookbook kit</a>
+    <p class="muted" style="text-align:center;margin:0">Every step is explained below, with the exact buttons to press.</p>
+  </div>
+
+  <h2><span class="step">Step 1</span> Download the kit</h2>
+  <ol>
+    <li>Tap <b>Download the cookbook kit</b> above. You get a file called <code>cookbook-kit.zip</code>.</li>
+    <li>Unzip it: on Windows, right-click it and choose <b class="ui">Extract All</b>. On a Mac, double-click it.</li>
+    <li>You now have a <b>cookbook-kit</b> folder. Inside are files like <code>index.html</code>, <code>config.js</code>, <code>setup.sql</code> and a few folders. Keep it handy.</li>
+  </ol>
+
+  <h2><span class="step">Step 2</span> GitHub: your website</h2>
+  <p>GitHub holds the cookbook's pages and gives you a free web address.</p>
+  <h3>Make your account</h3>
+  <ol>
+    <li>Go to <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a>.</li>
+    <li>Type your email, make a password, and pick a <b>username</b>. Your username becomes part of your web address. For example, <code>janesmith</code> gets <code>janesmith.github.io</code>.</li>
+    <li>Do the puzzle check, then type the code GitHub emails you.</li>
+    <li>If it asks questions about how you'll use GitHub, you can skip them.</li>
+  </ol>
+  <h3>Put the cookbook on it</h3>
+  <ol>
+    <li>Click the <b class="ui">+</b> at the top right, then <b class="ui">New repository</b>. A repository is just a folder for a project.</li>
+    <li>For <b>Repository name</b>, type <code>cookbook</code>.</li>
+    <li>Choose <b>Public</b>. The free website needs this. Only the app's code is public: your recipes are saved in Supabase, not here.</li>
+    <li>Click <b class="ui">Create repository</b>.</li>
+    <li>On the next page, click the link <b>uploading an existing file</b>.</li>
+    <li>Open your <b>cookbook-kit</b> folder. Select <b>everything inside it</b> (Ctrl+A on Windows, Cmd+A on a Mac) and drag it all onto the GitHub page.</li>
+    <li>Wait until every file is listed, including <code>vendor/supabase.js</code>. Then click <b class="ui">Commit changes</b> at the bottom.</li>
+  </ol>
+  <div class="warn">Drag the files <b>inside</b> the folder, not the folder itself. <code>index.html</code> must be at the top level of your repository, not inside another folder.</div>
+  <h3>Turn on the website</h3>
+  <ol>
+    <li>In your repository, click <b class="ui">Settings</b> (top row), then <b class="ui">Pages</b> (left side).</li>
+    <li>Under <b>Branch</b>, choose <b class="ui">main</b> and <b class="ui">/ (root)</b>, then click <b class="ui">Save</b>.</li>
+    <li>Wait 1–2 minutes and refresh the page. It shows <b>“Your site is live at …”</b> with your address, like <code>https://janesmith.github.io/cookbook/</code>. That's your cookbook!</li>
+    <li>If you open it now, it says <b>“Almost ready!”</b>. That's normal; Steps 3 and 4 finish it.</li>
+  </ol>
+
+  <h2><span class="step">Step 3</span> Supabase: where recipes are saved</h2>
+  <h3>Make your account and project</h3>
+  <ol>
+    <li>Go to <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com/dashboard</a>. Click <b class="ui">Continue with GitHub</b> to use the account you just made.</li>
+    <li>Click <b class="ui">New project</b>. Keep the free plan.</li>
+    <li><b>Project name</b>: <code>cookbook</code>. <b>Database password</b>: click <b class="ui">Generate a password</b> and save it somewhere safe. You won't need it often. <b>Region</b>: pick the one closest to you.</li>
+    <li>Click <b class="ui">Create new project</b>. It takes about 2 minutes to get ready.</li>
+  </ol>
+  <h3>Paste in the setup</h3>
+  <ol>
+    <li>In the left menu, click <b class="ui">SQL Editor</b>. If you don't see a blank box, click <b class="ui">+ New query</b>.</li>
+    <li>In your cookbook-kit folder, open <code>setup.sql</code>: Notepad on Windows (right-click → Open with), TextEdit on a Mac.</li>
+    <li>Select all of it, copy it, and paste it into the Supabase box.</li>
+    <li>Click <b class="ui">Run</b>. It should say <b>Success. No rows returned</b>.</li>
+  </ol>
+  <div class="note">If Supabase warns that the query has “destructive operations”, click to run it anyway. It's only replacing old copies of its own rules, so it's safe to run more than once.</div>
+  <h3>Make your sign-in</h3>
+  <ol>
+    <li>In the left menu, click <b class="ui">Authentication</b>, then <b class="ui">Users</b>.</li>
+    <li>Click <b class="ui">Add user</b> → <b class="ui">Create new user</b>.</li>
+    <li>Type your email and a password you'll remember. Leave <b>Auto Confirm User</b> checked. Click <b class="ui">Create user</b>.</li>
+  </ol>
+  <p class="muted">This is the only account that can sign in. Your family never needs one; they use the link you send them.</p>
+
+  <h2><span class="step">Step 4</span> Connect GitHub to Supabase</h2>
+  <h3>Copy 2 codes from Supabase</h3>
+  <ol>
+    <li>Click the gear, <b class="ui">Project Settings</b>, at the bottom of the left menu.</li>
+    <li>Click <b class="ui">Data API</b> (or <b class="ui">API</b>) and copy the <b>Project URL</b>. It looks like <code>https://abcdefgh.supabase.co</code>.</li>
+    <li>Click <b class="ui">API Keys</b> and copy the <b>anon public</b> key. It's a long code starting with <code>eyJ</code>. If you see tabs, it's under <b class="ui">Legacy API Keys</b>. A key starting with <code>sb_publishable_</code> also works.</li>
+  </ol>
+  <div class="warn">Don't use the key marked <b>secret</b> or <b>service_role</b>. That one must never go on your website.</div>
+  <h3>Paste them into config.js</h3>
+  <ol>
+    <li>Go back to your <b>cookbook</b> repository on GitHub and click the file <code>config.js</code>.</li>
+    <li>Click the pencil ✏️ (<b>Edit</b>) at the top right of the file.</li>
+    <li>Replace <code>PASTE_YOUR_PROJECT_URL_HERE</code> with your Project URL, and <code>PASTE_YOUR_ANON_KEY_HERE</code> with your key. Keep the <code>'</code> quote marks around each one.</li>
+    <li>If you like, change <code>'Me'</code> to your first name and change the footer line.</li>
+    <li>Click <b class="ui">Commit changes</b>, then <b class="ui">Commit changes</b> again.</li>
+  </ol>
+  <p>Wait a minute, then open your cookbook address. Sign in with the email and password from Step 3. 🎉</p>
+
+  <h2><span class="step">Step 5</span> Let family add photos</h2>
+  <p>This small piece lets family upload photos without having their own sign-in.</p>
+  <ol>
+    <li>In Supabase, click <b class="ui">Edge Functions</b> in the left menu.</li>
+    <li>Click <b class="ui">Deploy a new function</b> → <b class="ui">Via Editor</b>.</li>
+    <li>Name it exactly <code>recipe-upload</code>.</li>
+    <li>Delete the sample code. Open <code>supabase-functions/recipe-upload.ts</code> from your kit, copy all of it, and paste it in.</li>
+    <li>Click <b class="ui">Deploy function</b>.</li>
+    <li>Open the function's <b class="ui">Details</b> (or settings) and turn <b>off</b> <b>Enforce JWT verification</b> (it may be called <b>Verify JWT</b>). Save. The function checks the family link itself.</li>
+  </ol>
+  <p class="muted">If you skip this, family can still add and edit recipes, just not upload photos.</p>
+
+  <h2><span class="step opt">Optional</span> ✨ “Type it out for me” that reads handwriting</h2>
+  <p>The cookbook can type out a recipe card from its photo. Without this step, it uses a free reader on the phone. That reader works on printed recipes but often misreads handwriting. The smarter reader costs a few cents per card.</p>
+  <ol>
+    <li>Make an account at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>, add a little credit, and create an <b>API key</b>.</li>
+    <li>In Supabase, go to <b class="ui">Edge Functions</b> → <b class="ui">Secrets</b>. Add a secret named <code>ANTHROPIC_API_KEY</code> with your key as the value.</li>
+    <li>Deploy a second function the same way as Step 5, named <code>recipe-read</code>, using <code>supabase-functions/recipe-read.ts</code>. Leave JWT verification <b>on</b> for this one, so only you can use it.</li>
+  </ol>
+
+  <h2><span class="step">Step 6</span> Use it and share it</h2>
+  <ol>
+    <li>Tap <b class="ui">＋ Add a recipe</b>, take a photo of a recipe card, and tap <b class="ui">✨ Type it out for me</b>. Check it over, then <b class="ui">Save recipe</b>.</li>
+    <li>On a recipe, tap <b class="ui">📷 Add a photo of this dish</b> to upload, paste, or find a picture of the food.</li>
+    <li>To share: in the <b>Share with family</b> box at the top, tap <b class="ui">Send link</b>.</li>
+    <li>Anyone with the link can read, add, edit and delete recipes. They don't need an account. Deleted recipes go to <b>🗑 Recently deleted</b>, where you can bring them back.</li>
+    <li>Put it on your Home Screen. <b>iPhone</b>: in Safari, tap Share → <b class="ui">Add to Home Screen</b>. <b>Android</b>: in Chrome, tap ⋮ → <b class="ui">Add to Home screen</b>.</li>
+  </ol>
+  <div class="warn">Only send the family link to people you trust, since they can change recipes.</div>
+
+  <h2>If something's not right</h2>
+  <div class="card">
+    <table>
+      <tr><td>It says “Almost ready!”</td><td>The codes in <code>config.js</code> aren't pasted yet, or GitHub hasn't updated. Check Step 4 and wait a minute.</td></tr>
+      <tr><td>GitHub shows a 404 page</td><td>Wait a few minutes after turning on Pages. Also make sure <code>index.html</code> is at the top of the repository, not inside a folder.</td></tr>
+      <tr><td>“Invalid login credentials”</td><td>Check the email and password from Step 3. You can delete that user and make it again with <b>Auto Confirm User</b> checked.</td></tr>
+      <tr><td>Errors about missing tables</td><td>Run <code>setup.sql</code> again (Step 3).</td></tr>
+      <tr><td>Family can't add photos</td><td>Do Step 5, and make sure JWT verification is off for <code>recipe-upload</code>.</td></tr>
+      <tr><td>It stopped loading after a quiet week</td><td>Free Supabase projects pause after about a week with no visits. Sign in at supabase.com and click <b class="ui">Restore project</b>.</td></tr>
+    </table>
+  </div>
+  <p class="muted">Everything here is free: GitHub Pages hosts the website, and Supabase's free plan stores the recipes and photos. Only the optional smart reader costs anything.</p>
+</main>
+</body>
+</html>
