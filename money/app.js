@@ -291,10 +291,19 @@ function editTx(id, type, preset) {
   const drawCommon = () => {
     if (!$('tCommon')) return;
     if (autoAmt && $('tAmt').value === autoAmt) $('tAmt').value = '';
-    const list = commonPayees(kind, 16);
-    $('tCommonL').textContent = list.length ? (kind === 'income' ? 'Common income' : 'Common expenses') : '';
+    const exp = kind === 'expense', list = exp ? quickExpenses() : commonPayees(kind, 16), cut = exp ? 99 : 8;
+    $('tCommonL').textContent = exp ? 'Quick tap' : list.length ? 'Common income' : '';
     $('tCommon').classList.remove('all');
-    $('tCommon').innerHTML = list.map((c, i) => '<button type="button" class="chipbtn common' + (i >= 8 ? ' extra' : '') + '" data-common="' + i + '">' + esc(c.name) + (c.amount ? ' <small>' + money(c.amount) + '</small>' : '') + '</button>').join('') + (list.length > 8 ? '<button type="button" class="chipbtn more" id="tMoreCommon">More ▾</button>' : '');
+    $('tCommon').innerHTML = list.map((c, i) => '<button type="button" class="chipbtn common' + (i >= cut ? ' extra' : '') + '" data-common="' + i + '">' + esc(c.label || c.name) + (c.amount ? ' <small>' + money(c.amount) + '</small>' : '') + '</button>').join('') + (list.length > cut ? '<button type="button" class="chipbtn more" id="tMoreCommon">More ▾</button>' : '') +
+      (exp ? '<button type="button" class="chipbtn more" id="tEditQuick" title="Change these buttons">✏️</button>' : '');
+    if ($('tEditQuick')) $('tEditQuick').onclick = () => {
+      const now = quickExpenses().map(c => c.label).join(', ');
+      const v = prompt('Your quick-tap places, separated by commas:', now);
+      if (v == null) return;
+      const old = quickExpenses(), names = v.split(',').map(x => x.trim()).filter(Boolean);
+      data.settings.quickExpenses = names.map(n => old.find(o => o.label.toLowerCase() === n.toLowerCase()) ? (o => ({ label: o.label, payee: o.name, category: o.category }))(old.find(o => o.label.toLowerCase() === n.toLowerCase())) : { label: n, payee: n, category: '' });
+      window.save(); drawCommon(); toast('✓ Quick tap updated');
+    };
     $('tCommon').querySelectorAll('[data-common]').forEach(b => b.onclick = () => {
       const c = list[Number(b.dataset.common)];
       $('tPayee').value = c.name;
@@ -1288,6 +1297,27 @@ function autoSortAll() {
   return n;
 }
 // Most-used categories first, for the one-tap chips.
+// Her everyday spending spots, in her order (button label -> the payee name already used in the register).
+// Recurring bills stay off this row; they're added automatically. She can change the list with ✏️.
+const DEFAULT_QUICK_EXPENSES = [
+  { label: 'Walmart', payee: 'Walmart', category: 'Groceries' },
+  { label: 'Price Break', payee: 'Price Break', category: 'Booth business' },
+  { label: 'St. Joe’s', payee: 'St. Joe’s', category: '' },
+  { label: 'Marva’s', payee: 'Marva Workshop', category: 'Booth business' },
+  { label: 'Gas', payee: 'Gas', category: 'Gas' },
+  { label: 'McDonald’s', payee: "McDonald's", category: 'Eating out' },
+  { label: 'Vinted', payee: 'Vinted', category: 'Shopping' },
+  { label: 'The Corner Hangout', payee: 'The Corner Hangout', category: 'Eating out' },
+  { label: 'Y’allternative', payee: "Y'allternative Market", category: 'Booth business' },
+  { label: 'Goodwill', payee: 'Goodwill', category: 'Shopping' },
+  { label: 'The Thrift Store', payee: 'The Thrift Store', category: 'Shopping' }
+];
+function quickExpenses() {
+  const mine = data.settings.quickExpenses;
+  const list = Array.isArray(mine) ? mine.map(x => typeof x === 'string' ? { label: x, payee: x, category: '' } : x) : DEFAULT_QUICK_EXPENSES;
+  const mem = payeeMemory();
+  return list.filter(x => x && x.payee).map(x => ({ name: x.payee, label: x.label || x.payee, category: (mem[x.payee.toLowerCase()] || {}).category || x.category || '', amount: null }));
+}
 // The payees she uses most for this kind (last 6 months), with the amount when it's the same every time (Netflix, a paycheck).
 function commonPayees(type, n) {
   const since = isoDay(new Date(Date.now() - 183 * 864e5)), by = {};
