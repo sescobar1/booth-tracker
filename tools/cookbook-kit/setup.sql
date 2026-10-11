@@ -108,6 +108,62 @@ begin
   update family_recipes set deleted_at = now(), edited_by = left(p_by,60) where id = p_id and owner = v_owner and deleted_at is null;
 end $function$;
 
+-- Message board: family ask for recipes, ask questions, and reply
+create table if not exists public.family_recipe_posts (
+  id uuid primary key default gen_random_uuid(),
+  owner uuid not null references auth.users(id) on delete cascade,
+  kind text not null default 'question',
+  body text not null default '',
+  by_name text not null default '',
+  recipe_id uuid,
+  parent_id uuid references public.family_recipe_posts(id) on delete cascade,
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists family_recipe_posts_owner on public.family_recipe_posts(owner, created_at);
+alter table public.family_recipe_posts enable row level security;
+drop policy if exists "Own rows" on public.family_recipe_posts;
+create policy "Own rows" on public.family_recipe_posts for all to authenticated
+  using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
+grant select, insert, update, delete on public.family_recipe_posts to authenticated;
+
+create or replace function public.family_board(p_token text)
+ returns jsonb language sql stable security definer set search_path to 'public'
+as $function$
+  select coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'kind', p.kind, 'body', p.body, 'by', p.by_name, 'recipe', p.recipe_id, 'parent', p.parent_id, 'done', p.done, 'at', p.created_at) order by p.created_at), '[]'::jsonb)
+  from family_recipe_posts p join family_recipe_share s on s.owner = p.owner
+  where s.token = p_token and length(p_token) >= 20;
+$function$;
+
+create or replace function public.family_board_post(p_token text, p_kind text, p_body text, p_by text, p_recipe uuid, p_parent uuid)
+ returns uuid language plpgsql security definer set search_path to 'public'
+as $function$
+declare v_owner uuid; v_id uuid;
+begin
+  select owner into v_owner from family_recipe_share where token = p_token and length(p_token) >= 20;
+  if v_owner is null then raise exception 'This recipe link doesn''t work.'; end if;
+  if coalesce(trim(p_body),'') = '' then raise exception 'Type a message first.'; end if;
+  if p_parent is not null and not exists (select 1 from family_recipe_posts where id = p_parent and owner = v_owner) then raise exception 'That message is gone.'; end if;
+  insert into family_recipe_posts (owner, kind, body, by_name, recipe_id, parent_id)
+  values (v_owner, case when p_kind in ('request','question','note','reply') then p_kind else 'note' end, left(trim(p_body), 2000), left(coalesce(nullif(trim(p_by),''),'Family'), 60), p_recipe, p_parent)
+  returning id into v_id;
+  return v_id;
+end $function$;
+
+create or replace function public.family_board_done(p_token text, p_id uuid, p_done boolean)
+ returns void language sql security definer set search_path to 'public'
+as $function$
+  update family_recipe_posts p set done = p_done from family_recipe_share s
+  where s.token = p_token and length(p_token) >= 20 and p.owner = s.owner and p.id = p_id;
+$function$;
+
+revoke all on function public.family_board(text) from public;
+revoke all on function public.family_board_post(text, text, text, text, uuid, uuid) from public;
+revoke all on function public.family_board_done(text, uuid, boolean) from public;
+grant execute on function public.family_board(text) to anon, authenticated;
+grant execute on function public.family_board_post(text, text, text, text, uuid, uuid) to anon, authenticated;
+grant execute on function public.family_board_done(text, uuid, boolean) to anon, authenticated;
+
 revoke all on function public.family_recipes_book(text) from public;
 revoke all on function public.family_recipe_save(text, uuid, jsonb, text) from public;
 revoke all on function public.family_recipe_delete(text, uuid, text) from public;
