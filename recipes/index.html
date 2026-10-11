@@ -50,6 +50,22 @@
     .dish figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
     .dish figcaption a { color: inherit; }
     .cardh { font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; margin: 22px 0 8px; color: var(--accent); }
+    .boardbtn { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; background: var(--accent-soft); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 1.1rem; padding: 14px 18px; border-radius: 18px; margin: 0 0 18px; border: 1px solid var(--line); }
+    .boardbtn small { color: var(--muted); font-weight: 400; font-size: .92rem; }
+    .compose textarea { width: 100%; margin-top: 8px; }
+    .kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+    .bpost { margin: 12px 0; }
+    .bpost.done { opacity: .72; }
+    .bhead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
+    .bkind { font-weight: 700; color: var(--accent); }
+    .bhead small, .breply small { color: var(--muted); }
+    .bhead a { color: var(--accent); }
+    .bbody { white-space: pre-wrap; margin: 6px 0 8px; font-size: 1.05rem; }
+    .breply { border-left: 3px solid var(--line); padding: 2px 0 2px 12px; margin: 8px 0; }
+    .breply p { margin: 2px 0 0; white-space: pre-wrap; }
+    .brow { display: flex; gap: 8px; margin-top: 8px; }
+    .brow input { flex: 1; min-width: 0; }
+    .bacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .upl { display: block; text-align: center; margin: 10px 0 4px; cursor: pointer; }
     .upl + .upl { margin-top: 8px; }
     .orh { font-size: 1rem; margin: 16px 0 0; }
@@ -313,6 +329,7 @@
     const id = decodeURIComponent(location.hash.slice(1));
     if (id === 'new' || id.startsWith('new/')) return canEdit() ? edit(null, id.slice(4)) : list();
     if (id === 'trash') return owner() ? trash() : list();
+    if (id === 'board' || id.startsWith('board/')) return board(id.slice(6));
     if (id.startsWith('folder/')) { const f = book.folders.find(x => x.id === id.slice(7)); return f ? folderView(f) : list(); }
     if (id.startsWith('edit/')) return canEdit() ? edit(id.slice(5)) : list();
     const r = book.recipes.find(x => x.id === id);
@@ -332,7 +349,7 @@
       (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' : '') +
       (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see, add, change and delete recipes. Deleted ones go to <a href="#trash">🗑 Recently deleted</a> so you can bring them back.</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
       (book.recipes.length ?
-        (!q && cat === 'All' ? folderRow : '') +
+        (!q && cat === 'All' ? '<a class="boardbtn noprint" href="#board">💬 Message board <small>Ask for a recipe or ask a question</small></a>' + folderRow : '') +
         (cats.length > 1 ? '<div class="chips">' + ['All'].concat(cats).map(c => '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + (ICON[c] ? ICON[c] + ' ' : '') + esc(c) + '</button>').join('') + '</div>' : '') +
         body
         : (owner() ? folderRow : '') + '<div class="empty"><p style="font-size:3rem;margin:0">📸</p><p>' + (owner() ? 'No recipes yet. Tap <b>＋ Add a recipe</b> and take a picture of a recipe card, a cookbook page or the finished dish.' : 'No recipes yet. Check back soon!') + '</p></div>') +
@@ -363,7 +380,7 @@
         (steps.length ? '<div class="card"><h2>Directions</h2><ol class="steps">' + steps.map(x => '<li>' + esc(x) + '</li>').join('') + '</ol></div>' : '') +
         (r.notes ? '<div class="card" style="grid-column:1/-1"><h2>Notes</h2><div class="notes">' + esc(r.notes) + '</div></div>' : '') + '</div>' : '') +
       ((r.photos || []).length ? '<h2 class="cardh">📸 The original recipe card</h2><div class="gallery">' + r.photos.map((p, k) => '<img src="' + esc(photoUrl(p.path)) + '" alt="' + esc(r.title) + ' photo ' + (k + 1) + '" data-zoom="' + k + '" loading="lazy">').join('') + '</div>' + (r.photos.length > 1 ? '<p class="hint noprint">Swipe for more photos · tap one to see it big</p>' : '<p class="hint noprint">Tap the card to see it big</p>') : '') +
-      '<div class="actions"><button type="button" class="ghost" id="pr">🖨 Print</button><button type="button" class="ghost" id="sh">📤 Send this recipe</button>' + (canEdit() ? '<a class="btn" href="#edit/' + r.id + '">✏️ Edit</a>' : '') + '</div>' +
+      '<div class="actions"><a class="btn ghost" href="#board/' + r.id + '">💬 Ask about this recipe</a><button type="button" class="ghost" id="pr">🖨 Print</button><button type="button" class="ghost" id="sh">📤 Send this recipe</button>' + (canEdit() ? '<a class="btn" href="#edit/' + r.id + '">✏️ Edit</a>' : '') + '</div>' +
       (r.by && r.by !== ME ? '<p class="hint noprint">Last added or changed by ' + esc(r.by) + '</p>' : '');
     window.scrollTo(0, 0);
     app.querySelectorAll('.ing li:not(.subhead)').forEach(li => li.onclick = () => li.classList.toggle('got'));
@@ -594,6 +611,44 @@
       try { await deleteRecipe(r.id); } catch (e) { return toast(e.message || String(e)); }
       await load(); location.hash = ''; list(); toast('Deleted');
     };
+  }
+
+  // 💬 Message board: family request recipes, ask questions, and reply. Everyone with the link sees it.
+  const boardToken = () => token || (share && share.token) || '';
+  const ago = t => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' hr ago' : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+  const KINDS = { request: ['🙋', 'Recipe request'], question: ['❓', 'Question'], note: ['💬', 'Note'] };
+  async function board(about) {
+    document.title = 'Message board · ' + book.title;
+    const rAbout = about ? book.recipes.find(x => x.id === about) : null;
+    app.innerHTML = '<a class="back" href="' + (rAbout ? '#' + rAbout.id : '#') + '">‹ ' + (rAbout ? esc(rAbout.title) : 'All recipes') + '</a><h1 class="rtitle">💬 Message board</h1><p class="meta">Ask for a recipe, ask a question, or share a tip. Everyone with the family link can see and reply.</p>' +
+      '<div class="card compose noprint"><div class="kinds" id="bKind">' + Object.entries(KINDS).map(([k, [ic, l]]) => '<button type="button" class="chip' + ((rAbout ? 'question' : 'request') === k ? ' on' : '') + '" data-k="' + k + '">' + ic + ' ' + l + '</button>').join('') + '</div>' +
+      (rAbout ? '<p class="hint">About <b>' + esc(rAbout.title) + '</b></p>' : '') +
+      '<textarea id="bBody" rows="3" placeholder="' + (rAbout ? 'What do you want to know about ' + esc(rAbout.title) + '?' : 'Can someone add Grandma’s yeast rolls?') + '"></textarea><div class="actions"><button type="button" id="bPost">Post</button></div></div><div id="bList"><p class="hint">Loading…</p></div>';
+    let kind = rAbout ? 'question' : 'request';
+    $('bKind').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { kind = b.dataset.k; $('bKind').querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === b)); });
+    const post = async (k, body, parent, recipe) => {
+      const { error } = await sb.rpc('family_board_post', { p_token: boardToken(), p_kind: k, p_body: body, p_by: myName(), p_recipe: recipe || null, p_parent: parent || null });
+      if (error) { toast(error.message); return false; } return true;
+    };
+    $('bPost').onclick = async () => { const v = $('bBody').value.trim(); if (!v) return toast('Type a message first.'); $('bPost').disabled = true; if (await post(kind, v, null, rAbout && rAbout.id)) { $('bBody').value = ''; toast('✓ Posted'); draw(); } $('bPost').disabled = false; };
+    async function draw() {
+      const { data, error } = await sb.rpc('family_board', { p_token: boardToken() });
+      if (error) { $('bList').innerHTML = '<p class="hint">' + esc(error.message) + '</p>'; return; }
+      const all = data || [], tops = all.filter(p => !p.parent).sort((a, b) => (a.done - b.done) || (new Date(b.at) - new Date(a.at)));
+      const replies = id => all.filter(p => p.parent === id);
+      const recLink = id => { const r = book.recipes.find(x => x.id === id); return r ? ' · about <a href="#' + r.id + '">' + esc(r.title) + '</a>' : ''; };
+      $('bList').innerHTML = tops.length ? tops.map(p => { const [ic, l] = KINDS[p.kind] || KINDS.note; return '<div class="card bpost' + (p.done ? ' done' : '') + '"><div class="bhead"><span class="bkind">' + ic + ' ' + l + (p.done ? ' · ✓ ' + (p.kind === 'request' ? 'added' : 'answered') : '') + '</span><small>' + esc(p.by) + ' · ' + ago(p.at) + recLink(p.recipe) + '</small></div><p class="bbody">' + esc(p.body) + '</p>' +
+        replies(p.id).map(c => '<div class="breply"><b>' + esc(c.by) + '</b> <small>' + ago(c.at) + '</small><p>' + esc(c.body) + '</p></div>').join('') +
+        '<div class="brow noprint"><input placeholder="Write a reply…" data-rin="' + p.id + '"><button type="button" class="small" data-rgo="' + p.id + '">Reply</button></div>' +
+        '<div class="bacts noprint">' + (p.kind !== 'note' ? '<button type="button" class="small ghost" data-done="' + p.id + '">' + (p.done ? '↩ Reopen' : p.kind === 'request' ? '✓ Recipe added' : '✓ Answered') + '</button>' : '') + (p.kind === 'request' && !p.done && canEdit() ? '<a class="btn small ghost" href="#new">＋ Add this recipe</a>' : '') + (owner() ? '<button type="button" class="small ghost" data-bdel="' + p.id + '" title="Delete">🗑</button>' : '') + '</div></div>'; }).join('')
+        : '<p class="empty">No messages yet. Be the first to ask for a recipe!</p>';
+      app.querySelectorAll('[data-rgo]').forEach(b => b.onclick = async () => { const inp = app.querySelector('[data-rin="' + b.dataset.rgo + '"]'), v = inp.value.trim(); if (!v) return; b.disabled = true; if (await post('reply', v, b.dataset.rgo)) draw(); else b.disabled = false; });
+      app.querySelectorAll('[data-rin]').forEach(i => i.onkeydown = e => { if (e.key === 'Enter') app.querySelector('[data-rgo="' + i.dataset.rin + '"]').click(); });
+      app.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => { const p = all.find(x => x.id === b.dataset.done); const { error: e } = await sb.rpc('family_board_done', { p_token: boardToken(), p_id: p.id, p_done: !p.done }); if (e) return toast(e.message); draw(); });
+      app.querySelectorAll('[data-bdel]').forEach(b => b.onclick = async () => { if (!confirm('Delete this message and its replies?')) return; const { error: e } = await sb.from('family_recipe_posts').delete().eq('id', b.dataset.bdel); if (e) return toast(e.message); draw(); });
+    }
+    window.scrollTo(0, 0);
+    draw();
   }
 
   // 🗑 Recently deleted (Shaana only): bring a recipe back, or delete it for good with its photos.
