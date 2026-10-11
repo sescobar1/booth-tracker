@@ -260,6 +260,7 @@ function editTx(id, type, preset) {
     '<div class="segs" id="tKind"><button type="button" class="seg' + (kind === 'expense' ? ' on' : '') + '" data-k="expense">− Expense</button><button type="button" class="seg' + (kind === 'income' ? ' on' : '') + '" data-k="income">+ Income</button></div>' +
     '<label>Amount<input id="tAmt" inputmode="decimal" placeholder="0.00" value="' + (t.amount === '' ? '' : Number(t.amount).toFixed(2)) + '" class="big-input"></label>' +
     '<label>Payee<input id="tPayee" list="payees" value="' + esc(t.payee) + '" placeholder="Walmart" autocapitalize="words"></label><datalist id="payees">' + payees.map(p => '<option value="' + esc(p) + '">').join('') + '</datalist>' +
+    (id ? '' : '<p class="lbl" id="tCommonL"></p><div class="catchips" id="tCommon"></div>') +
     '<div class="grid2"><label>Category<input id="tCat" list="cats" value="' + esc(t.category) + '" placeholder="Groceries"></label><label>Date<input id="tDate" type="date" value="' + esc(t.date) + '"></label></div>' +
     '<datalist id="cats">' + data.settings.categories.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
     '<div class="catchips" id="tChips">' + topCategories(99).map((c, i) => '<button type="button" class="chipbtn' + (i >= 10 && c !== t.category ? ' extra' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('') +
@@ -285,7 +286,30 @@ function editTx(id, type, preset) {
   $('tChips').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { $('tCat').value = b.dataset.cat; markChip(); });
   $('tCat').oninput = markChip; markChip();
   $('tMoreCats').onclick = () => { $('tChips').classList.add('all'); $('tMoreCats').remove(); };
-  $('tKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('tKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); });
+  // One tap fills the payee, its usual category, and the amount when it never changes.
+  let autoAmt = null; // the amount a common button filled in, so tapping a different one replaces it
+  const drawCommon = () => {
+    if (!$('tCommon')) return;
+    if (autoAmt && $('tAmt').value === autoAmt) $('tAmt').value = '';
+    const list = commonPayees(kind, 16);
+    $('tCommonL').textContent = list.length ? (kind === 'income' ? 'Common income' : 'Common expenses') : '';
+    $('tCommon').classList.remove('all');
+    $('tCommon').innerHTML = list.map((c, i) => '<button type="button" class="chipbtn common' + (i >= 8 ? ' extra' : '') + '" data-common="' + i + '">' + esc(c.name) + (c.amount ? ' <small>' + money(c.amount) + '</small>' : '') + '</button>').join('') + (list.length > 8 ? '<button type="button" class="chipbtn more" id="tMoreCommon">More ▾</button>' : '');
+    $('tCommon').querySelectorAll('[data-common]').forEach(b => b.onclick = () => {
+      const c = list[Number(b.dataset.common)];
+      $('tPayee').value = c.name;
+      $('tCat').value = c.category || autoCategory(c.name, '', kind) || $('tCat').value; markChip();
+      if (autoAmt && $('tAmt').value === autoAmt) $('tAmt').value = '';
+      autoAmt = null;
+      if (c.amount && !$('tAmt').value) $('tAmt').value = autoAmt = Number(c.amount).toFixed(2);
+      const m = mem[c.name.toLowerCase()]; if (m && m.taxCat && !$('tTax').value) $('tTax').value = m.taxCat;
+      $('tCommon').querySelectorAll('[data-common]').forEach(x => x.classList.toggle('on', x === b));
+      if (!$('tAmt').value) $('tAmt').focus();
+    });
+    if ($('tMoreCommon')) $('tMoreCommon').onclick = () => { $('tCommon').classList.add('all'); $('tMoreCommon').remove(); };
+  };
+  drawCommon();
+  $('tKind').querySelectorAll('.seg').forEach(b => b.onclick = () => { kind = b.dataset.k; $('tKind').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); drawCommon(); });
   $('tPayee').onchange = () => {
     const m = mem[$('tPayee').value.trim().toLowerCase()];
     if (!$('tCat').value) $('tCat').value = autoCategory($('tPayee').value, '', kind) || '';
@@ -1264,6 +1288,16 @@ function autoSortAll() {
   return n;
 }
 // Most-used categories first, for the one-tap chips.
+// The payees she uses most for this kind (last 6 months), with the amount when it's the same every time (Netflix, a paycheck).
+function commonPayees(type, n) {
+  const since = isoDay(new Date(Date.now() - 183 * 864e5)), by = {};
+  data.tx.filter(t => t.type === type && t.payee && t.date >= since).sort(byTime).forEach(t => {
+    const k = looseName(t.payee); if (!k || /^(check|transfer|deposit)$/.test(k)) return;
+    const e = by[k] = by[k] || { name: t.payee.trim(), n: 0, amts: [], category: '' };
+    e.n++; e.amts.push(Number(t.amount)); if (t.source !== 'Bank') e.name = t.payee.trim(); if (t.category) e.category = t.category;
+  });
+  return Object.values(by).sort((a, b) => b.n - a.n).slice(0, n).map(e => { const last = e.amts.slice(-3); return { name: e.name, category: e.category, amount: last.length >= 2 && last.every(a => a === last[0]) ? last[0] : null }; });
+}
 function topCategories(n) {
   const count = {};
   data.tx.forEach(t => { if (t.category) count[t.category] = (count[t.category] || 0) + 1; });

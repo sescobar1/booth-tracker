@@ -144,3 +144,6 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .catchips .chipbtn.extra { display: none; }
 .catchips.all .chipbtn.extra { display: inline-flex; }
 .chipbtn.more { border-style: dashed; }
+
+/* Common expenses / income: one tap fills payee, category and a fixed amount */
+.chipbtn.common small { font-weight: 500; opacity: .75; margin-left: 4px; }
