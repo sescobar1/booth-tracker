@@ -1903,28 +1903,33 @@
   }
 
   // ---------- render hook ----------
-  // ---------- Home: net sold each day of the week, all booths together ----------
-  let dailyWeek = 0; // 0 = this week, -1 = last week…
+  // ---------- Home: net sold each day of the month, all booths together (the store is closed Mondays) ----------
+  let dailyMonth = 0, dailyAll = false; // 0 = this month, -1 = last month…; dailyAll shows every day, not just the last 7
   if ($('todo') && !$('dashDaily')) $('todo').insertAdjacentHTML('beforebegin', '<section class="panel summary" id="dashDaily"></section>');
   function renderDaily() {
     const el = $('dashDaily'); if (!el) return;
-    const today = todayIso(), start = addDays(weekStart(), dailyWeek * 7), end = addDays(start, 6);
-    const sales = salesBetween(start, end), prev = salesBetween(addDays(start, -7), addDays(start, -1));
-    const sum = l => l.reduce((t, x) => t + Number(x.amount || 0), 0), tot = sum(sales), ptot = sum(prev), ch = pct(tot, ptot);
-    const count = l => l.reduce((t, x) => t + (Number(x.qty) > 1 ? Number(x.qty) : 1), 0);
-    const days = Array.from({ length: 7 }, (_, i) => addDays(start, i)), per = days.map(d => sales.filter(x => x.date === d));
-    const best = Math.max(...per.map(sum));
-    el.innerHTML = '<div class="dd-head"><h3>Sold each day</h3><div class="dd-nav"><button type="button" class="icon-btn" data-dd="-1" aria-label="Week before">‹</button><span>' + (dailyWeek === 0 ? 'This week' : dailyWeek === -1 ? 'Last week' : nice(start).replace(/^\w+, /, '') + ' week') + '</span><button type="button" class="icon-btn" data-dd="1" aria-label="Next week"' + (dailyWeek >= 0 ? ' disabled' : '') + '>›</button></div></div>' +
-      '<div class="panel-body"><ul class="dd-list">' + days.map((d, i) => {
-        const v = sum(per[i]), n = count(per[i]), future = d > today;
-        return '<li class="' + (d === today ? 'today ' : '') + (future ? 'future' : '') + '"><span class="dd-day"><b>' + (d === today ? 'Today' : DAYS[dow(d)]) + '</b><small>' + nice(d).replace(/^\w+, /, '') + '</small></span>' +
-          '<span class="dd-bar"><i style="width:' + (best ? Math.round(v / best * 100) : 0) + '%"></i></span>' +
-          '<span class="dd-amt">' + (future ? '' : money(v)) + (n ? '<small>' + n + ' item' + (n === 1 ? '' : 's') + '</small>' : '') + '</span></li>';
-      }).join('') + '</ul>' +
-      '<div class="dd-total"><span>Week total · all booths</span><b>' + money(tot) + '</b></div>' +
-      (ch != null ? '<p class="helper" style="margin:4px 0 0">' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs the week before (' + money(ptot) + ')</p>' : '') +
-      (!sales.length && dailyWeek === 0 ? '<p class="helper" style="margin:4px 0 0">No dated sales yet this week. Import your ' + STORE_SHORT + ' sales to fill it in.</p>' : '') + '</div>';
-    el.querySelectorAll('[data-dd]').forEach(b => b.onclick = () => { dailyWeek = Math.min(0, dailyWeek + Number(b.dataset.dd)); renderDaily(); });
+    const today = todayIso(), now = new Date(), first = new Date(now.getFullYear(), now.getMonth() + dailyMonth, 1);
+    const start = isoLocal(first), last = isoLocal(new Date(first.getFullYear(), first.getMonth() + 1, 0)), end = last < today ? last : today;
+    const label = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const sum = l => l.reduce((t, x) => t + Number(x.amount || 0), 0), count = l => l.reduce((t, x) => t + (Number(x.qty) > 1 ? Number(x.qty) : 1), 0);
+    const sales = end >= start ? salesBetween(start, end) : [];
+    // Same days of the month before, to compare fairly mid-month.
+    const pFirst = new Date(first.getFullYear(), first.getMonth() - 1, 1), pStart = isoLocal(pFirst), pLast = isoLocal(new Date(pFirst.getFullYear(), pFirst.getMonth() + 1, 0));
+    const pEnd = end === last ? pLast : (d => d > pLast ? pLast : d)(isoLocal(new Date(pFirst.getFullYear(), pFirst.getMonth(), Number(end.slice(8)))));
+    const tot = sum(sales), ptot = sum(salesBetween(pStart, pEnd)), ch = pct(tot, ptot);
+    const sold = new Set(sales.map(x => x.date)), days = []; for (let d = start; d <= end; d = addDays(d, 1)) if (dow(d) !== 1 || sold.has(d)) days.push(d);
+    const per = days.map(d => sales.filter(x => x.date === d)), vals = per.map(sum), best = Math.max(0, ...vals);
+    const open = days.filter(d => d < today || dailyMonth < 0).length || 1, bi = vals.indexOf(best);
+    const rows = days.map((d, i) => ({ d, v: vals[i], n: count(per[i]) })).reverse(); // newest first
+    el.innerHTML = '<div class="dd-head"><h3>Sold each day</h3><div class="dd-nav"><button type="button" class="icon-btn" data-dd="-1" aria-label="Month before">‹</button><span>' + label + '</span><button type="button" class="icon-btn" data-dd="1" aria-label="Next month"' + (dailyMonth >= 0 ? ' disabled' : '') + '>›</button></div></div>' +
+      '<div class="panel-body"><div class="dd-total top"><span>' + (dailyMonth === 0 ? 'So far this month' : 'Month total') + ' · all booths</span><b>' + money(tot) + '</b></div>' +
+      '<p class="helper" style="margin:2px 0 8px">' + count(sales) + ' items' + (tot ? ' · about ' + money(tot / open) + ' per open day · best: ' + nice(days[bi]) : '') + (ch != null ? ' · ' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs ' + pFirst.toLocaleDateString('en-US', { month: 'short' }) + (end === last ? '' : ' (same days)') : '') + '. Closed Mondays.</p>' +
+      (rows.length ? '<ul class="dd-list">' + rows.filter((r, i) => dailyAll || i < 7).map(r => '<li class="' + (r.d === today ? 'today' : '') + '"><span class="dd-day"><b>' + (r.d === today ? 'Today' : DAYS[dow(r.d)]) + '</b><small>' + nice(r.d).replace(/^\w+, /, '') + '</small></span>' +
+        '<span class="dd-bar"><i style="width:' + (best ? Math.round(r.v / best * 100) : 0) + '%"></i></span>' +
+        '<span class="dd-amt">' + money(r.v) + (r.n ? '<small>' + r.n + ' item' + (r.n === 1 ? '' : 's') + '</small>' : '') + '</span></li>').join('') + '</ul>' + (rows.length > 7 ? '<button type="button" class="link dd-more" id="ddMore">' + (dailyAll ? 'Show fewer' : 'Show all ' + rows.length + ' days') + '</button>' : '') : '<p class="helper">No open days yet this month.</p>') +
+      (!sales.length && dailyMonth === 0 ? '<p class="helper" style="margin:6px 0 0">No dated sales yet this month. Import your ' + STORE_SHORT + ' sales to fill it in.</p>' : '') + '</div>';
+    el.querySelectorAll('[data-dd]').forEach(b => b.onclick = () => { dailyMonth = Math.min(0, dailyMonth + Number(b.dataset.dd)); dailyAll = false; renderDaily(); });
+    if ($('ddMore')) $('ddMore').onclick = () => { dailyAll = !dailyAll; renderDaily(); };
   }
   function renderExtras() {
     const need = renderRestock();

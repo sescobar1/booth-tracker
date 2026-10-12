@@ -418,4 +418,5 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .dd-day b{display:block}.dd-day small,.dd-amt small{display:block;color:#66737c;font-size:.78rem}
 .dd-bar{height:10px;border-radius:99px;background:#eef3f5;overflow:hidden}.dd-bar i{display:block;height:100%;background:var(--green);border-radius:99px}
 .dd-amt{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;min-width:72px}
-.dd-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;font-weight:700}.dd-total b{font-size:1.25rem;color:var(--green)}
+.dd-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;font-weight:700}.dd-total.top{padding-top:0}
+.dd-more{margin-top:8px}.dd-total b{font-size:1.25rem;color:var(--green)}
