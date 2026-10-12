@@ -632,6 +632,16 @@
     try { importRelic(await fileRows(f)); } catch (err) { $('relicMsg').textContent = /\.pdf$/i.test(f.name) ? 'That PDF could not be read (it may be a scanned picture). Try the CSV export, or paste the rows below.' : 'That file could not be read. Try the CSV export, or paste the rows below.'; }
   });
   $('relicPasteBtn').addEventListener('click', () => { const t = $('relicPaste').value; if (t.trim()) { importRelic(textRows(t)); $('relicPaste').value = ''; } });
+  // One tap: copy the report on the store's website, then tap this. No paste box needed.
+  const fileBtn = $('relicFile').closest('label');
+  if (fileBtn && !$('relicClip')) fileBtn.insertAdjacentHTML('afterend', '<button type="button" class="button" id="relicClip">📋 Import what I copied</button>');
+  $('relicClip').addEventListener('click', async () => {
+    let t = '';
+    try { t = navigator.clipboard && navigator.clipboard.readText ? await navigator.clipboard.readText() : ''; } catch (e) { t = ''; }
+    if (t && t.trim()) { $('relicMsg').textContent = 'Reading what you copied…'; importRelic(textRows(t)); return; }
+    const box = $('relicPaste').closest('details'); if (box) box.open = true; $('relicPaste').focus();
+    $('relicMsg').textContent = 'Nothing copied yet (or your phone asked first). Copy the sales table on the store’s site, then tap 📋 again, or paste it in the box below.';
+  });
 
   // ---------- restock ----------
   function restockData() {
@@ -1924,9 +1934,21 @@
     const per = days.map(d => sales.filter(x => x.date === d)), vals = per.map(sum), best = Math.max(0, ...vals);
     const open = days.filter(d => d < today || dailyMonth < 0).length || 1, bi = vals.indexOf(best);
     const rows = days.map((d, i) => ({ d, v: vals[i], n: count(per[i]) })).reverse(); // newest first
+    // Mid-month heads-up: a booth whose sales pace won't cover its rent and purchases this month.
+    let pace = '';
+    if (dailyMonth === 0 && typeof boothStats === 'function') {
+      const openAll = []; for (let d = start; d <= last; d = addDays(d, 1)) if (dow(d) !== 1) openAll.push(d);
+      const done = openAll.filter(d => d < today).length, left = openAll.length - done;
+      if (done >= 3 && left > 0) {
+        const { st } = boothStats(label), names = Object.fromEntries((typeof BOOTH_LIST !== 'undefined' ? BOOTH_LIST : []).map(b => [b.code, b.name]));
+        const warn = Object.entries(st).map(([c, x]) => ({ c, name: names[c] || '', sales: x.sales, cost: x.buy + x.rent, pace: x.sales / done * openAll.length }))
+          .filter(x => x.cost > 0 && x.pace < x.cost).sort((a, b) => (a.pace - a.cost) - (b.pace - b.cost));
+        pace = warn.map(x => '<div class="dd-warn">⚠️ <b>' + esc(x.c) + '</b>' + (x.name ? ' ' + esc(x.name) : '') + ' is on pace for about <b>' + money(x.pace) + '</b> in sales vs <b>' + money(x.cost) + '</b> in rent and purchases. It needs about <b>' + money(Math.max(0, x.cost - x.sales) / left) + ' a day</b> for the last ' + left + ' open days to break even.</div>').join('');
+      }
+    }
     el.innerHTML = '<div class="dd-head"><h3>Sold each day</h3><div class="dd-nav"><button type="button" class="icon-btn" data-dd="-1" aria-label="Month before">‹</button><span>' + label + '</span><button type="button" class="icon-btn" data-dd="1" aria-label="Next month"' + (dailyMonth >= 0 ? ' disabled' : '') + '>›</button></div></div>' +
       '<div class="panel-body"><div class="dd-total top"><span>' + (dailyMonth === 0 ? 'So far this month' : 'Month total') + ' · all booths</span><b>' + money(tot) + '</b></div>' +
-      '<p class="helper" style="margin:2px 0 8px">' + count(sales) + ' items' + (tot ? ' · about ' + money(tot / open) + ' per open day · best: ' + nice(days[bi]) : '') + (ch != null ? ' · ' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs ' + pFirst.toLocaleDateString('en-US', { month: 'short' }) + (end === last ? '' : ' (same days)') : '') + '. Closed Mondays.</p>' +
+      '<p class="helper" style="margin:2px 0 8px">' + count(sales) + ' items' + (tot ? ' · about ' + money(tot / open) + ' per open day · best: ' + nice(days[bi]) : '') + (ch != null ? ' · ' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs ' + pFirst.toLocaleDateString('en-US', { month: 'short' }) + (end === last ? '' : ' (same days)') : '') + '. Closed Mondays.</p>' + pace +
       (rows.length ? '<ul class="dd-list">' + rows.filter((r, i) => dailyAll || i < 7).map(r => '<li class="' + (r.d === today ? 'today' : '') + '"><span class="dd-day"><b>' + (r.d === today ? 'Today' : DAYS[dow(r.d)]) + '</b><small>' + nice(r.d).replace(/^\w+, /, '') + '</small></span>' +
         '<span class="dd-bar"><i style="width:' + (best ? Math.round(r.v / best * 100) : 0) + '%"></i></span>' +
         '<span class="dd-amt">' + money(r.v) + (r.n ? '<small>' + r.n + ' item' + (r.n === 1 ? '' : 's') + '</small>' : '') + '</span></li>').join('') + '</ul>' + (rows.length > 7 ? '<button type="button" class="link dd-more" id="ddMore">' + (dailyAll ? 'Show fewer' : 'Show all ' + rows.length + ' days') + '</button>' : '') : '<p class="helper">No open days yet this month.</p>') +

@@ -420,3 +420,6 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .dd-amt{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;min-width:72px}
 .dd-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;font-weight:700}.dd-total.top{padding-top:0}
 .dd-more{margin-top:8px}.dd-total b{font-size:1.25rem;color:var(--green)}
+
+.dd-warn{background:#fff3d6;border-left:4px solid #b67c20;border-radius:8px;padding:9px 12px;margin:6px 0 10px;font-size:.92rem;line-height:1.4}
+#relicClip{margin:8px 0 0}
