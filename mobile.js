@@ -1903,6 +1903,29 @@
   }
 
   // ---------- render hook ----------
+  // ---------- Home: net sold each day of the week, all booths together ----------
+  let dailyWeek = 0; // 0 = this week, -1 = last week…
+  if ($('todo') && !$('dashDaily')) $('todo').insertAdjacentHTML('beforebegin', '<section class="panel summary" id="dashDaily"></section>');
+  function renderDaily() {
+    const el = $('dashDaily'); if (!el) return;
+    const today = todayIso(), start = addDays(weekStart(), dailyWeek * 7), end = addDays(start, 6);
+    const sales = salesBetween(start, end), prev = salesBetween(addDays(start, -7), addDays(start, -1));
+    const sum = l => l.reduce((t, x) => t + Number(x.amount || 0), 0), tot = sum(sales), ptot = sum(prev), ch = pct(tot, ptot);
+    const count = l => l.reduce((t, x) => t + (Number(x.qty) > 1 ? Number(x.qty) : 1), 0);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(start, i)), per = days.map(d => sales.filter(x => x.date === d));
+    const best = Math.max(...per.map(sum));
+    el.innerHTML = '<div class="dd-head"><h3>Sold each day</h3><div class="dd-nav"><button type="button" class="icon-btn" data-dd="-1" aria-label="Week before">‹</button><span>' + (dailyWeek === 0 ? 'This week' : dailyWeek === -1 ? 'Last week' : nice(start).replace(/^\w+, /, '') + ' week') + '</span><button type="button" class="icon-btn" data-dd="1" aria-label="Next week"' + (dailyWeek >= 0 ? ' disabled' : '') + '>›</button></div></div>' +
+      '<div class="panel-body"><ul class="dd-list">' + days.map((d, i) => {
+        const v = sum(per[i]), n = count(per[i]), future = d > today;
+        return '<li class="' + (d === today ? 'today ' : '') + (future ? 'future' : '') + '"><span class="dd-day"><b>' + (d === today ? 'Today' : DAYS[dow(d)]) + '</b><small>' + nice(d).replace(/^\w+, /, '') + '</small></span>' +
+          '<span class="dd-bar"><i style="width:' + (best ? Math.round(v / best * 100) : 0) + '%"></i></span>' +
+          '<span class="dd-amt">' + (future ? '' : money(v)) + (n ? '<small>' + n + ' item' + (n === 1 ? '' : 's') + '</small>' : '') + '</span></li>';
+      }).join('') + '</ul>' +
+      '<div class="dd-total"><span>Week total · all booths</span><b>' + money(tot) + '</b></div>' +
+      (ch != null ? '<p class="helper" style="margin:4px 0 0">' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + '% vs the week before (' + money(ptot) + ')</p>' : '') +
+      (!sales.length && dailyWeek === 0 ? '<p class="helper" style="margin:4px 0 0">No dated sales yet this week. Import your ' + STORE_SHORT + ' sales to fill it in.</p>' : '') + '</div>';
+    el.querySelectorAll('[data-dd]').forEach(b => b.onclick = () => { dailyWeek = Math.min(0, dailyWeek + Number(b.dataset.dd)); renderDaily(); });
+  }
   function renderExtras() {
     const need = renderRestock();
     renderBatches();
@@ -1914,6 +1937,7 @@
     renderAmazon();
     renderCookies();
     renderDashInsights();
+    renderDaily();
     if ($('reports').classList.contains('active')) { renderReportCard(); renderWeekdays(); }
     renderTaxes();
     renderWeek();

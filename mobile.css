@@ -404,3 +404,18 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .mytask-donehead{display:flex;justify-content:space-between;align-items:center;color:#64747d;font-size:.9rem;padding:10px 0 2px}
 .mytask-donehead .linkish{border:0;background:none;color:var(--green);font:inherit;font-size:.9rem;cursor:pointer;text-decoration:underline}
 .mytask-empty{color:#64747d;margin:4px 0 6px}
+
+/* Home: sold each day */
+#dashDaily .dd-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px 8px 0;border-bottom:1px solid var(--line)}
+#dashDaily .dd-head h3{border-bottom:0}
+#dashDaily .dd-nav{display:flex;align-items:center;gap:6px;font-weight:700;color:#4b5b64}
+#dashDaily .icon-btn{min-width:36px;min-height:36px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:1.2rem;line-height:1}
+#dashDaily .icon-btn:disabled{opacity:.35}
+.dd-list{list-style:none;margin:0;padding:0}
+.dd-list li{display:grid;grid-template-columns:74px 1fr auto;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #edf1f2}
+.dd-list li.today .dd-day b{color:var(--green)}
+.dd-list li.future{opacity:.45}
+.dd-day b{display:block}.dd-day small,.dd-amt small{display:block;color:#66737c;font-size:.78rem}
+.dd-bar{height:10px;border-radius:99px;background:#eef3f5;overflow:hidden}.dd-bar i{display:block;height:100%;background:var(--green);border-radius:99px}
+.dd-amt{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;min-width:72px}
+.dd-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;font-weight:700}.dd-total b{font-size:1.25rem;color:var(--green)}
