@@ -347,7 +347,7 @@
     const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="rlist">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="rlist">' + rs.map(card).join('') + '</div>';
     app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
       (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' : '') +
-      (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see, add, change and delete recipes. Deleted ones go to <a href="#trash">🗑 Recently deleted</a> so you can bring them back.</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
+      (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see, add, change and delete recipes. Deleted ones go to <a href="#trash">🗑 Recently deleted</a> so you can bring them back.</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><button type="button" class="small ghost" id="shBackup">⬇ Back up everything</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
       (book.recipes.length ?
         (!q && cat === 'All' ? '<a class="boardbtn noprint" href="#board">💬 Message board <small>Ask for a recipe or ask a question</small></a>' + folderRow : '') +
         (cats.length > 1 ? '<div class="chips">' + ['All'].concat(cats).map(c => '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + (ICON[c] ? ICON[c] + ' ' : '') + esc(c) + '</button>').join('') + '</div>' : '') +
@@ -362,6 +362,7 @@
     if (owner()) {
       $('shCopy').onclick = async () => { try { await navigator.clipboard.writeText(shareLink()); toast('Link copied'); } catch (e) { prompt('Copy this link:', shareLink()); } };
       $('shShare').onclick = async () => { const text = 'Here’s our family cookbook 🍽💛 ' + shareLink(); if (navigator.share) { try { await navigator.share({ title: book.title, text: 'Here’s our family cookbook 🍽💛', url: shareLink() }); } catch (e) {} } else location.href = 'sms:?&body=' + encodeURIComponent(text); };
+      $('shBackup').onclick = () => backupAll($('shBackup'));
       $('shName').onclick = async () => { const n = prompt('Name of the recipe book:', book.title); if (!n || !n.trim()) return; const { error } = await sb.from('family_recipe_share').update({ title: n.trim() }).eq('owner', user.id); if (error) return toast(error.message); book.title = share.title = n.trim(); list(); };
       $('out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
     }
@@ -649,6 +650,48 @@
     }
     window.scrollTo(0, 0);
     draw();
+  }
+
+  // ⬇ Backup: one .zip with every recipe (recipes.json), a readable cookbook.html, and the card and dish photos.
+  async function backupAll(btn) {
+    const label = btn.textContent; btn.disabled = true;
+    try {
+      btn.textContent = 'Getting ready…';
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', () => window.JSZip);
+      const zip = new JSZip(), slug = t => String(t || 'recipe').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'recipe';
+      const pics = [], pages = [];
+      book.recipes.forEach(r => {
+        const mine = [];
+        (r.photos || []).forEach((p, i) => { if (p.path) { const name = 'photos/' + slug(r.title) + '-card-' + (i + 1) + '.jpg'; pics.push({ url: photoUrl(p.path), name }); mine.push(name); } });
+        let dish = '';
+        if (r.dish && r.dish.url) { if (r.dish.path) { dish = 'photos/' + slug(r.title) + '-dish.jpg'; pics.push({ url: r.dish.url, name: dish }); } else dish = r.dish.url; }
+        pages.push({ r, mine, dish });
+      });
+      let n = 0, missed = 0;
+      for (const x of pics) {
+        btn.textContent = 'Saving photos ' + (++n) + ' of ' + pics.length + '…';
+        try { const res = await fetch(x.url); if (!res.ok) throw 0; zip.file(x.name, await res.blob()); } catch (e) { missed++; }
+      }
+      const lines = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean);
+      const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(book.title) + '</title><style>body{font:17px/1.55 Georgia,serif;max-width:760px;margin:auto;padding:16px;color:#3d2c24;background:#fbf6ee}h1{text-align:center}h2{border-top:2px solid #eadfd2;padding-top:18px;margin-top:34px}img{max-width:100%;border-radius:10px;margin:6px 0}small{color:#8c766a}@media print{h2{break-before:page}}</style>' +
+        '<h1>' + esc(book.title) + '</h1><p style="text-align:center"><small>Saved ' + new Date().toLocaleDateString() + ' · ' + book.recipes.length + ' recipes</small></p>' +
+        pages.map(({ r, mine, dish }) => '<h2>' + esc(r.title) + '</h2><small>' + esc([sectionOf(r), r.from ? 'From ' + r.from : '', r.servings ? 'Serves ' + r.servings : '', r.prep ? 'Prep ' + r.prep : '', r.cook ? 'Cook ' + r.cook : '', r.temp ? 'Oven ' + r.temp : ''].filter(Boolean).join(' · ')) + '</small>' +
+          (dish ? '<p><img src="' + esc(dish) + '" alt=""></p>' : '') +
+          (lines(r.ingredients).length ? '<h3>Ingredients</h3><ul>' + lines(r.ingredients).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') +
+          (lines(r.steps).length ? '<h3>Directions</h3><ol>' + lines(r.steps).map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>' : '') +
+          (r.notes ? '<h3>Notes</h3><p>' + esc(r.notes) + '</p>' : '') +
+          mine.map(m => '<p><img src="' + esc(m) + '" alt="Recipe card"></p>').join('')).join('');
+      zip.file('cookbook.html', html);
+      zip.file('recipes.json', JSON.stringify({ title: book.title, saved: new Date().toISOString(), folders: book.folders, recipes: book.recipes }, null, 1));
+      btn.textContent = 'Zipping…';
+      const blob = await zip.generateAsync({ type: 'blob' }), fname = slug(book.title) + '-backup-' + new Date().toISOString().slice(0, 10) + '.zip';
+      const file = new File([blob], fname, { type: 'application/zip' });
+      // Phones: the share sheet lets her save to Files or OneDrive. Computers: a normal download.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: book.title + ' backup' }); } catch (e) {} }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+      toast('✓ Backup made: ' + book.recipes.length + ' recipes, ' + (pics.length - missed) + ' photos' + (missed ? ' (' + missed + ' photos couldn’t be saved)' : ''));
+    } catch (e) { toast('Couldn’t make the backup: ' + (e.message || e)); }
+    finally { btn.disabled = false; btn.textContent = label; }
   }
 
   // 🗑 Recently deleted (Shaana only): bring a recipe back, or delete it for good with its photos.
