@@ -1302,11 +1302,14 @@
   });
 
   // ---------- shared helpers for the week page, baking plan, thrift list, and pricing ----------
-  let flatSales = null, flatVer = -1;
+  // Rebuilt after any change, and also when the built-in sales file finishes loading or synced data arrives
+  // (neither goes through save), so lists never show $0 because they were read too early.
+  let flatSales = null, flatVer = -1, flatWb = null, flatData = null;
   function salesFlat() {
-    if (flatSales && flatVer === dataVer) return flatSales;
+    const wb = typeof workbook !== 'undefined' ? workbook : null;
+    if (flatSales && flatVer === dataVer && flatWb === wb && flatData === data) return flatSales;
     flatSales = []; for (const m of months) for (const x of allRows('sales', m)) if (x.booth !== 'Work income') flatSales.push({ ...x, k: groupKey(x.item) });
-    flatVer = dataVer; return flatSales;
+    flatVer = dataVer; flatWb = wb; flatData = data; return flatSales;
   }
   const salesBetween = (a, b) => salesFlat().filter(x => x.date && x.date >= a && x.date <= b);
   const shareText = async (title, text) => {
