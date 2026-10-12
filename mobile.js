@@ -413,6 +413,8 @@
     const s = String(v || '').trim(); let m;
     if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return m[1] + '-' + pad(m[2]) + '-' + pad(m[3]);
     if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))) return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad(m[1]) + '-' + pad(m[2]);
+    // "10/11" with no year (the store's web report): this year, or last year if that would be in the future.
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})$/))) { const now = new Date(), y = now.getFullYear(), d = y + '-' + pad(m[1]) + '-' + pad(m[2]); return d > isoLocal(new Date(Date.now() + 7 * DAY)) ? (y - 1) + d.slice(4) : d; }
     const d = new Date(s); return s && !isNaN(d) ? isoLocal(d) : '';
   }
   // Sales count at the net sale amount when the report has that column; payout is the fallback.
@@ -440,7 +442,7 @@
   }
   // Text copied from the store's report web page arrives one cell per line. Rebuild the rows from the header.
   function columnRows(text) {
-    const L = text.replace(/\r/g, '').split('\n').map(x => x.trim()).filter(Boolean), DATE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+    const L = text.replace(/\r/g, '').split('\n').map(x => x.trim()).filter(Boolean), DATE = /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/;
     let head = null, section = 0; const entries = [];
     for (let i = 0; i < L.length; i++) {
       if (/^date( sold)?$/i.test(L[i])) {
@@ -570,7 +572,7 @@
       return;
     }
     const net = col(...NET_SALE) >= 0 ? col(...NET_SALE) : col('NET');
-    const c = { item: col('DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'), pay: col('PAYOUT', 'NETPAYOUT'), net, date: col('DATESOLD', 'DATE', 'SOLDDATE'), status: col('STATUS') };
+    const c = { item: col('DETAIL', 'ITEMDESCRIPTION', 'ITEM', 'DESCRIPTION'), pay: col('PAYOUT', 'NETPAYOUT'), net, date: col('DATESOLD', 'DATE', 'SOLDDATE'), status: col('STATUS'), qty: col('QTY', 'QUANTITY'), sale: col('SALE', 'SALES', 'PRICE', 'GROSSSALE') };
     const amtCol = c.net >= 0 ? c.net : c.pay;
     const incoming = {}; let skippedStatus = 0, outside = 0;
     for (const r of body) {
@@ -580,7 +582,10 @@
       if (c.status >= 0 && /refund|void|cancel/i.test(String(r[c.status] || ''))) { skippedStatus++; continue; }
       const m = date ? monthOf(date) : currentMonth;
       if (!months.includes(m)) { outside++; continue; }
-      (incoming[m] = incoming[m] || []).push(payout != null ? { item, amount, payout, date, booth: 'Unassigned' } : { item, amount, date, booth: 'Unassigned' });
+      const row = payout != null ? { item, amount, payout, date, booth: 'Unassigned' } : { item, amount, date, booth: 'Unassigned' };
+      const qty = c.qty >= 0 ? Math.round(numberValue(r[c.qty])) : 0; if (qty > 1) row.qty = qty;
+      if (c.sale >= 0 && c.sale !== amtCol && numberValue(r[c.sale]) > 0) row.price = Math.round(numberValue(r[c.sale]) * 100) / 100;
+      (incoming[m] = incoming[m] || []).push(row);
     }
     let added = 0, dupes = 0, fixed = 0, replaced = 0; const perMonth = [];
     // The report is the truth for the days it covers: if the tracker's sales for those days don't match it,
