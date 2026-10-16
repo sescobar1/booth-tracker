@@ -174,7 +174,9 @@ $('topAdd').onclick = () => {
 };
 
 // ---------- Register ----------
-let regMonth = '', regSearch = '', regCat = '';
+let regMonth = '', regSearch = '', regCat = '', regType = '';
+// Select-to-delete: picked entry ids, and the last batch deleted (for Undo).
+let selMode = false, picked = new Set(), lastDeleted = null;
 let balView = (() => { try { return localStorage.getItem(KEY + 'BalView') || 'bank'; } catch (e) { return 'bank'; } })();
 function viewRegister() {
   const acc = activeAccount();
@@ -189,13 +191,15 @@ function viewRegister() {
   const b = balances(acc);
   const months = [...new Set(b.list.map(t => t.date.slice(0, 7)))].sort().reverse();
   const q = regSearch.toLowerCase();
-  const shown = b.list.filter(t => (!regMonth || t.date.startsWith(regMonth)) && (!regCat || (t.category || '') === regCat) &&
+  const searching = !!(q || regMonth || regCat || regType);
+  const shown = b.list.filter(t => (!regMonth || t.date.startsWith(regMonth)) && (!regCat || (t.category || '') === regCat) && (!regType || t.type === regType) &&
     (!q || [t.payee, t.note, t.category, t.checkNum, String(t.amount), tagsOf(t).map(x => '#' + x).join(' ')].join(' ').toLowerCase().includes(q))).reverse();
   let lastDate = '', rows = '';
   shown.forEach(t => {
     if (t.date !== lastDate) { rows += '<div class="day">' + esc(fmtDate(t.date, true)) + '</div>'; lastDate = t.date; }
-    rows += '<div class="tx' + (t.cleared ? ' cleared' : '') + '" data-tx="' + t.id + '">' +
-      '<button type="button" class="clr" data-clear="' + t.id + '" title="' + (t.cleared ? 'Cleared – tap to unclear' : 'Not cleared – tap to clear') + '">' + (t.cleared ? '✓' : '') + '</button>' +
+    rows += '<div class="tx' + (t.cleared ? ' cleared' : '') + (selMode && picked.has(t.id) ? ' picked' : '') + '" data-tx="' + t.id + '">' +
+      (selMode ? '<span class="selbox' + (picked.has(t.id) ? ' on' : '') + '" aria-hidden="true">' + (picked.has(t.id) ? '✓' : '') + '</span>' :
+      '<button type="button" class="clr" data-clear="' + t.id + '" title="' + (t.cleared ? 'Cleared – tap to unclear' : 'Not cleared – tap to clear') + '">' + (t.cleared ? '✓' : '') + '</button>') +
       '<div class="who"><b>' + (String(t.id).startsWith('rec_') ? '🔁 ' : '') + esc(t.payee || '(no payee)') + '</b>' +
       '<span class="sub">' + esc([t.category, t.checkNum ? '#' + t.checkNum : '', t.note].filter(Boolean).join(' · ')) + '</span>' +
       (tagsOf(t).length ? '<span class="sub">' + tagsOf(t).map(x => '<span class="chip tagc">#' + esc(x) + '</span>').join(' ') + '</span>' : '') +
@@ -207,7 +211,12 @@ function viewRegister() {
   const needCat = b.list.filter(t => !t.category).length;
   $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
     '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
-    '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
+    (lastDeleted ? '<div class="undo-bar">🗑 Deleted ' + lastDeleted.length + ' ' + (lastDeleted.length === 1 ? 'entry' : 'entries') + '<button type="button" class="ghost small" id="undoDel">↩ Undo</button><button type="button" class="linkish" id="undoX">OK</button></div>' : '') +
+    '<div class="searchbar"><input id="regFind" type="search" placeholder="🔍 Search payee, amount, category, #tag" value="' + esc(regSearch) + '">' +
+    '<div class="segs" id="regType"><button type="button" class="seg' + (!regType ? ' on' : '') + '" data-rt="">All</button><button type="button" class="seg' + (regType === 'expense' ? ' on' : '') + '" data-rt="expense">− Expenses</button><button type="button" class="seg' + (regType === 'income' ? ' on' : '') + '" data-rt="income">+ Income</button></div>' +
+    (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out ' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + ' · in ' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</span>' +
+      (shown.length ? '<button type="button" class="ghost small" id="selToggle">' + (selMode ? 'Done selecting' : '☑ Select to delete') + '</button>' : '') + '<button type="button" class="linkish" id="regClear">Clear search</button></div>' : '') + '</div>' +
+    (searching ? '' : '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
     '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
     (balView === 'bank'
       ? '<div class="bal"><span>Bank balance (what\'s cleared)</span><b class="' + (b.cleared < 0 ? 'neg' : '') + '">' + money(b.cleared) + '</b></div>' +
@@ -217,20 +226,35 @@ function viewRegister() {
     safeToSpend(acc, b.balance) + budgetCard(acc) + comingUp(acc, b.balance) +
     (needCat ? '<a class="card pad inbox-link" href="#inbox">🗂 <b>' + needCat + '</b> ' + (needCat === 1 ? 'entry needs' : 'entries need') + ' a category <span class="sub">Sort them →</span></a>' : '') +
     favRow() +
-    '<div class="row-actions quick"><button type="button" id="addExp">− Expense</button><button type="button" class="income-btn" id="addInc">+ Income</button></div>' +
-    '<div class="filters"><input id="regFind" type="search" placeholder="Search payee, amount, #tag" value="' + esc(regSearch) + '">' +
+    '<div class="row-actions quick"><button type="button" id="addExp">− Expense</button><button type="button" class="income-btn" id="addInc">+ Income</button></div>') +
+    '<div class="filters">' +
     '<select id="regMonth"><option value="">All months</option>' + months.map(m => '<option value="' + m + '"' + (m === regMonth ? ' selected' : '') + '>' + esc(monthName(m)) + '</option>').join('') + '</select>' +
     '<select id="regCat"><option value="">All categories</option>' + data.settings.categories.map(c => '<option' + (c === regCat ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></div>' +
     (regMonth ? '<p class="helper">' + esc(monthName(regMonth)) + ': in ' + money(monthIn.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)) + ' · out ' + money(monthIn.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)) + '</p>' : '') +
-    (rows || '<p class="helper">No entries' + (q || regMonth || regCat ? ' match' : ' yet') + '.</p>');
+    (selMode && shown.length ? '<p class="helper">Tap entries to pick them. <button type="button" class="linkish" id="selAll">' + (shown.every(t => picked.has(t.id)) ? 'Unpick all' : 'Pick all ' + shown.length) + '</button></p>' : '') +
+    (rows || '<p class="helper">No entries' + (searching ? ' match' : ' yet') + '.</p>') +
+    (selMode ? '<div class="del-bar"><span>' + picked.size + ' picked' + (picked.size ? ' · ' + money([...picked].map(id => data.tx.find(x => x.id === id)).filter(Boolean).reduce((s2, t) => s2 + Number(t.amount), 0)) : '') + '</span><button type="button" class="danger" id="delPicked"' + (picked.size ? '' : ' disabled') + '>🗑 Delete</button><button type="button" class="ghost" id="selCancel">Cancel</button></div>' : '');
   $('view').querySelectorAll('[data-bv]').forEach(x => x.onclick = () => { balView = x.dataset.bv; try { localStorage.setItem(KEY + 'BalView', balView); } catch (e) {} viewRegister(); });
   if ($('accPick')) $('accPick').onchange = e => { currentAccount = e.target.value; viewRegister(); };
   $('view').querySelectorAll('[data-uprec]').forEach(x => x.onclick = () => editRecurring(x.dataset.uprec));
   $('view').querySelectorAll('[data-newrec]').forEach(x => x.onclick = () => editRecurring(null, x.dataset.newrec));
   $('view').querySelectorAll('[data-fav]').forEach(x => x.onclick = () => editTx(null, 'expense', { payee: x.dataset.fav }));
   $('view').querySelectorAll('[data-budcat]').forEach(x => x.onclick = () => { regCat = x.dataset.budcat; regMonth = today().slice(0, 7); viewRegister(); });
-  $('addExp').onclick = () => editTx(null, 'expense');
-  $('addInc').onclick = () => editTx(null, 'income');
+  if ($('addExp')) $('addExp').onclick = () => editTx(null, 'expense');
+  if ($('addInc')) $('addInc').onclick = () => editTx(null, 'income');
+  $('regType').querySelectorAll('[data-rt]').forEach(x => x.onclick = () => { regType = x.dataset.rt; viewRegister(); });
+  if ($('regClear')) $('regClear').onclick = () => { regSearch = ''; regMonth = ''; regCat = ''; regType = ''; selMode = false; picked.clear(); viewRegister(); };
+  if ($('selToggle')) $('selToggle').onclick = () => { selMode = !selMode; picked.clear(); viewRegister(); };
+  if ($('selCancel')) $('selCancel').onclick = () => { selMode = false; picked.clear(); viewRegister(); };
+  if ($('selAll')) $('selAll').onclick = () => { const all = shown.every(t => picked.has(t.id)); shown.forEach(t => all ? picked.delete(t.id) : picked.add(t.id)); viewRegister(); };
+  if ($('delPicked')) $('delPicked').onclick = () => {
+    const gone = data.tx.filter(t => picked.has(t.id)); if (!gone.length) return;
+    if (!confirm('Delete ' + gone.length + ' ' + (gone.length === 1 ? 'entry' : 'entries') + ' (' + money(gone.reduce((s2, t) => s2 + Number(t.amount), 0)) + ')? You can undo right after.')) return;
+    data.tx = data.tx.filter(t => !picked.has(t.id)); lastDeleted = gone; selMode = false; picked.clear();
+    window.save(); viewRegister(); window.scrollTo(0, 0);
+  };
+  if ($('undoDel')) $('undoDel').onclick = () => { const have = new Set(data.tx.map(t => t.id)); lastDeleted.forEach(t => { if (!have.has(t.id)) data.tx.push(t); }); toast('↩ Brought back ' + lastDeleted.length); lastDeleted = null; window.save(); viewRegister(); };
+  if ($('undoX')) $('undoX').onclick = () => { lastDeleted = null; viewRegister(); };
   $('regFind').oninput = e => { regSearch = e.target.value; clearTimeout(viewRegister.t); viewRegister.t = setTimeout(() => { viewRegister(); const f = $('regFind'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }, 250); };
   $('regMonth').onchange = e => { regMonth = e.target.value; viewRegister(); };
   $('regCat').onchange = e => { regCat = e.target.value; viewRegister(); };
@@ -238,7 +262,11 @@ function viewRegister() {
     e.stopPropagation();
     const t = data.tx.find(x => x.id === btn.dataset.clear); t.cleared = !t.cleared; window.save(); viewRegister();
   });
-  $('view').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => editTx(el.dataset.tx));
+  $('view').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => {
+    if (!selMode) { editTx(el.dataset.tx); return; }
+    const id = el.dataset.tx; picked.has(id) ? picked.delete(id) : picked.add(id);
+    const y = window.scrollY; viewRegister(); window.scrollTo(0, y);
+  });
   if (window.moneySync) window.moneySync.renderBox();
 }
 

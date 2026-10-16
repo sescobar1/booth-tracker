@@ -147,3 +147,17 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 
 /* Common expenses / income: one tap fills payee, category and a fixed amount */
 .chipbtn.common small { font-weight: 500; opacity: .75; margin-left: 4px; }
+
+/* Register search, select-to-delete, undo */
+.searchbar{background:#fff;border:1px solid var(--line,#dfe6e3);border-radius:16px;padding:10px;margin:0 0 12px;display:grid;gap:8px}
+.searchbar input{width:100%;font-size:1rem}
+.searchbar .segs{margin:0}
+.search-sum{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:.92rem}
+.search-sum span{flex:1 1 100%}
+.tx .selbox{width:28px;height:28px;border-radius:8px;border:2px solid #9fb3ad;display:grid;place-items:center;font-weight:800;color:#fff;flex:none}
+.tx .selbox.on{background:#b3261e;border-color:#b3261e}
+.tx.picked{background:#fdeceb}
+.del-bar{position:sticky;bottom:calc(70px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #f0c9c6;border-radius:14px;padding:10px 12px;margin-top:12px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.del-bar span{flex:1;font-weight:700}
+.undo-bar{display:flex;align-items:center;gap:10px;background:#fff7e0;border:1px solid #f1d58a;border-radius:12px;padding:8px 12px;margin:0 0 10px;font-weight:600}
+.undo-bar button:first-of-type{margin-left:auto}
