@@ -209,13 +209,13 @@ function viewRegister() {
   const accOpts = data.accounts.length > 1 ? '<select id="accPick">' + data.accounts.slice().sort((a, c) => a.sort - c.sort).map(a => '<option value="' + a.id + '"' + (a.id === acc.id ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select>' : '<b>' + esc(acc.name) + '</b>';
   const monthIn = regMonth ? b.list.filter(t => t.date.startsWith(regMonth)) : [];
   const needCat = b.list.filter(t => !t.category).length;
-  $('view').innerHTML = (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
-    (lastDeleted ? '<div class="undo-bar">🗑 Deleted ' + lastDeleted.length + ' ' + (lastDeleted.length === 1 ? 'entry' : 'entries') + '<button type="button" class="ghost small" id="undoDel">↩ Undo</button><button type="button" class="linkish" id="undoX">OK</button></div>' : '') +
+  $('view').innerHTML = (lastDeleted ? '<div class="undo-bar">🗑 Deleted ' + lastDeleted.length + ' ' + (lastDeleted.length === 1 ? 'entry' : 'entries') + '<button type="button" class="ghost small" id="undoDel">↩ Undo</button><button type="button" class="linkish" id="undoX">OK</button></div>' : '') +
     '<div class="searchbar"><input id="regFind" type="search" placeholder="🔍 Search payee, amount, category, #tag" value="' + esc(regSearch) + '">' +
     '<div class="segs" id="regType"><button type="button" class="seg' + (!regType ? ' on' : '') + '" data-rt="">All</button><button type="button" class="seg' + (regType === 'expense' ? ' on' : '') + '" data-rt="expense">− Expenses</button><button type="button" class="seg' + (regType === 'income' ? ' on' : '') + '" data-rt="income">+ Income</button></div>' +
     (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out ' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + ' · in ' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</span>' +
       (shown.length ? '<button type="button" class="ghost small" id="selToggle">' + (selMode ? 'Done selecting' : '☑ Select to delete') + '</button>' : '') + '<button type="button" class="linkish" id="regClear">Clear search</button></div>' : '') + '</div>' +
+    (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
+    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
     (searching ? '' : '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
     '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
     (balView === 'bank'
