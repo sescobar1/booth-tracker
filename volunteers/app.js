@@ -1419,7 +1419,53 @@ async function readFile(file) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
     return { rows };
   }
-  throw new Error('Choose the Excel or CSV file you downloaded (it ends in .xlsx or .csv).');
+  if (/\.docx$/.test(name) || file.type.includes('wordprocessingml')) return { rows: await docxRows(file) };
+  if (/\.pdf$/.test(name) || file.type === 'application/pdf') return { rows: await pdfRows(file) };
+  if (/\.doc$/.test(name)) throw new Error('That is an older Word file (.doc). In Word, choose File → Save As → Word Document (.docx), then upload that.');
+  throw new Error('Choose an Excel, CSV, Word (.docx) or PDF file.');
+}
+function loadScript(src, ready) {
+  return new Promise((ok, no) => {
+    if (ready()) return ok();
+    const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('Could not load the file reader. Check your internet and try again.'));
+    document.head.appendChild(s);
+  });
+}
+// Word: every table row becomes a row (header row included); a document without tables gives one row per line.
+async function docxRows(file) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', () => window.JSZip);
+  const zip = await JSZip.loadAsync(await file.arrayBuffer()), xml = zip.file('word/document.xml');
+  if (!xml) throw new Error('That Word file could not be read.');
+  const doc = new DOMParser().parseFromString(await xml.async('string'), 'application/xml'), W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const textOf = el => [...el.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, '*')].map(n => n.localName === 't' ? n.textContent : n.localName === 'tab' ? '\t' : n.localName === 'br' ? ' ' : '').join('')).join(' ').replace(/\s+/g, ' ').trim();
+  const rows = [];
+  [...doc.getElementsByTagNameNS(W, 'tbl')].forEach(t => [...t.getElementsByTagNameNS(W, 'tr')].forEach(tr => rows.push([...tr.getElementsByTagNameNS(W, 'tc')].map(textOf))));
+  if (rows.length) return rows;
+  return [...doc.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, '*')].map(n => n.localName === 't' ? n.textContent : n.localName === 'tab' ? '\t' : '').join(''))
+    .filter(l => l.trim()).map(l => l.includes('\t') ? l.split('\t').map(x => x.trim()) : [l.trim()]);
+}
+// PDF: words on the same line make a row; a wide gap between words starts a new cell (column).
+async function pdfRows(file) {
+  const pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise, out = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const tc = await (await pdf.getPage(n)).getTextContent(), lines = [];
+    tc.items.forEach(it => {
+      const str = it.str.trim(); if (!str) return;
+      const x = it.transform[4], y = it.transform[5], size = Math.abs(it.transform[3]) || 10;
+      let ln = lines.find(l => Math.abs(l.y - y) < size * 0.5); if (!ln) lines.push(ln = { y, size, words: [] });
+      ln.words.push({ x, end: x + (it.width || str.length * size * 0.5), str });
+    });
+    lines.sort((a, b) => b.y - a.y).forEach(l => {
+      l.words.sort((a, b) => a.x - b.x);
+      const cells = [];
+      l.words.forEach(w => { const c = cells[cells.length - 1]; if (c && w.x - c.end < l.size * 1.2) { c.str += ' ' + w.str; c.end = w.end; } else cells.push({ ...w }); });
+      if (cells.length) out.push(cells.map(c => c.str));
+    });
+  }
+  if (!out.length) throw new Error('No text found in that PDF (it may be a scanned picture). Try the Excel or Word version.');
+  return out;
 }
 function loadXlsx() {
   return new Promise((ok, no) => {
@@ -1450,13 +1496,13 @@ function viewImport(evId) {
     $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>Import a list</h1><p class="helper">For moving over sign-ups you already have. New sign-ups come in by themselves from your sign-up page.</p>' + (ev ? '<p class="helper">Into <b>' + esc(ev.name) + '</b> (' + esc(fmtDate(ev.date)) + ')</p>' : '') +
       '<div class="card pad"><h2>🟢 SignUpGenius <small>(adults)</small></h2>' +
       '<ol class="steps"><li>On a computer, open SignUpGenius → <b>Reports</b> (or <b>Sign Ups → Created → Run report</b>).</li><li>Choose the sign-up and the dates, then <b>Export → Excel</b> or <b>CSV</b>.</li><li>Upload that file here. Phone numbers come in if your sign-up asks for them.</li></ol>' +
-      '<label class="button file">Choose SignUpGenius file<input type="file" id="fSug" accept=".xlsx,.xls,.csv,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label></div>' +
+      '<label class="button file">Choose SignUpGenius file<input type="file" id="fSug" accept=".xlsx,.xls,.csv,.txt,.docx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div>' +
       '<div class="card pad"><h2>🟣 BAND <small>(students)</small></h2>' +
       '<ol class="steps"><li>In the BAND app, open the sign-up post (or the member list).</li><li>Press and hold the list, choose <b>Copy</b>, and paste it below. One name per line works best; a line like <i>Concessions:</i> starts a new job.</li><li>Or upload a file if you have one.</li></ol>' +
       '<textarea id="bandText" rows="7" placeholder="Concessions:\nJane Doe\nSam Smith 501-555-0123\n\nWater crew:\nAlex Lee"></textarea>' +
-      '<div class="row-actions"><button type="button" id="bandGo">Use pasted list</button><label class="button ghost file">Upload a file<input type="file" id="fBand" accept=".xlsx,.xls,.csv,.txt" hidden></label></div></div>' +
-      '<div class="card pad"><h2>Another list</h2><p class="helper">Any spreadsheet with names (and phone numbers if you have them), like a student roster with parent cell numbers. People already here are matched, not duplicated.</p>' +
-      '<label class="button ghost file">Upload a file<input type="file" id="fOther" accept=".xlsx,.xls,.csv,.txt" hidden></label></div>';
+      '<div class="row-actions"><button type="button" id="bandGo">Use pasted list</button><label class="button ghost file">Upload a file<input type="file" id="fBand" accept=".xlsx,.xls,.csv,.txt,.docx,.pdf" hidden></label></div></div>' +
+      '<div class="card pad"><h2>Another list</h2><p class="helper">Any spreadsheet, Word document or PDF with names (and phone numbers if you have them), like a student roster with parent cell numbers. People already here are matched, not duplicated.</p>' +
+      '<label class="button ghost file">Upload a file<input type="file" id="fOther" accept=".xlsx,.xls,.csv,.txt,.docx,.pdf" hidden></label></div>';
     const onFile = source => async e => {
       const file = e.target.files[0]; if (!file) return;
       try { imp = { target: evId || null }; const { rows } = await readFile(file); startTable(rows, source); }
