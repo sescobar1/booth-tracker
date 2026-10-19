@@ -35,6 +35,16 @@ const MORE_TEMPLATES = [
 ];
 // For parents of students who are already working a game.
 const PARENT_TEMPLATE = { id: 'parentask', name: 'Ask a parent (student is working)', text: 'Hi {first}! {kid} is signed up to work the concession stand {when} for {event}. 💛 Would you like to work alongside them? We still need {adultopen} more adults, and even an hour or two helps. Sign up here: {link} Thank you! – {from}' };
+// Students are texted through their parent when a parent's cell is saved.
+const PARENT_SIGNUP_TEXT = 'Hi {parentfirst}! Just letting you know {child} is signed up to volunteer {when} at {event}{time}. Thank you for supporting the band! 💛 – {from}';
+const parentPhoneOf = p => p && p.type === 'student' ? digits(p.parentPhone) : '';
+const parentFirstOf = p => String((p && p.parent) || '').trim().split(/\s+/)[0] || '';
+// Who a text actually goes to: the student's parent when we have their cell, otherwise the person.
+const textTo = p => parentPhoneOf(p) ? { phone: parentPhoneOf(p), parent: true } : { phone: digits(p.phone), parent: false };
+function parentMessage(text, ev, s, p) {
+  const t = String(text || '').replace(/\{parentfirst\}/g, p ? parentFirstOf(p) : '').replace(/Hi\s+!/g, 'Hi!').replace(/\{child\}/g, p ? (p.first || 'your child') : 'your child');
+  return fillMessage(t, ev, s, null);
+}
 const FOOD_EMAIL = 'Hi {first}! Thank you for signing up to bring {item} for {event}. {dropoff}We appreciate you supporting the band! – {from}';
 const DONATE_INFO = 'Please type what your donation is for in the Cash App note ("For"), for example: "Concessions 10/9 – Jane Smith" or "Band trip – student name". That way it goes to the right place. Thank you!';
 if (!data.settings.emailText) data.settings.emailText = CONCESSION_TEMPLATE.text;
@@ -183,9 +193,10 @@ function upsertPerson(p) {
     if (!hit.phone && digits(p.phone)) hit.phone = digits(p.phone);
     if (!hit.email && p.email) hit.email = p.email.trim();
     if (!hit.parent && p.parent) hit.parent = p.parent;
+    if (digits(p.parentPhone)) hit.parentPhone = digits(p.parentPhone);
     return { person: hit, isNew: false };
   }
-  const np = { id: uid(), first: p.first || '', last: p.last || '', phone: digits(p.phone) || '', email: (p.email || '').trim(), type: p.type || 'adult', parent: p.parent || '', notes: '' };
+  const np = { id: uid(), first: p.first || '', last: p.last || '', phone: digits(p.phone) || '', email: (p.email || '').trim(), type: p.type || 'adult', parent: p.parent || '', parentPhone: digits(p.parentPhone) || '', notes: '' };
   data.people.push(np);
   return { person: np, isNew: true };
 }
@@ -577,13 +588,13 @@ function viewEvent(id) {
     .filter(x => evFilter === 'all' || (evFilter === 'student' ? x.p.type === 'student' : evFilter === 'adult' ? x.p.type !== 'student' : needsPhone(x.p)))
     .sort((a, b) => ((a.s.role || 'zzz') + (a.s.start || '') + sortName(a.p)).localeCompare((b.s.role || 'zzz') + (b.s.start || '') + sortName(b.p)));
   const volRow = ({ s, p }) => {
-    const d = digits(p.phone);
+    const to = textTo(p), d = to.phone;
     return '<div class="vol" data-slot="' + s.id + '">' +
       '<div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
-      '<span class="sub">' + esc([fmtRange(s.start, s.end), phoneNote(p), s.source].filter(Boolean).join(' · ')) + '</span>' +
+      '<span class="sub">' + esc([fmtRange(s.start, s.end), to.parent ? '👪 ' + (p.parent || 'Parent') + ' ' + fmtPhone(d) : phoneNote(p), s.source].filter(Boolean).join(' · ')) + '</span>' +
       (s.inAt ? '<span class="sub ok">✓ In ' + clock(s.inAt) + (s.outAt ? ' – out ' + clock(s.outAt) + ' (' + fmtHours(hoursOf(s)) + ' h)' : '') + '</span>' : '') +
       (s.noShow ? '<span class="sub bad">❌ No-show</span>' : '') + '</div>' +
-      '<div class="acts">' + (d ? '<a class="icon" href="' + esc(smsHref([d], '')) + '" title="Text">💬</a><a class="icon" href="tel:' + e164(d) + '" title="Call">📞</a>' : '<button type="button" class="icon edit" title="Edit">✏️</button>') + '</div></div>';
+      '<div class="acts">' + (d ? '<a class="icon" href="' + esc(smsHref([d], to.parent && event(s.eventId) ? parentMessage(data.settings.parentText || PARENT_SIGNUP_TEXT, event(s.eventId), s, p) : '')) + '" title="' + (to.parent ? 'Text parent' : 'Text') + '">💬</a><a class="icon" href="tel:' + e164(d) + '" title="Call">📞</a>' : '<button type="button" class="icon edit" title="Edit">✏️</button>') + '</div></div>';
   };
   const jobIds = new Set(jobsFor(id).map(j => j.id));
   const food = jobsFor(id).filter(isFood);
@@ -650,11 +661,13 @@ function personFields(p) {
     '<div class="grid2"><label>Cell phone<input id="pPhone" type="tel" inputmode="tel" value="' + esc(fmtPhone(p.phone)) + '"></label>' +
     '<label>Adult or student<select id="pType"><option value="adult"' + (p.type !== 'student' ? ' selected' : '') + '>Adult</option><option value="student"' + (p.type === 'student' ? ' selected' : '') + '>Student</option></select></label></div>' +
     '<div class="grid2"><label>Email<input id="pEmail" type="email" value="' + esc(p.email) + '"></label><label>Parent / student name<input id="pParent" value="' + esc(p.parent) + '" placeholder="optional"></label></div>' +
+    '<label>Parent\'s cell (students: texts go to this parent)<input id="pParentPhone" type="tel" inputmode="tel" value="' + esc(fmtPhone(p.parentPhone || '')) + '" placeholder="optional"></label>' +
     '<div class="grid2"><label>Student\'s grade (moves up each school year)' + gradeSelect('pGrade', p.classYear) + '</label>' +
     '<label>School (students)<select id="pSchool">' + ['', 'RHS', 'RJHS', 'RMS'].map(x => '<option value="' + x + '"' + ((p.school || '') === x ? ' selected' : '') + '>' + (x || '—') + '</option>').join('') + '</select></label></div>';
 }
 function readPerson(p) {
   Object.assign(p, { first: $('pFirst').value.trim(), last: $('pLast').value.trim(), phone: digits($('pPhone').value) || $('pPhone').value.trim(), type: $('pType').value, email: $('pEmail').value.trim(), parent: $('pParent').value.trim() });
+  if ($('pParentPhone')) p.parentPhone = digits($('pParentPhone').value);
   p.school = $('pSchool').value;
   const g = $('pGrade').value;
   if (g !== 'grad') p.classYear = classOf(g);
@@ -699,7 +712,7 @@ function addVolunteer(evId, walkIn) {
   $('aFind').onchange = () => {
     const name = $('aFind').value.split(' · ')[0].trim().toLowerCase();
     const p = data.people.find(x => fullName(x).toLowerCase() === name);
-    if (p) { $('pFirst').value = p.first; $('pLast').value = p.last; $('pPhone').value = fmtPhone(p.phone); $('pType').value = p.type; $('pEmail').value = p.email || ''; $('pParent').value = p.parent || ''; }
+    if (p) { $('pFirst').value = p.first; $('pLast').value = p.last; $('pPhone').value = fmtPhone(p.phone); $('pType').value = p.type; $('pEmail').value = p.email || ''; $('pParent').value = p.parent || ''; if ($('pParentPhone')) $('pParentPhone').value = fmtPhone(p.parentPhone || ''); }
   };
   $('aSave').onclick = () => {
     const tmp = {}; readPerson(tmp);
@@ -724,49 +737,61 @@ function openTexter(evId) {
     '<label>Message<select id="tTpl">' + tplOpts + '<option value="">(blank)</option></select></label>' +
     '<textarea id="tText" rows="4"></textarea>' +
     '<p class="helper">{first} becomes each person\'s first name when you text one at a time, and “everyone” in a group text. Group texts also go to you (' + fmtPhone(MY_PHONE) + ') so you can see they were sent.</p>' +
+    '<div id="tParentBox" hidden><label>Message to parents of students<textarea id="tParentText" rows="3"></textarea></label><p class="helper">Students with a parent\'s cell saved are texted through that parent. {child} becomes the student\'s first name (“your child” in a group text) and {parentfirst} the parent\'s first name.</p></div>' +
     '<div id="tPick" class="pick"></div>' +
     '<div class="row-actions stack"><button type="button" id="tOne">Text one at a time (personal, recommended)</button><div id="tGroups"></div>' +
     '<button type="button" class="ghost" id="tCopyNums">Copy phone numbers</button><button type="button" class="ghost" id="tCopyMsg">Copy message</button><button type="button" class="ghost" id="tClose">Close</button></div>');
   const tpl = () => data.templates.find(t => t.id === $('tTpl').value);
   $('tText').value = tpl() ? tpl().text : '';
+  $('tParentText').value = data.settings.parentText || PARENT_SIGNUP_TEXT;
+  $('tParentText').onchange = () => { data.settings.parentText = $('tParentText').value; window.save(); };
   $('tTpl').onchange = () => { $('tText').value = tpl() ? tpl().text : ''; };
   const chosen = () => [...document.querySelectorAll('#tPick input:checked')].map(i => list[Number(i.value)]);
   function drawPick() {
     $('tPick').innerHTML = list.map((x, i) => {
       const show = who === 'all' || (who === 'student' ? x.p.type === 'student' : who === 'adult' ? x.p.type !== 'student' : !x.s.inAt);
-      const d = digits(x.p.phone);
-      return show ? '<label class="check"><input type="checkbox" value="' + i + '"' + (d ? ' checked' : ' disabled') + '> ' + esc(fullName(x.p)) + ' <span class="sub">' + (d ? esc(fmtPhone(d)) : 'no phone') + '</span>' + (x.s.textedAt ? ' <span class="sub ok">texted</span>' : '') + '</label>' : '';
+      const to = textTo(x.p), d = to.phone;
+      return show ? '<label class="check"><input type="checkbox" value="' + i + '"' + (d ? ' checked' : ' disabled') + '> ' + esc(fullName(x.p)) + ' <span class="sub">' + (d ? (to.parent ? '👪 parent ' + esc(x.p.parent || '') + ' · ' : '') + esc(fmtPhone(d)) : 'no phone') + '</span>' + (x.s.textedAt ? ' <span class="sub ok">texted</span>' : '') + '</label>' : '';
     }).join('') || '<p class="helper">Nobody here.</p>';
     drawGroups();
   }
   // Carriers cap group texts around 20 people, so big lists go out in batches.
   // Shaana's own number rides along on every group text so she sees it went out.
+  // Parents of students get their own group text with the parent message.
   function drawGroups() {
-    const nums = chosen().map(x => digits(x.p.phone)).filter(n => n !== MY_PHONE);
-    const batches = []; for (let i = 0; i < nums.length; i += 19) batches.push(nums.slice(i, i + 19).concat(MY_PHONE));
-    $('tGroups').innerHTML = batches.map((b, i) => '<button type="button" class="ghost" data-batch="' + i + '">Open group text' + (batches.length > 1 ? ' ' + (i + 1) + ' of ' + batches.length : '') + ' (' + b.length + ')</button>').join('');
+    const pick = chosen(), any = pick.some(x => textTo(x.p).parent);
+    $('tParentBox').hidden = !any;
+    const split = (list, kind) => {
+      const nums = [...new Set(list.map(x => textTo(x.p).phone).filter(n => n && n !== MY_PHONE))], out = [];
+      for (let i = 0; i < nums.length; i += 19) out.push({ kind, nums: nums.slice(i, i + 19).concat(MY_PHONE) });
+      return out;
+    };
+    const groups = [...split(pick.filter(x => !textTo(x.p).parent), 'people'), ...split(pick.filter(x => textTo(x.p).parent), 'parents')];
+    $('tGroups').innerHTML = groups.map((g, i) => { const same = groups.filter(x => x.kind === g.kind), k = same.indexOf(g); return '<button type="button" class="ghost" data-batch="' + i + '">Open ' + (g.kind === 'parents' ? 'parents\' ' : '') + 'group text' + (same.length > 1 ? ' ' + (k + 1) + ' of ' + same.length : '') + ' (' + g.nums.length + ')</button>'; }).join('');
     $('tGroups').querySelectorAll('button').forEach(btn => btn.onclick = () => {
-      location.href = smsHref(batches[Number(btn.dataset.batch)], fillMessage($('tText').value, ev, null, null));
+      const g = groups[Number(btn.dataset.batch)];
+      location.href = smsHref(g.nums, g.kind === 'parents' ? parentMessage($('tParentText').value, ev, null, null) : fillMessage($('tText').value, ev, null, null));
     });
   }
   $('tPick').addEventListener('change', drawGroups);
   $('tWho').querySelectorAll('.seg').forEach(b => b.onclick = () => { who = b.dataset.w; $('tWho').querySelectorAll('.seg').forEach(x => x.classList.toggle('on', x === b)); drawPick(); });
-  $('tCopyNums').onclick = () => copy(chosen().map(x => fmtPhone(x.p.phone)).join(', '), 'Phone numbers');
+  $('tCopyNums').onclick = () => copy(chosen().map(x => fmtPhone(textTo(x.p).phone)).join(', '), 'Phone numbers');
   $('tCopyMsg').onclick = () => copy(fillMessage($('tText').value, ev, null, null), 'Message');
   $('tClose').onclick = closeModal;
-  $('tOne').onclick = () => { const q = chosen(); if (!q.length) { toast('Pick at least one person with a phone number.'); return; } textOneByOne(ev, q, $('tText').value); };
+  $('tOne').onclick = () => { const q = chosen(); if (!q.length) { toast('Pick at least one person with a phone number.'); return; } textOneByOne(ev, q, $('tText').value, null, $('tParentText').value); };
   drawPick();
 }
 
-function textOneByOne(ev, queue, text, onSent) {
+function textOneByOne(ev, queue, text, onSent, parentText) {
   let i = 0;
   function step() {
     if (i >= queue.length) { closeModal(); route(); toast('All ' + queue.length + ' texts done.'); return; }
-    const { s, p } = queue[i];
-    const msg = fillMessage(text, ev, s, p);
+    const { s, p } = queue[i], to = parentText != null ? textTo(p) : { phone: digits(p.phone), parent: false };
+    const msg = to.parent ? parentMessage(parentText || PARENT_SIGNUP_TEXT, ev, s, p) : fillMessage(text, ev, s, p);
+    const toName = to.parent ? (parentFirstOf(p) || 'parent') : (p.first || 'them');
     openModal('<h2>Text ' + (i + 1) + ' of ' + queue.length + '</h2>' +
-      '<p><b>' + esc(fullName(p)) + '</b> · ' + esc(fmtPhone(p.phone)) + '</p><div class="bubble">' + esc(msg) + '</div>' +
-      '<div class="row-actions stack"><a class="button" id="oSend" href="' + esc(smsHref([p.phone], msg)) + '">💬 Open text to ' + esc(p.first || 'them') + '</a>' +
+      '<p><b>' + esc(fullName(p)) + '</b>' + (to.parent ? ' · 👪 parent ' + esc(p.parent || '') : '') + ' · ' + esc(fmtPhone(to.phone)) + '</p><div class="bubble">' + esc(msg) + '</div>' +
+      '<div class="row-actions stack"><a class="button" id="oSend" href="' + esc(smsHref([to.phone], msg)) + '">💬 Open text to ' + esc(toName) + '</a>' +
       '<button type="button" id="oNext">' + (i + 1 < queue.length ? 'Next person ›' : 'Done') + '</button>' +
       '<button type="button" class="ghost" id="oSkip">Skip</button><button type="button" class="ghost" id="oStop">Stop</button></div>' +
       '<p class="helper">Tap Open text, press Send in Messages, then come back here and tap Next.</p>');
@@ -1261,7 +1286,7 @@ function viewPeople() {
       const st = personStats(p), ns = noShowsOf(p);
       return '<div class="vol" data-p="' + p.id + '"><div class="who"><b>' + esc(fullName(p)) + '</b> <span class="chip ' + (p.type === 'student' ? 'student' : '') + '">' + typeLabel(p.type) + '</span>' +
         (ns ? ' <span class="chip warn">❌ ' + ns + ' no-show' + (ns > 1 ? 's' : '') + '</span>' : '') +
-        '<span class="sub">' + esc([phoneNote(p), p.parent ? (p.type === 'student' ? 'Parent: ' : 'Student: ') + p.parent : '', p.type === 'student' ? p.school : '', gradeOf(p.classYear)].filter(Boolean).join(' · ')) + '</span>' +
+        '<span class="sub">' + esc([phoneNote(p), p.parent ? (p.type === 'student' ? 'Parent: ' : 'Student: ') + p.parent + (parentPhoneOf(p) ? ' ' + fmtPhone(parentPhoneOf(p)) : '') : (parentPhoneOf(p) ? 'Parent: ' + fmtPhone(parentPhoneOf(p)) : ''), p.type === 'student' ? p.school : '', gradeOf(p.classYear)].filter(Boolean).join(' · ')) + '</span>' +
         '<span class="sub">' + st.yearEvents + ' events this school year' + (st.hours ? ' · ' + fmtHours(st.hours) + ' hours' : '') + '</span></div>' +
         (digits(p.phone) ? '<div class="acts"><a class="icon" href="' + esc(smsHref([p.phone], '')) + '">💬</a><a class="icon" href="tel:' + e164(p.phone) + '">📞</a></div>' : '') + '</div>';
     }).join('') || '<p class="helper">No one yet. Import sign-ups to fill this in.</p>';
@@ -1319,6 +1344,9 @@ function exportHours() {
 // ---------- Import ----------
 // Column names vary between SignUpGenius reports and BAND copies, so guess each field from its header.
 const FIELDS = [
+  ['parentPhone', 'Parent phone', /(parent|guardian|mom|dad|mother|father).*(phone|cell|mobile|number|#)|(phone|cell|mobile).*(parent|guardian|mom|dad)/],
+  ['parentFirst', 'Parent first name', /(parent|guardian|mom|dad|mother|father).*first/],
+  ['parentLast', 'Parent last name', /(parent|guardian|mom|dad|mother|father).*last/],
   ['first', 'First name', /first/],
   ['last', 'Last name', /last/],
   ['name', 'Full name', /^(name|full ?name|volunteer|member|student|participant|your name)$|volunteer name|member name|student name/],
@@ -1358,7 +1386,8 @@ function entriesFromTable() {
     let first = val(r, 'first'), last = val(r, 'last');
     if (!first && !last) ({ first, last } = splitName(val(r, 'name')));
     const dateRaw = val(r, 'date');
-    return { include: true, first, last, phone: val(r, 'phone'), email: val(r, 'email'), role: val(r, 'role'), parent: val(r, 'parent'),
+    const parent = val(r, 'parent') || [val(r, 'parentFirst'), val(r, 'parentLast')].filter(Boolean).join(' ');
+    return { include: true, first, last, phone: val(r, 'phone'), email: val(r, 'email'), role: val(r, 'role'), parent, parentPhone: val(r, 'parentPhone'),
       date: parseDate(dateRaw), start: parseTime(val(r, 'start')) || (m.start == null ? parseTime(dateRaw) : ''), end: parseTime(val(r, 'end')),
       event: val(r, 'event'), location: val(r, 'location') };
   }).filter(e => e.first || e.last);
@@ -1482,7 +1511,7 @@ function drawImport() {
       '<div class="newev" data-newev="' + gi + '"' + (g.choice !== '' ? ' hidden' : '') + '><div class="grid2"><label>Event name<input data-nname="' + gi + '" list="evIdeas2" value="' + esc(g.newName != null ? g.newName : (g.event || '')) + '" placeholder="Football game concessions"></label>' +
       '<label>Date<input type="date" data-ndate="' + gi + '" value="' + esc(g.newDate || g.date || '') + '"></label></div></div>' +
       '<div class="pick">' + g.entries.map(e => { const i = imp.entries.indexOf(e); return '<label class="check"><input type="checkbox" data-inc="' + i + '"' + (e.include ? ' checked' : '') + '> ' + esc((e.first + ' ' + e.last).trim()) +
-        ' <span class="sub">' + esc([e.role, fmtRange(e.start, e.end), e.phone ? fmtPhone(e.phone) : '', findPerson(e) ? 'already in People' : ''].filter(Boolean).join(' · ')) + '</span></label>'; }).join('') + '</div></div>').join('') +
+        ' <span class="sub">' + esc([e.role, fmtRange(e.start, e.end), e.phone ? fmtPhone(e.phone) : '', e.parent || digits(e.parentPhone) ? '👪 ' + [e.parent, digits(e.parentPhone) ? fmtPhone(e.parentPhone) : ''].filter(Boolean).join(' ') : '', findPerson(e) ? 'already in People' : ''].filter(Boolean).join(' · ')) + '</span></label>'; }).join('') + '</div></div>').join('') +
     '<datalist id="evIdeas2">' + EVENT_IDEAS.map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
     '<div class="row-actions"><button type="button" id="iGo">Add ' + n + ' volunteers</button><button type="button" class="ghost" id="iCancel">Start over</button></div>';
   document.querySelectorAll('[data-map]').forEach(s => s.onchange = () => {
