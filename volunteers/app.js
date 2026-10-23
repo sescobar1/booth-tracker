@@ -628,8 +628,10 @@ function viewEvent(id) {
     (ev.date <= today() ? '<a class="button" href="#checkin/' + id + '">❌<span>Mark no-shows' + (c.noShows ? ' (' + c.noShows + ')' : '') + '</span></a>' : '') + '</div>' +
     '<div class="segs">' + f('all', 'All ' + c.total) + f('adult', 'Adults ' + c.adults) + f('student', 'Students ' + c.students) + (c.noPhone ? f('nophone', 'Need phone ' + c.noPhone) : '') + '</div>' +
     (rows || '<p class="helper">No jobs or volunteers yet. Tap Edit event to add the jobs you need filled.</p>') +
-    '<div class="row-actions"><button type="button" class="ghost" id="evDoc">📄 Send to Google sign-in sheet</button><a class="button ghost" href="#import/' + id + '">⬆ Import a list into this event</a></div>';
+    '<div class="row-actions"><button type="button" class="ghost" id="evDoc">📄 Send to Google sign-in sheet</button><a class="button ghost" href="#import/' + id + '">⬆ Import a list into this event</a>' +
+    (slotsFor(id).length ? '<button type="button" class="danger" id="evClear">🧹 Clear sign-up list</button>' : '') + '</div>';
   $('evEdit').onclick = () => editEvent(id);
+  if ($('evClear')) $('evClear').onclick = () => clearSignups(id);
   $('evDoc').onclick = () => sendToDoc(id);
   $('textAll').onclick = () => openTexter(id);
   $('addVol').onclick = () => addVolunteer(id);
@@ -638,6 +640,30 @@ function viewEvent(id) {
   if ($('emailDirs')) $('emailDirs').onclick = () => emailDirectors(id);
   document.querySelectorAll('.seg').forEach(b => b.onclick = () => { evFilter = b.dataset.f; viewEvent(id); });
   document.querySelectorAll('.vol').forEach(el => el.addEventListener('click', e => { if (e.target.closest('a.icon')) return; editSlot(el.dataset.slot); }));
+}
+
+// Empties an event's sign-up list (everyone, or only adults or students) so a fresh list can be
+// added and sent to the sign-in sheet. Jobs, spot counts, and the People list are kept.
+function clearSignups(id) {
+  const ev = event(id); if (!ev) return;
+  const all = slotsFor(id), isStu = s => (person(s.personId) || {}).type === 'student';
+  const nStu = all.filter(isStu).length, nAdult = all.length - nStu;
+  openModal('<h2>Clear sign-up list</h2><p class="helper">Removes people from ' + esc(ev.name) + ' (' + esc(fmtDate(ev.date)) + ') so the list is blank. Jobs and spot counts stay, and everyone stays in your People list. Then add the new names and tap Send to Google sign-in sheet.</p>' +
+    '<div class="row-actions">' +
+    '<button type="button" class="danger" data-clr="all">Clear everyone (' + all.length + ')</button>' +
+    (nAdult ? '<button type="button" class="ghost" data-clr="adult">Adults only (' + nAdult + ')</button>' : '') +
+    (nStu ? '<button type="button" class="ghost" data-clr="student">Students only (' + nStu + ')</button>' : '') +
+    '<button type="button" class="ghost" id="clrCancel">Cancel</button></div>');
+  $('clrCancel').onclick = closeModal;
+  document.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => {
+    const k = b.dataset.clr;
+    const drop = all.filter(s => k === 'all' || (k === 'student' ? isStu(s) : !isStu(s)));
+    if (!confirm('Remove ' + drop.length + ' sign-ups from ' + ev.name + '? This can\'t be undone.')) return;
+    const ids = new Set(drop.map(s => s.id));
+    data.slots = data.slots.filter(s => !ids.has(s.id));
+    window.save(); closeModal(); route();
+    toast(drop.length + ' sign-ups cleared. Add the new list, then send it to the sign-in sheet.');
+  });
 }
 
 // Grades are saved as the student's graduating class, so 9th grade this year shows as 10th next year.
