@@ -319,17 +319,18 @@ function editTx(id, type, preset) {
   const drawCommon = () => {
     if (!$('tCommon')) return;
     if (autoAmt && $('tAmt').value === autoAmt) $('tAmt').value = '';
-    const exp = kind === 'expense', list = exp ? quickExpenses() : commonPayees(kind, 16), cut = exp ? 99 : 8;
-    $('tCommonL').textContent = exp ? 'Quick tap' : list.length ? 'Common income' : '';
+    const exp = kind === 'expense', pinned = exp ? [] : quickExpenses('income'), seen = new Set(pinned.map(c => c.name.toLowerCase()));
+    const list = exp ? quickExpenses() : pinned.concat(commonPayees(kind, 16).filter(c => !seen.has(c.name.toLowerCase()))), cut = exp ? 99 : pinned.length + 8;
+    $('tCommonL').textContent = 'Quick tap';
     $('tCommon').classList.remove('all');
     $('tCommon').innerHTML = list.map((c, i) => '<button type="button" class="chipbtn common' + (i >= cut ? ' extra' : '') + '" data-common="' + i + '">' + esc(c.label || c.name) + (c.amount ? ' <small>' + money(c.amount) + '</small>' : '') + '</button>').join('') + (list.length > cut ? '<button type="button" class="chipbtn more" id="tMoreCommon">More ▾</button>' : '') +
-      (exp ? '<button type="button" class="chipbtn more" id="tEditQuick" title="Change these buttons">✏️</button>' : '');
+      '<button type="button" class="chipbtn more" id="tEditQuick" title="Change these buttons">✏️</button>';
     if ($('tEditQuick')) $('tEditQuick').onclick = () => {
-      const now = quickExpenses().map(c => c.label).join(', ');
-      const v = prompt('Your quick-tap places, separated by commas:', now);
+      const now = quickExpenses(kind).map(c => c.label).join(', ');
+      const v = prompt(exp ? 'Your quick-tap places, separated by commas:' : 'Your quick-tap income, separated by commas:', now);
       if (v == null) return;
-      const old = quickExpenses(), names = v.split(',').map(x => x.trim()).filter(Boolean);
-      data.settings.quickExpenses = names.map(n => old.find(o => o.label.toLowerCase() === n.toLowerCase()) ? (o => ({ label: o.label, payee: o.name, category: o.category }))(old.find(o => o.label.toLowerCase() === n.toLowerCase())) : { label: n, payee: n, category: '' });
+      const old = quickExpenses(kind), names = v.split(',').map(x => x.trim()).filter(Boolean);
+      data.settings[exp ? 'quickExpenses' : 'quickIncome'] = names.map(n => old.find(o => o.label.toLowerCase() === n.toLowerCase()) ? (o => ({ label: o.label, payee: o.name, category: o.category }))(old.find(o => o.label.toLowerCase() === n.toLowerCase())) : { label: n, payee: n, category: '' });
       window.save(); drawCommon(); toast('✓ Quick tap updated');
     };
     $('tCommon').querySelectorAll('[data-common]').forEach(b => b.onclick = () => {
@@ -1355,11 +1356,18 @@ const DEFAULT_QUICK_EXPENSES = [
   { label: 'The Corner Hangout', payee: 'The Corner Hangout', category: 'Eating out' },
   { label: 'Y’allternative', payee: "Y'allternative Market", category: 'Booth business' },
   { label: 'Goodwill', payee: 'Goodwill', category: 'Shopping' },
-  { label: 'The Thrift Store', payee: 'The Thrift Store', category: 'Shopping' }
+  { label: 'The Thrift Store', payee: 'The Thrift Store', category: 'Shopping' },
+  { label: 'Sonic', payee: 'Sonic', category: 'Eating out' },
+  { label: 'Amazon', payee: 'Amazon', category: 'Shopping' }
 ];
-function quickExpenses() {
-  const mine = data.settings.quickExpenses;
-  const list = Array.isArray(mine) ? mine.map(x => typeof x === 'string' ? { label: x, payee: x, category: '' } : x) : DEFAULT_QUICK_EXPENSES;
+// Income quick-tap buttons, shown before the income she gets most often.
+const DEFAULT_QUICK_INCOME = [
+  { label: 'Vinted', payee: 'Vinted', category: 'Side income' },
+  { label: 'eBay', payee: 'eBay', category: 'Side income' }
+];
+function quickExpenses(kind) {
+  const inc = kind === 'income', mine = data.settings[inc ? 'quickIncome' : 'quickExpenses'];
+  const list = Array.isArray(mine) ? mine.map(x => typeof x === 'string' ? { label: x, payee: x, category: '' } : x) : inc ? DEFAULT_QUICK_INCOME : DEFAULT_QUICK_EXPENSES;
   const mem = payeeMemory();
   return list.filter(x => x && x.payee).map(x => ({ name: x.payee, label: x.label || x.payee, category: (mem[x.payee.toLowerCase()] || {}).category || x.category || '', amount: null }));
 }
