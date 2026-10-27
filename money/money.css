@@ -159,7 +159,7 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .tx.picked{background:#fdeceb}
 .del-bar{position:sticky;bottom:calc(70px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #f0c9c6;border-radius:14px;padding:10px 12px;margin-top:12px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
 .del-bar span{flex:1;font-weight:700}
-.undo-bar{display:flex;align-items:center;gap:10px;background:#fff7e0;border:1px solid #f1d58a;border-radius:12px;padding:8px 12px;margin:0 0 10px;font-weight:600}
+.undo-bar{position:fixed;left:12px;right:84px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:6;max-width:616px;margin:0 auto;display:flex;align-items:center;gap:10px;background:#fff7e0;border:1px solid #f1d58a;border-radius:12px;padding:8px 12px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.15)}
 .undo-bar button:first-of-type{margin-left:auto}
 
 /* Recurring tab: each row shows its amount with Pause and Edit buttons beside it. */
@@ -167,3 +167,11 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .rec-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .rec-acts button { margin: 0; }
 .rec-row .sub { display: block; }
+
+/* Swipe left on a register entry to delete it: the red button sits behind the row. */
+.swipe { position: relative; margin: 4px 0; border-radius: 12px; overflow: hidden; }
+.swipe .tx { position: relative; z-index: 1; margin: 0; touch-action: pan-y; }
+.swipe-del { position: absolute; top: 0; right: 0; bottom: 0; width: 96px; margin: 0; border: 0; border-radius: 0; background: #b3261e; color: #fff; font-weight: 700; display: grid; place-content: center; gap: 2px; font-size: 1.1rem; opacity: 0; }
+.swipe.on .swipe-del { opacity: 1; }
+.swipe-del span { font-size: .8rem; }
+.swipe.far .swipe-del { width: 100%; justify-items: end; padding-right: 24px; }

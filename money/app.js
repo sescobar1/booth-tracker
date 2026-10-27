@@ -197,14 +197,14 @@ function viewRegister() {
   let lastDate = '', rows = '';
   shown.forEach(t => {
     if (t.date !== lastDate) { rows += '<div class="day">' + esc(fmtDate(t.date, true)) + '</div>'; lastDate = t.date; }
-    rows += '<div class="tx' + (t.cleared ? ' cleared' : '') + (selMode && picked.has(t.id) ? ' picked' : '') + '" data-tx="' + t.id + '">' +
+    rows += (selMode ? '' : '<div class="swipe"><button type="button" class="swipe-del" data-swdel="' + t.id + '" tabindex="-1">🗑<span>Delete</span></button>') + '<div class="tx' + (t.cleared ? ' cleared' : '') + (selMode && picked.has(t.id) ? ' picked' : '') + '" data-tx="' + t.id + '">' +
       (selMode ? '<span class="selbox' + (picked.has(t.id) ? ' on' : '') + '" aria-hidden="true">' + (picked.has(t.id) ? '✓' : '') + '</span>' :
       '<button type="button" class="clr" data-clear="' + t.id + '" title="' + (t.cleared ? 'Cleared – tap to unclear' : 'Not cleared – tap to clear') + '">' + (t.cleared ? '✓' : '') + '</button>') +
       '<div class="who"><b>' + (String(t.id).startsWith('rec_') ? '🔁 ' : '') + esc(t.payee || '(no payee)') + '</b>' +
       '<span class="sub">' + esc([t.category, t.checkNum ? '#' + t.checkNum : '', t.note].filter(Boolean).join(' · ')) + '</span>' +
       (tagsOf(t).length ? '<span class="sub">' + tagsOf(t).map(x => '<span class="chip tagc">#' + esc(x) + '</span>').join(' ') + '</span>' : '') +
       (t.taxCat || t.receipt ? '<span class="sub">' + (t.taxCat ? '<span class="chip tax">🧾 ' + esc(t.taxCat) + '</span> ' : '') + (t.receipt ? '<span class="chip">📎 receipt</span>' : '') + '</span>' : '') + '</div>' +
-      '<div class="amt"><b class="' + t.type + '">' + (t.type === 'income' ? '+' : '−') + money(t.amount).replace('−', '') + '</b>' + (t.bankAmount != null && Math.abs(bankAmt(t) - t.amount) >= 0.005 ? '<span class="sub bankamt">bank ' + money(bankAmt(t)) + '</span>' : '') + '<span class="sub">' + money(b.running[t.id]) + '</span></div></div>';
+      '<div class="amt"><b class="' + t.type + '">' + (t.type === 'income' ? '+' : '−') + money(t.amount).replace('−', '') + '</b>' + (t.bankAmount != null && Math.abs(bankAmt(t) - t.amount) >= 0.005 ? '<span class="sub bankamt">bank ' + money(bankAmt(t)) + '</span>' : '') + '<span class="sub">' + money(b.running[t.id]) + '</span></div></div>' + (selMode ? '' : '</div>');
   });
   const accOpts = data.accounts.length > 1 ? '<select id="accPick">' + data.accounts.slice().sort((a, c) => a.sort - c.sort).map(a => '<option value="' + a.id + '"' + (a.id === acc.id ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') + '</select>' : '<b>' + esc(acc.name) + '</b>';
   const monthIn = regMonth ? b.list.filter(t => t.date.startsWith(regMonth)) : [];
@@ -263,11 +263,53 @@ function viewRegister() {
     const t = data.tx.find(x => x.id === btn.dataset.clear); t.cleared = !t.cleared; window.save(); viewRegister();
   });
   $('view').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => {
+    if (el.dataset.swiped) { delete el.dataset.swiped; return; }
     if (!selMode) { editTx(el.dataset.tx); return; }
     const id = el.dataset.tx; picked.has(id) ? picked.delete(id) : picked.add(id);
     const y = window.scrollY; viewRegister(); window.scrollTo(0, y);
   });
+  if (!selMode) wireSwipes();
   if (window.moneySync) window.moneySync.renderBox();
+}
+
+// Swipe a register entry left to delete it. A short swipe opens a Delete button; a long swipe deletes
+// right away. Either way the Undo bar brings it back.
+function swipeDelete(id) {
+  const t = data.tx.find(x => x.id === id); if (!t) return;
+  data.tx = data.tx.filter(x => x.id !== id); lastDeleted = [t];
+  window.save(); const y = window.scrollY; viewRegister(); window.scrollTo(0, y);
+}
+function wireSwipes() {
+  const OPEN = 96;
+  let openRow = null;
+  const shut = el => { if (!el) return; el.style.transition = 'transform .18s'; el.style.transform = ''; setTimeout(() => el.parentNode.classList.remove('on'), 180); if (openRow === el) openRow = null; };
+  $('view').querySelectorAll('[data-swdel]').forEach(b => b.onclick = e => { e.stopPropagation(); swipeDelete(b.dataset.swdel); });
+  $('view').querySelectorAll('.swipe .tx').forEach(el => {
+    let x0 = 0, y0 = 0, dx = 0, base = 0, dir = '';
+    el.addEventListener('touchstart', e => {
+      if (openRow && openRow !== el) shut(openRow);
+      const p = e.touches[0]; x0 = p.clientX; y0 = p.clientY; dx = 0; dir = ''; base = openRow === el ? -OPEN : 0; el.style.transition = 'none';
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+      const p = e.touches[0], mx = p.clientX - x0, my = p.clientY - y0;
+      if (!dir) { if (Math.abs(mx) < 8 && Math.abs(my) < 8) return; dir = Math.abs(mx) > Math.abs(my) ? 'x' : 'y'; }
+      if (dir !== 'x') return;
+      e.preventDefault();
+      el.parentNode.classList.add('on');
+      dx = Math.min(0, base + mx);
+      el.style.transform = 'translateX(' + dx + 'px)';
+      el.parentNode.classList.toggle('far', dx < -el.offsetWidth * 0.5);
+    }, { passive: false });
+    el.addEventListener('touchend', () => {
+      if (dir !== 'x') return;
+      el.dataset.swiped = '1'; setTimeout(() => { delete el.dataset.swiped; }, 400);
+      if (dx < -el.offsetWidth * 0.5) { el.style.transition = 'transform .15s'; el.style.transform = 'translateX(-110%)'; setTimeout(() => swipeDelete(el.dataset.tx), 150); return; }
+      el.style.transition = 'transform .18s';
+      if (dx < -OPEN / 2) { el.style.transform = 'translateX(-' + OPEN + 'px)'; openRow = el; } else shut(el);
+    });
+  });
+  // Tapping anywhere else closes an open row.
+  $('view').addEventListener('touchstart', e => { if (openRow && !openRow.parentNode.contains(e.target)) shut(openRow); }, { passive: true });
 }
 
 // Last category used for a payee, so typing "Shellpoint" fills in "House Bill".
