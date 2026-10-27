@@ -150,7 +150,7 @@ function balances(acc) {
 function route() {
   if (location.hash.startsWith('#add')) { quickAdd(); return; }
   const [tab, arg] = (location.hash.slice(1) || 'register').split('/');
-  const tabOf = { reports: 'register', import: 'more', accounts: 'more', recurring: 'more', siri: 'more', inbox: 'register', calendar: 'register', rules: 'more', budgets: 'more' };
+  const tabOf = { reports: 'register', import: 'more', accounts: 'more', siri: 'more', inbox: 'register', calendar: 'register', rules: 'more', budgets: 'more' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
   const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar };
   (views[tab] || viewRegister)(arg);
@@ -514,20 +514,37 @@ function upcoming(acc, days) {
 }
 function firstOfNextMonth(iso) { const [y, m] = iso.split('-').map(Number); return (m === 12 ? y + 1 : y) + '-' + pad(m === 12 ? 1 : m + 1) + '-01'; }
 
+// One recurring bill or deposit, with its next date and buttons to edit or pause it.
+function recRow(r) {
+  const nxt = r.paused ? '' : (recDates(r, r.through || today(), '2100-01-01')[0] || '');
+  return '<div class="mini-row rec-row" data-rec="' + r.id + '"><span><b>' + esc(r.payee) + '</b>' + (r.paused ? ' <span class="chip warn">paused</span>' : '') +
+    '<span class="sub">' + esc(recWhen(r)) + (r.category ? ' · ' + esc(r.category) : '') + (nxt ? ' · next ' + esc(fmtDate(nxt)) : '') + (account(r.accountId) && data.accounts.length > 1 ? ' · ' + esc(account(r.accountId).name) : '') + '</span></span>' +
+    '<span class="rec-acts"><b class="' + r.type + '">' + signedAmt(r.type, r.amount) + '</b>' +
+    '<button type="button" class="ghost small" data-recpause="' + r.id + '">' + (r.paused ? '▶ Resume' : '⏸ Pause') + '</button>' +
+    '<button type="button" class="small">✏️ Edit</button></span></div>';
+}
 function viewRecurring() {
   const acc = activeAccount();
   const list = recList().slice().sort((a, b) => (a.type === b.type ? 0 : a.type === 'income' ? -1 : 1) || b.amount - a.amount);
   const total = t => list.filter(r => !r.paused && r.type === t && r.every === 'month').reduce((s, r) => s + Number(r.amount), 0);
   const sugg = acc ? suggestRecurring(acc) : [];
-  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>🔁 Recurring</h1>' +
+  $('view').innerHTML = '<h1>🔁 Recurring</h1>' +
     '<p class="helper">Bills and income that repeat. Each one is added to your register on its day (not cleared yet), and the 🏦 Bank tab clears it when it shows up at the bank.</p>' +
     (list.length ? '<div class="stat-row"><div class="stat"><span>Monthly bills</span><b class="expense">' + money(total('expense')) + '</b></div><div class="stat"><span>Monthly income</span><b class="income">' + money(total('income')) + '</b></div><div class="stat"><span>Bills</span><b>' + list.filter(r => r.type === 'expense').length + '</b></div></div>' +
-      '<div class="card pad">' + list.map(r => '<div class="mini-row" data-rec="' + r.id + '" style="cursor:pointer"><span><b>' + esc(r.payee) + '</b>' + (r.paused ? ' <span class="chip warn">paused</span>' : '') + '<span class="sub">' + esc(recWhen(r)) + (r.category ? ' · ' + esc(r.category) : '') + '</span></span><b class="' + r.type + '">' + signedAmt(r.type, r.amount) + '</b></div>').join('') + '</div>' : '') +
+      [['income', '💵 Deposits'], ['expense', '🧾 Bills']].map(([t, head]) => { const rows = list.filter(r => r.type === t); return rows.length ? '<div class="card pad"><h2>' + head + ' <small>(' + rows.length + ')</small></h2>' + rows.map(recRow).join('') + '</div>' : ''; }).join('') : '<p class="helper">Nothing set up yet. Add your monthly bills and paychecks below.</p>') +
     '<div class="row-actions"><button type="button" id="recNew">+ Add a recurring bill</button><button type="button" class="ghost" id="recInc">+ Recurring deposit</button></div>' +
     (sugg.length ? '<div class="card pad"><h2>Suggested from your register</h2><p class="helper">Tick the ones that repeat every month. They\'ll be added on the 1st starting ' + esc(fmtDate(sugg[sugg.length - 1].start, true)) + ' (you can change any one\'s day after).</p>' +
       sugg.map((s, k) => '<label class="check bline"><input type="checkbox" data-sug="' + k + '"' + (s.likely ? ' checked' : '') + '> <span><b>' + esc(s.payee) + '</b><span class="sub">' + esc(s.why) + '</span></span> <b class="' + s.type + '">' + signedAmt(s.type, s.amount) + '</b></label>').join('') +
       '<div class="row-actions"><button type="button" id="sugAdd">Add ticked bills</button></div></div>' : '');
   $('view').querySelectorAll('[data-rec]').forEach(el => el.onclick = () => editRecurring(el.dataset.rec));
+  $('view').querySelectorAll('[data-recpause]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const r = recList().find(x => x.id === b.dataset.recpause); if (!r) return;
+    r.paused = !r.paused;
+    // Unpausing starts it again from today, so the months it was paused aren't filled in.
+    if (!r.paused) r.through = today();
+    data.settings.recurring = recList().slice(); window.save(); toast(r.payee + (r.paused ? ' paused.' : ' turned back on.')); viewRecurring();
+  });
   $('recNew').onclick = () => editRecurring(null, 'expense');
   $('recInc').onclick = () => editRecurring(null, 'income');
   if ($('sugAdd')) $('sugAdd').onclick = () => {
