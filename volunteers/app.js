@@ -300,7 +300,13 @@ function route() {
   (views[tab] || viewEvents)(id);
   window.scrollTo(0, 0);
 }
-window.render = () => { const y = window.scrollY; const keepImport = location.hash.startsWith('#import') && imp; if (!keepImport) route(); window.scrollTo(0, y); };
+// A cloud sync redraws the page; never let that wipe a list someone is pasting or typing.
+window.render = () => {
+  const y = window.scrollY, h = location.hash;
+  const typing = [...document.querySelectorAll('#view textarea')].some(t => t.value.trim());
+  const keep = (h.startsWith('#import') && (imp || typing)) || (h.startsWith('#sug') && (sugPlan || typing));
+  if (!keep) route(); window.scrollTo(0, y);
+};
 window.addEventListener('hashchange', route);
 $('topShare').onclick = () => { location.hash = 'share'; };
 
@@ -1520,6 +1526,11 @@ function viewImport(evId) {
   if (!imp) {
     const ev = evId && event(evId);
     $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>Import a list</h1><p class="helper">For moving over sign-ups you already have. New sign-ups come in by themselves from your sign-up page.</p>' + (ev ? '<p class="helper">Into <b>' + esc(ev.name) + '</b> (' + esc(fmtDate(ev.date)) + ')</p>' : '') +
+      '<div class="card pad"><h2>📋 Paste a list <small>(no file needed)</small></h2>' +
+      '<p class="helper">Copy names from anywhere (a text, an email, BAND, SignUpGenius, Notes) and paste them here. One name per line. A line like <i>Concessions:</i> starts a new job.</p>' +
+      '<textarea id="anyText" rows="8" placeholder="Jane Doe\nSam Smith 501-555-0123\nAlex Lee"></textarea>' +
+      '<label>These volunteers are<select id="anyType"><option value="adult">Adults</option><option value="student">Students</option></select></label>' +
+      '<div class="row-actions"><button type="button" id="anyGo">Next: check the names</button></div></div>' +
       '<div class="card pad"><h2>🟢 SignUpGenius <small>(adults)</small></h2>' +
       '<ol class="steps"><li>On a computer, open SignUpGenius → <b>Reports</b> (or <b>Sign Ups → Created → Run report</b>).</li><li>Choose the sign-up and the dates, then <b>Export → Excel</b> or <b>CSV</b>.</li><li>Upload that file here. Phone numbers come in if your sign-up asks for them.</li></ol>' +
       '<label class="button file">Choose SignUpGenius file<input type="file" id="fSug" accept=".xlsx,.xls,.csv,.txt,.docx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div>' +
@@ -1537,6 +1548,22 @@ function viewImport(evId) {
     $('fSug').onchange = onFile('SignUpGenius');
     $('fBand').onchange = onFile('BAND');
     $('fOther').onchange = onFile('List');
+    $('anyGo').onclick = () => {
+      const t = $('anyText').value.trim(); if (!t) { toast('Paste the names in the box first.'); return; }
+      // A whole SignUpGenius page pasted here goes through the SignUpGenius update instead.
+      if (/slots?\s+filled|^\s*name\s*:/im.test(t) && /\d{1,2}\/\d{1,2}\/\d{4}/.test(t)) {
+        const parsed = parseSug(t);
+        if (parsed.some(e => e.jobs.length)) { sugPlan = planSug(parsed); location.hash = 'sug'; return; }
+      }
+      imp = { target: evId || null, type: $('anyType').value };
+      const lines = t.split(/\r?\n/);
+      if (lines[0].includes('\t')) startTable(lines.map(l => l.split('\t')), 'Pasted list');
+      else {
+        const entries = entriesFromLines(t);
+        if (!entries.length) { imp = null; toast('No names found. Put one name on each line.'); return; }
+        startEntries(entries, 'Pasted list');
+      }
+    };
     $('bandGo').onclick = () => {
       const t = $('bandText').value.trim(); if (!t) { toast('Paste the BAND list first.'); return; }
       imp = { target: evId || null };
