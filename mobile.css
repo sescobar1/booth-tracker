@@ -423,3 +423,42 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 
 .dd-warn{background:#fff3d6;border-left:4px solid #b67c20;border-radius:8px;padding:9px 12px;margin:6px 0 10px;font-size:.92rem;line-height:1.4}
 #relicClip{margin:8px 0 0}
+
+/* Vinted & eBay listing helper */
+.cards.ls-cards{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ls-warn{color:#a44b28}
+.ls-stale{background:#fff1d6;color:#8a5a00;border-radius:10px;padding:10px 12px;margin:0 0 12px;font-weight:600}
+.ls-bar{display:grid;gap:8px;margin:0 0 10px}
+.ls-bar input[type=search]{width:100%;border:1px solid #cbd9df;border-radius:9px;padding:10px 12px;font:inherit;background:#fff}
+.seg.ls-seg{display:flex;flex-wrap:wrap;margin:0}
+.seg.ls-seg button{flex:1 0 auto;padding:8px 10px}
+.ls-list{display:grid;gap:8px;margin-bottom:16px}
+.ls-row{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer}
+.ls-row.ls-ship{border-color:#e7b28f;background:#fff8f3}
+.ls-row.ls-shipped{opacity:.75}
+.ls-thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--soft)}
+.ls-nophoto{display:grid;place-items:center;font-size:1.6rem}
+.ls-main{flex:1;min-width:0;display:grid;gap:2px}
+.ls-main b{overflow-wrap:anywhere}
+.ls-sub{font-size:.85rem;color:#62727c}
+.ls-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.button.small{padding:6px 10px;font-size:.85rem;min-height:0}
+.ls-st-draft{background:#eef1f3;color:#4b5b65}.ls-st-listed{background:#e8f1f6;color:#24536f}.ls-st-ship{background:#fbe7e0;color:#a44b28}.ls-st-shipped{background:#e3f3e8;color:var(--green)}
+.ls-empty{padding:18px 4px}
+.ls-settings summary{cursor:pointer;font-weight:700}
+.ls-settings textarea{width:100%}
+.ls-check{display:inline-flex;align-items:center;gap:6px;margin:4px 14px 8px 0;font-weight:600}
+.ls-sitepick{margin:4px 0 6px;font-weight:700}
+.ls-copy{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0;background:#fbfcfd}
+.ls-copy h3{font-size:1rem;margin:0 0 6px}
+.ls-copy textarea,.ls-copy input{width:100%}
+.ls-field{margin:8px 0}
+.ls-fhead{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;font-size:.9rem}
+.ls-text{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:4px;font-size:.95rem;user-select:text;-webkit-user-select:text}
+.ls-prev-h{font-size:1rem;margin-top:12px}.ls-prev-h small{font-weight:400;color:#62727c}
+.ls-del{color:#a44b28}
+#lsSheet textarea{width:100%;display:block;margin-top:4px;border:1px solid #cbd9df;border-radius:7px;padding:9px;font:inherit;background:#fff}
+.ls-settings textarea{width:100%;display:block;margin:4px 0 8px;border:1px solid #cbd9df;border-radius:7px;padding:9px;font:inherit}
+.ls-copy input{display:block;margin-top:4px;border:1px solid #cbd9df;border-radius:7px;padding:9px;font:inherit;width:100%}
+@media (max-width:760px){.cards.ls-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ls-cards .card{padding:10px}.ls-cards .value{font-size:1.2rem}.ls-cards .label{font-size:.7rem}}
+#lsSheet textarea,.ls-copy input{font-weight:400}
