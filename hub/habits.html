@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Routines</title><link rel="stylesheet" href="style.css">
+<style>.h{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer;user-select:none}.h:last-of-type{border-bottom:0}
+.ck{width:22px;height:22px;border:1.5px solid var(--sage);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px}.h.on .ck{background:var(--sage)}
+.h.on .nm{color:var(--muted)}.st{font-size:12px;color:var(--muted);white-space:nowrap}.st b{color:var(--ink);font-weight:500}
+.wk{display:flex;gap:3px;margin-top:3px}.wk i{width:7px;height:7px;border-radius:50%;background:var(--sage-l)}.wk i.on{background:var(--sage)}
+.edit{font-size:12px;color:var(--muted);margin-top:10px;cursor:pointer;background:none;padding:0}.ed textarea{width:100%;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px;min-height:130px}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Routines <span class="muted" style="font-size:13px" id="sum"></span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+const START = ['☀️ Morning routine', '💪 Move / exercise', '📖 Read 20 minutes', '☕ Coffee & plan the day', '🪷 Quiet time', '🌙 Evening wind-down'];
+let SB, st;
+const day = k => { const d = new Date(); d.setDate(d.getDate() - k); return isoDay(d); };
+function streak(h) { // days in a row, counting today only once it's done
+  let n = 0, k = (st.log[day(0)] || []).includes(h) ? 0 : 1;
+  while ((st.log[day(k)] || []).includes(h)) { n++; k++; }
+  return n;
+}
+function draw() {
+  const el = document.getElementById('body'), t = st.log[day(0)] || [];
+  el.className = '';
+  el.innerHTML = st.list.map((h, i) => { const s = streak(h), on = t.includes(h);
+    return '<div class="h' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="ck">' + (on ? '✓' : '') + '</span><span><span class="nm">' + esc(h) + '</span><span class="wk">' +
+      [6, 5, 4, 3, 2, 1, 0].map(k => '<i class="' + ((st.log[day(k)] || []).includes(h) ? 'on' : '') + '"></i>').join('') + '</span></span><span class="st">' + (s ? '🔥 <b>' + s + '</b>' : '') + '</span></div>'; }).join('') +
+    '<button class="edit" id="ed">✎ Edit routines</button>';
+  document.getElementById('sum').textContent = t.filter(h => st.list.includes(h)).length + ' / ' + st.list.length + ' today';
+}
+async function save() { await hubSet(SB, 'habits', st); }
+document.addEventListener('click', async e => {
+  const r = e.target.closest('.h');
+  if (r) { const h = st.list[+r.dataset.i], k = day(0), t = st.log[k] = st.log[k] || [];
+    if (t.includes(h)) t.splice(t.indexOf(h), 1); else t.push(h); draw();
+    // keep about 3 months of history
+    for (const d of Object.keys(st.log)) if (d < day(100)) delete st.log[d];
+    await save(); return; }
+  if (e.target.id === 'ed') {
+    document.getElementById('body').innerHTML = '<div class="ed"><p class="muted small">One routine per line.</p><textarea id="ta">' + esc(st.list.join('\n')) + '</textarea><button class="btn" id="sv">Save</button></div>';
+  }
+  if (e.target.id === 'sv') { st.list = document.getElementById('ta').value.split('\n').map(s => s.trim()).filter(Boolean); draw(); await save(); }
+});
+hubData(async sb => {
+  SB = sb; if (document.getElementById('ta')) return; // don't redraw while editing
+  const d = await hubGet(sb, 'habits'); st = { list: d.list || START, log: d.log || {} }; draw();
+});
+</script></body></html>

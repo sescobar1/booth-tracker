@@ -3775,7 +3775,10 @@ function viewFeed() {
   $('feedNew').onclick = () => { if (!confirm('Make a new link? Calendars subscribed to the old one will stop updating.')) return; S().feedToken = ''; window.save(); viewFeed(); };
 }
 
-if (!maybeBrief()) route();
+// Links from the hub: #add opens the Add menu straight away.
+const hubAdd = location.hash === '#add';
+if (hubAdd) history.replaceState(null, '', location.pathname + '#today');
+if (hubAdd) { route(); setTimeout(() => $('fab').click(), 300); } else if (!maybeBrief()) route();
 // Keep connected calendars fresh while the planner is open.
 setInterval(() => { if (document.visibilityState === 'visible') refreshAll(); }, 10 * 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshAll(); });

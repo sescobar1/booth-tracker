@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meals this week</title><link rel="stylesheet" href="style.css">
+<style>.md{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}.md:last-child{border-bottom:0}
+.md.now{background:var(--sage-l);margin:0 -10px;padding:7px 10px;border-radius:8px;border-bottom-color:transparent}
+.dn{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:2px}.ml small{color:var(--muted);font-size:11px;margin-right:4px}
+.empty{color:#b5b9b0;font-style:italic}.links{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.links a{font-size:13px;color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Meals <span class="muted" style="font-size:13px">this week</span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+const P = 'https://sescobar1.github.io/booth-tracker/planner/';
+hubData(async sb => {
+  const ws = weekStart(new Date()), days = [...Array(7)].map((_, k) => { const d = new Date(ws); d.setDate(d.getDate() + k); return isoDay(d); }), tdy = isoDay(new Date());
+  const [ml, shop, kd] = await Promise.all([
+    sb.from('planner_items').select('title,date,list').eq('kind', 'meal').gte('date', days[0]).lte('date', days[6]),
+    sb.from('planner_items').select('id', { count: 'exact', head: true }).eq('kind', 'shop').eq('done', false),
+    sb.from('kid_dinners').select('who,title,status')
+  ]);
+  const by = {}; for (const m of ml.data || []) (by[m.date] = by[m.date] || []).push(m);
+  const order = { Breakfast: 0, Lunch: 1, Dinner: 2 };
+  const asks = (kd.data || []).filter(k => !k.status || k.status === 'new' || k.status === 'pending');
+  const el = document.getElementById('body'); el.className = '';
+  el.innerHTML = days.map(d => { const ms = (by[d] || []).sort((a, b) => (order[a.list] ?? 3) - (order[b.list] ?? 3));
+    return '<div class="md' + (d === tdy ? ' now' : '') + '"><div class="dn">' + new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'short' }) + '</div><div class="ml">' +
+      (ms.length ? ms.map(m => (m.list && m.list !== 'Dinner' ? '<small>' + esc(m.list) + '</small>' : '') + esc(m.title)).join('<br>') : '<span class="empty">—</span>') + '</div></div>'; }).join('') +
+    (asks.length ? '<div class="lbl">Dinner requests</div>' + asks.map(a => '<div class="row"><span>' + esc(a.title) + '</span><span class="pill">' + esc(a.who) + '</span></div>').join('') : '') +
+    '<div class="links"><a href="' + P + '#meals" target="_blank">🍽 Plan meals</a><a href="' + P + '#meals/shop" target="_blank">🛒 Grocery list' + (shop.count ? ' · ' + shop.count : '') + '</a><a href="https://sescobar1.github.io/booth-tracker/recipes/" target="_blank">📖 Recipes</a></div>';
+});
+</script></body></html>

@@ -37,3 +37,8 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') run(box, draw); });
   };
 })();
+
+// Small synced notes for the hub (habits, gift ideas, checklists), one row per key.
+window.hubGet = async (sb, key) => { const { data, error } = await sb.from('hub_state').select('data').eq('key', key).maybeSingle(); if (error) throw error; return data ? data.data : {}; };
+window.hubSet = async (sb, key, val) => { const { error } = await sb.from('hub_state').upsert({ key, data: val, updated_at: new Date().toISOString() }, { onConflict: 'owner,key' }); if (error) throw error; };
+window.weekStart = d => { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };

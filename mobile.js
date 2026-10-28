@@ -199,6 +199,11 @@
     setTimeout(() => qf.item.focus(), 60);
   }
   fab.addEventListener('click', () => openQuick());
+  // Links from the hub: #quick/sales or #quick/purchases opens Quick add straight away.
+  if (/^#quick\/(sales|purchases)$/.test(location.hash)) {
+    const t = location.hash.split('/')[1]; history.replaceState(null, '', location.pathname);
+    setTimeout(() => { try { openQuick(t); } catch (e) {} }, 400);
+  }
   qf.querySelectorAll('[data-qtype]').forEach(b => b.addEventListener('click', () => setQuickType(b.dataset.qtype)));
   qf.item.addEventListener('input', () => { if (!boothTouched && qf.item.value.trim()) qf.booth.value = boothFor(qf.item.value); });
   qf.booth.addEventListener('change', () => { boothTouched = true; });

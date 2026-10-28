@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Booth prep</title><link rel="stylesheet" href="style.css">
+<style>.c{display:grid;grid-template-columns:22px 1fr;gap:9px;align-items:center;padding:6px 0;font-size:14px;cursor:pointer;user-select:none}
+.ck{width:18px;height:18px;border:1.5px solid var(--sage);border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px}.c.on .ck{background:var(--sage)}.c.on span:last-child{color:var(--muted);text-decoration:line-through}
+.bar2{display:flex;justify-content:space-between;align-items:center;margin-top:10px}.ghost{font-size:12px;border:1px solid var(--line);border-radius:8px;padding:5px 10px}
+.ed textarea{width:100%;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px;min-height:150px}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Booth prep <span class="muted" style="font-size:13px" id="cnt"></span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+const START = ['Check restock list', 'Price & tag new items', 'Bake & bag cookies', 'Fold & refresh flannels', 'Pack bins & hangers', 'Restock squishies', 'Fill out inventory sheet', 'Snap photos for listings', 'Log mileage for the trip'];
+let SB, st, restock = [];
+function draw() {
+  const el = document.getElementById('body'); el.className = '';
+  const done = st.list.filter(x => st.done.includes(x)).length;
+  document.getElementById('cnt').textContent = done + ' / ' + st.list.length;
+  el.innerHTML = (restock.length ? '<div class="lbl" style="margin-top:0">Needs restocking</div>' + restock.map(r => '<div class="row"><span>' + esc(r.item) + '</span><span class="pill' + (r.status === 'out' ? ' warn' : '') + '">' + (r.status === 'out' ? 'Out' : 'Low') + '</span></div>').join('') + '<div class="lbl">Checklist</div>' : '') +
+    st.list.map((x, i) => '<div class="c' + (st.done.includes(x) ? ' on' : '') + '" data-i="' + i + '"><span class="ck">' + (st.done.includes(x) ? '✓' : '') + '</span><span>' + esc(x) + '</span></div>').join('') +
+    '<div class="bar2"><button class="ghost" id="reset">↺ Start a new trip</button><button class="ghost" id="ed">✎ Edit</button></div>';
+}
+const save = () => hubSet(SB, 'boothPrep', st);
+document.addEventListener('click', async e => {
+  const c = e.target.closest('.c');
+  if (c) { const x = st.list[+c.dataset.i]; st.done = st.done.includes(x) ? st.done.filter(y => y !== x) : st.done.concat(x); draw(); await save(); return; }
+  if (e.target.id === 'reset') { st.done = []; draw(); await save(); }
+  if (e.target.id === 'ed') document.getElementById('body').innerHTML = '<div class="ed"><p class="muted small">One step per line.</p><textarea id="ta">' + esc(st.list.join('\n')) + '</textarea><button class="btn" id="sv">Save</button></div>';
+  if (e.target.id === 'sv') { st.list = document.getElementById('ta').value.split('\n').map(s => s.trim()).filter(Boolean); draw(); await save(); }
+});
+hubData(async sb => {
+  SB = sb; if (document.getElementById('ta')) return;
+  const [d, b] = await Promise.all([hubGet(sb, 'boothPrep'), sb.from('booth_data').select('data->hubSummary').limit(1)]);
+  st = { list: d.list || START, done: d.done || [] };
+  restock = (b.data?.[0]?.hubSummary?.restock) || [];
+  draw();
+});
+</script></body></html>

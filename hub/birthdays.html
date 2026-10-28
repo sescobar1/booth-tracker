@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Birthdays</title><link rel="stylesheet" href="style.css">
+<style>.p{padding:9px 0;border-bottom:1px solid var(--line)}.p:last-child{border-bottom:0}.top{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+.ideas{margin:4px 0 0 0;padding:0;list-style:none;font-size:13px}.ideas li{display:flex;justify-content:space-between;color:var(--ink)}.ideas li:before{content:'🎁 ';margin-right:4px}.ideas li span{flex:1}
+.x{font-size:12px;color:var(--muted);opacity:.5}.add{display:flex;gap:6px;margin-top:5px}.add input{flex:1;font:inherit;font-size:12px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.add button{font-size:12px;border:1px solid var(--line);border-radius:8px}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Birthdays <span class="muted" style="font-size:13px">& gift ideas</span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+let SB, gifts = {}, people = [];
+function draw() {
+  const el = document.getElementById('body'); el.className = '';
+  el.innerHTML = people.length ? people.map((p, i) => '<div class="p"><div class="top"><span>🎂 ' + esc(p.name) + '</span><span class="pill' + (p.days <= 14 ? ' warn' : '') + '">' +
+    (p.days === 0 ? 'Today!' : p.days === 1 ? 'Tomorrow' : p.days + ' days') + ' · ' + p.when + '</span></div><ul class="ideas">' +
+    (gifts[p.name] || []).map((g, k) => '<li><span>' + esc(g) + '</span><button class="x" data-p="' + i + '" data-k="' + k + '">✕</button></li>').join('') + '</ul>' +
+    '<form class="add" data-p="' + i + '"><input placeholder="Add a gift idea"><button>+</button></form></div>').join('')
+    : '<p class="muted small">Add birthdays in your Planner (Family) and they show up here.</p>';
+}
+document.addEventListener('submit', async e => { e.preventDefault(); const p = people[+e.target.dataset.p], v = e.target.querySelector('input').value.trim(); if (!v) return;
+  (gifts[p.name] = gifts[p.name] || []).push(v); draw(); await hubSet(SB, 'gifts', gifts); });
+document.addEventListener('click', async e => { const b = e.target.closest('.x'); if (!b) return; const p = people[+b.dataset.p]; gifts[p.name].splice(+b.dataset.k, 1); draw(); await hubSet(SB, 'gifts', gifts); });
+hubData(async sb => {
+  SB = sb; if (document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.value) return;
+  const [bd, g] = await Promise.all([sb.from('family_birthdays').select('name,md'), hubGet(sb, 'gifts')]);
+  gifts = g || {};
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  people = (bd.data || []).filter(b => /^\d\d-\d\d$/.test(b.md || '')).map(b => {
+    let d = new Date(t.getFullYear() + '-' + b.md + 'T00:00'); if (d < t) d = new Date((t.getFullYear() + 1) + '-' + b.md + 'T00:00');
+    return { name: b.name, days: Math.round((d - t) / 864e5), when: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) };
+  }).sort((a, b) => a.days - b.days).slice(0, 5);
+  draw();
+});
+</script></body></html>
