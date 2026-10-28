@@ -6,3 +6,14 @@ html,body{height:100%;background:var(--bg);color:var(--ink);font-family:Lora,Geo
 h1{font-weight:400;font-size:24px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .muted{color:var(--muted)}
 button{background:none;border:0;color:var(--ink);font:inherit;font-size:18px;cursor:pointer;padding:0 6px}
+.small{font-size:13px}
+.signin{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.signin input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.btn{background:var(--sage);color:#fff;border-radius:8px;padding:8px 14px;font-size:14px}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.row:last-child{border-bottom:0}
+.lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+.big{font-size:34px;line-height:1.1}
+.bar{height:8px;background:var(--sage-l);border-radius:6px;overflow:hidden;margin:8px 0 4px}.bar i{display:block;height:100%;background:var(--sage);border-radius:6px}
+.pill{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--sage-l);white-space:nowrap}
+.pill.warn{background:#f3e3d3}

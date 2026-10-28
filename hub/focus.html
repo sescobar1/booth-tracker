@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Focus</title><link rel="stylesheet" href="style.css">
+<style>.wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.ring{position:relative;width:170px;height:170px}.ring svg{transform:rotate(-90deg)}.ring .tm{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:38px}
+.ring .tm small{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.modes{display:flex;gap:6px}.modes button{font-size:13px;padding:5px 11px;border:1px solid var(--line);border-radius:20px}.modes button.on{background:var(--sage-l);border-color:var(--sage)}
+.ctl{display:flex;gap:8px;align-items:center}.ctl .btn{min-width:90px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}
+.ghost.on{background:var(--sage-l);border-color:var(--sage)}.dots{font-size:13px;color:var(--muted)}</style></head><body><div class="card">
+<h1>Focus <span class="dots" id="dots"></span></h1>
+<div class="wrap">
+  <div class="modes"><button data-m="25" class="on">Focus 25</button><button data-m="5">Break 5</button><button data-m="15">Long 15</button></div>
+  <div class="ring"><svg width="170" height="170"><circle cx="85" cy="85" r="76" fill="none" stroke="var(--sage-l)" stroke-width="8"/><circle id="arc" cx="85" cy="85" r="76" fill="none" stroke="var(--sage)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477.5" stroke-dashoffset="0"/></svg>
+    <div class="tm"><span id="tm">25:00</span><small id="lab">Focus</small></div></div>
+  <div class="ctl"><button class="btn" id="go">Start</button><button class="ghost" id="reset">Reset</button><button class="ghost" id="rain" title="Soft rain sound">🌧 Rain</button></div>
+</div></div><script>
+const C = 477.5; let mins = 25, left = 25 * 60, timer = null, done = 0, ctx, noise;
+const $ = id => document.getElementById(id);
+function show() {
+  $('tm').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+  $('arc').style.strokeDashoffset = C * (1 - left / (mins * 60));
+  $('dots').textContent = done ? '🌿'.repeat(Math.min(done, 8)) : '';
+  document.title = timer ? $('tm').textContent + ' · Focus' : 'Focus';
+}
+function chime() {
+  try { const a = ctx || new AudioContext(); ctx = a; [523, 659, 784].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = f; o.connect(g); g.connect(a.destination);
+    const t = a.currentTime + i * .25; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.15, t + .02); g.gain.exponentialRampToValueAtTime(.001, t + 1.2); o.start(t); o.stop(t + 1.3); }); } catch (e) {}
+}
+function tick() {
+  left--; if (left <= 0) { clearInterval(timer); timer = null; if (mins === 25) done++; chime(); $('go').textContent = 'Start'; setMode(mins === 25 ? (done % 4 ? 5 : 15) : 25); return; }
+  show();
+}
+function setMode(m) { mins = m; left = m * 60; document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('on', +b.dataset.m === m)); $('lab').textContent = m === 25 ? 'Focus' : 'Break'; show(); }
+$('go').onclick = () => { if (timer) { clearInterval(timer); timer = null; $('go').textContent = 'Resume'; } else { timer = setInterval(tick, 1000); $('go').textContent = 'Pause'; } show(); };
+$('reset').onclick = () => { clearInterval(timer); timer = null; $('go').textContent = 'Start'; setMode(mins); };
+document.querySelector('.modes').onclick = e => { const b = e.target.closest('button'); if (b) { clearInterval(timer); timer = null; $('go').textContent = 'Start'; setMode(+b.dataset.m); } };
+// Soft rain: filtered noise made in the browser, nothing downloaded.
+$('rain').onclick = () => {
+  if (noise) { noise.stop(); noise = null; $('rain').classList.remove('on'); return; }
+  ctx = ctx || new AudioContext(); const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; d[i] = last * 3.5 + w * .04; }
+  noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1200; const g = ctx.createGain(); g.gain.value = .5;
+  noise.connect(f); f.connect(g); g.connect(ctx.destination); noise.start(); $('rain').classList.add('on');
+};
+show();
+</script></body></html>

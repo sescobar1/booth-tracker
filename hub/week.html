@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coming up</title><link rel="stylesheet" href="style.css">
+<style>.day{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}.day:last-child{border-bottom:0}
+.d{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.d b{display:block;font-size:22px;font-weight:400;color:var(--ink);letter-spacing:0}
+.it{font-size:14px;padding:2px 0;display:flex;justify-content:space-between;gap:8px}.it a{color:inherit;text-decoration:none}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Coming up <span class="muted" style="font-size:13px">next 7 days</span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+hubData(async sb => {
+  const now = new Date(), from = isoDay(now), endD = new Date(now); endD.setDate(endD.getDate() + 7); const to = isoDay(endD);
+  const ev = await sb.from('vol_events').select('id,name,date,start_time').gte('date', from).lte('date', to);
+  const ids = (ev.data || []).map(e => e.id).concat('none');
+  const [jobs, sus, ms, bd, pl] = await Promise.all([
+    sb.from('vol_jobs').select('id,event_id,need').in('event_id', ids),
+    sb.from('vol_signups').select('event_id,job_id,no_show').in('event_id', ids),
+    sb.from('money_settings').select('data').limit(1),
+    sb.from('family_birthdays').select('name,md'),
+    sb.from('planner_items').select('title,date,start_time,kind,done').in('kind', ['event', 'task']).gte('date', from).lte('date', to)
+  ]);
+  const items = {}; const add = (date, icon, text, tag, warn) => (items[date] = items[date] || []).push({ icon, text, tag, warn });
+  for (const e of ev.data || []) {
+    const need = (jobs.data || []).filter(j => j.event_id === e.id).reduce((t, j) => t + (j.need || 0), 0);
+    const have = (sus.data || []).filter(s => s.event_id === e.id && !s.no_show).length, open = Math.max(0, need - have);
+    add(e.date, '🎺', e.name, open ? open + ' open' : 'Full', open > 0);
+  }
+  const rec = ((ms.data || [])[0]?.data?.settings?.recurring || []).filter(r => !r.paused && r.every === 'month');
+  for (let i = 0; i <= 7; i++) {
+    const d = new Date(now); d.setDate(d.getDate() + i); const iso = isoDay(d), md = iso.slice(5);
+    for (const r of rec) if (r.day === d.getDate() && (!r.start || r.start <= iso)) add(iso, r.type === 'income' ? '💵' : '🧾', r.payee, $money(r.amount), false);
+    for (const b of bd.data || []) if (b.md === md) add(iso, '🎂', b.name + "'s birthday", '', false);
+  }
+  for (const p of pl.data || []) if (!p.done) add(p.date, p.kind === 'task' ? '☐' : '📌', p.title, p.start_time || '', false);
+  const days = Object.keys(items).sort();
+  const el = document.getElementById('body'); el.className = '';
+  el.innerHTML = days.length ? days.map(d => { const dt = new Date(d + 'T12:00');
+    return '<div class="day"><div class="d">' + dt.toLocaleDateString('en-US', { weekday: 'short' }) + '<b>' + dt.getDate() + '</b></div><div>' +
+      items[d].map(x => '<div class="it"><span>' + x.icon + ' ' + esc(x.text) + '</span>' + (x.tag ? '<span class="pill' + (x.warn ? ' warn' : '') + '">' + esc(x.tag) + '</span>' : '') + '</div>').join('') + '</div></div>'; }).join('')
+    : '<p class="muted small">Nothing on the books this week.</p>';
+});
+</script></body></html>

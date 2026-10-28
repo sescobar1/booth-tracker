@@ -1174,6 +1174,18 @@
       '<div class="goal-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + goal + '" aria-valuenow="' + Math.round(cur.profit) + '"><i style="width:' + pct + '%"></i></div>' +
       '<p class="helper">' + money(cur.profit) + ' of ' + money(goal) + (cur.profit >= goal && goal > 0 ? ' · Goal reached!' : ' · ' + money(Math.max(0, goal - cur.profit)) + ' to go') + '. Rent for the month counts from day 1, so this starts below zero.' + (dm !== currentMonth ? ' Last month (' + esc(dm) + '): ' + money(mm.profit) + '.' : '') + '</p></section>';
   }
+  // Small summary for the Notion hub widget. Saved with the synced data only when it changes.
+  function saveHubSummary() {
+    try {
+      const cur = monthMoney(currentMonth), st = cur.st || {};
+      const booths = Object.keys(st).map(c => ({ code: c, sales: Math.round(st[c].sales), profit: Math.round(st[c].sales - st[c].buy - st[c].rent) })).sort((a, b) => b.sales - a.sales);
+      const restock = restockData().need.slice(0, 4).map(x => ({ item: x.item, status: x.status, qty: x.qty }));
+      const sum = { month: currentMonth, goal: Number(data.settings.goal) || 0, sales: Math.round(cur.sales), profit: Math.round(cur.profit), gas: Math.round(cur.gas), booths, restock };
+      const prev = data.hubSummary ? JSON.stringify({ ...data.hubSummary, at: 0 }) : '';
+      if (prev === JSON.stringify({ ...sum, at: 0 })) return;
+      data.hubSummary = { ...sum, at: new Date().toISOString() }; save();
+    } catch (e) { /* the hub summary is optional */ }
+  }
   document.addEventListener('change', e => { if (e.target.id === 'goalInput') { data.settings.goal = Math.max(0, Number(e.target.value) || 0); save(); renderExtras(); } });
 
   // Booth report card: last four months ending with the latest month that has sales.
@@ -1966,7 +1978,7 @@
     renderWork();
     renderAmazon();
     renderCookies();
-    renderDashInsights();
+    renderDashInsights(); saveHubSummary();
     renderDaily();
     if ($('reports').classList.contains('active')) { renderReportCard(); renderWeekdays(); }
     renderTaxes();

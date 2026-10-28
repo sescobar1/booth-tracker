@@ -1,0 +1,54 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hello</title><link rel="stylesheet" href="style.css">
+<style>.card{min-height:0;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,#fbfaf6 0%,#eef1ea 100%)}
+.hi{font-size:28px}.q{font-size:16px;font-style:italic;margin-top:10px;line-height:1.5}.who{font-size:12px;color:var(--muted);margin-top:4px}
+.sm{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:12px;letter-spacing:.06em}</style></head><body><div class="card">
+<div class="hi" id="hi"></div>
+<div class="q" id="q"></div>
+<div class="sm" id="sm"></div>
+</div><script>
+const Q = [
+  'Small steps every day add up to big things.',
+  'You don\'t have to do it all today. Just the next right thing.',
+  'Rest is part of the work.',
+  'Progress, not perfection.',
+  'You are allowed to take up space and take your time.',
+  'One task at a time. One breath at a time.',
+  'Done is better than perfect.',
+  'Your students remember how you made them feel.',
+  'The best time to start is now; the second best is after coffee.',
+  'Be proud of how far you\'ve come.',
+  'Grace for yourself counts too.',
+  'Slow down. Nothing blooms all year.',
+  'You are doing better than you think.',
+  'Make room for joy today.',
+  'Feet on the floor, heart in the work.',
+  'What you water grows.',
+  'Choose the one thing that makes everything else easier.',
+  'A calm mind is a clear plan.',
+  'Today is a good day to be kind to yourself.',
+  'Your pace is the right pace.',
+  'Let the little wins count.',
+  'Breathe in courage, breathe out worry.',
+  'It\'s okay to say no so you can say yes to what matters.',
+  'Good things take time.',
+  'Care for the caregiver: that\'s you.',
+  'Finish one thing before starting the next.',
+  'Plant seeds. Trust the season.',
+  'Some days the win is just showing up.',
+  'Light the way, but keep your own lamp full.',
+  'You\'ve handled every hard day so far.',
+  'Make today a little lighter.'
+];
+function draw() {
+  const d = new Date(), h = d.getHours();
+  const part = h < 5 ? 'Hello night owl' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const icon = h < 5 ? '🌙' : h < 12 ? '☀️' : h < 17 ? '🌿' : '🌙';
+  document.getElementById('hi').textContent = icon + ' ' + part + ', Shaana';
+  const start = new Date(d.getFullYear(), 0, 0), day = Math.floor((d - start) / 864e5);
+  document.getElementById('q').textContent = '“' + Q[day % Q.length] + '”';
+  const yearPct = Math.floor(day / ((d.getFullYear() % 4 ? 365 : 366)) * 100);
+  const wd = d.getDay(), weekLeft = wd === 0 || wd === 6 ? 0 : 6 - wd;
+  document.getElementById('sm').innerHTML = '<span>Day ' + day + ' of the year</span><span>' + yearPct + '% of ' + d.getFullYear() + ' done</span><span>' + (weekLeft ? weekLeft + (weekLeft === 1 ? ' day' : ' days') + ' to the weekend' : 'Happy weekend!') + '</span>';
+}
+draw(); setInterval(draw, 10 * 60000);
+</script></body></html>

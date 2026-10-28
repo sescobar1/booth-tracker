@@ -1,0 +1,30 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Money snapshot</title><link rel="stylesheet" href="style.css">
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Money <span class="muted" style="font-size:13px" id="mo"></span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+hubData(async sb => {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  const mStart = isoDay(new Date(y, m, 1)), lStart = isoDay(new Date(y, m - 1, 1)), today = isoDay(now);
+  const lSame = isoDay(new Date(y, m - 1, Math.min(now.getDate(), new Date(y, m, 0).getDate())));
+  document.getElementById('mo').textContent = now.toLocaleDateString('en-US', { month: 'long' });
+  const acc = await sb.from('money_accounts').select('id,name,opening_balance,opening_date');
+  // The server sends at most 1,000 rows at a time, so page through them.
+  const T = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await sb.from('money_tx').select('id,account_id,date,amount,type,category').order('id').range(i, i + 999);
+    if (error) throw error; T.push(...data); if (data.length < 1000) break;
+  }
+  const skip = c => /transfer/i.test(c || '');
+  const bal = (acc.data || []).map(a => ({ name: a.name, v: Number(a.opening_balance || 0) + T.filter(t => t.account_id === a.id).reduce((s, t) => s + (t.type === 'income' ? 1 : -1) * Number(t.amount), 0) }));
+  const spent = (a, b) => T.filter(t => t.type === 'expense' && !skip(t.category) && t.date >= a && t.date <= b).reduce((s, t) => s + Number(t.amount), 0);
+  const inc = T.filter(t => t.type === 'income' && !skip(t.category) && t.date >= mStart && t.date <= today).reduce((s, t) => s + Number(t.amount), 0);
+  const thisM = spent(mStart, today), lastM = spent(lStart, lSame), diff = thisM - lastM;
+  const cats = {}; for (const t of T) if (t.type === 'expense' && !skip(t.category) && t.date >= mStart && t.date <= today) cats[t.category || 'Other'] = (cats[t.category || 'Other'] || 0) + Number(t.amount);
+  const top = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3), max = top[0]?.[1] || 1;
+  const el = document.getElementById('body'); el.className = '';
+  el.innerHTML = bal.map(b => '<div class="lbl">' + esc(b.name) + '</div><div class="big">' + $money(b.v) + '</div>').join('') +
+    '<div class="lbl">Spent this month</div><div class="row"><span class="big" style="font-size:24px">' + $money(thisM) + '</span><span class="pill' + (diff > 0 ? ' warn' : '') + '">' + (diff > 0 ? '▲ ' : '▼ ') + $money(Math.abs(diff)) + ' vs. last month</span></div>' +
+    '<div class="row"><span class="muted">Money in</span><span>' + $money(inc) + '</span></div>' +
+    (top.length ? '<div class="lbl">Top categories</div>' + top.map(([c, v]) => '<div class="row" style="border:0;padding:3px 0"><span>' + esc(c) + '</span><span>' + $money(v) + '</span></div><div class="bar" style="margin:0 0 6px"><i style="width:' + (v / max * 100) + '%"></i></div>').join('') : '');
+});
+</script></body></html>

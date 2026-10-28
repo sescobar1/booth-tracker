@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Booth goal</title><link rel="stylesheet" href="style.css">
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>Booth goal <span class="muted" style="font-size:13px" id="mo"></span></h1><div id="body" class="muted small">Loading…</div>
+</div><script>
+hubData(async sb => {
+  const { data, error } = await sb.from('booth_data').select('data->hubSummary').limit(1);
+  if (error) throw error;
+  const s = data?.[0]?.hubSummary, el = document.getElementById('body'); el.className = '';
+  if (!s) { el.innerHTML = '<p class="muted small">Open Booth Tracker once and this fills in.</p>'; return; }
+  document.getElementById('mo').textContent = s.month;
+  const pct = s.goal ? Math.max(0, Math.min(100, s.profit / s.goal * 100)) : 0, left = Math.max(0, s.goal - s.profit);
+  const top = (s.booths || [])[0];
+  el.innerHTML = '<div class="row" style="border:0"><span class="big">' + $money(s.profit) + '</span><span class="muted small">of ' + $money(s.goal) + ' profit</span></div>' +
+    '<div class="bar"><i style="width:' + pct + '%"></i></div><p class="muted small">' + (left ? $money(left) + ' to go' : '🎉 Goal reached!') + ' · Sales ' + $money(s.sales) + '</p>' +
+    (top ? '<div class="lbl">Top booth</div><div class="row"><span>' + esc(top.code) + '</span><span>' + $money(top.sales) + ' sales</span></div>' : '') +
+    '<div class="lbl">Restock</div>' + ((s.restock || []).length ? s.restock.map(r => '<div class="row"><span>' + esc(r.item) + '</span><span class="pill' + (r.status === 'out' ? ' warn' : '') + '">' + (r.status === 'out' ? 'Out' : 'Low') + '</span></div>').join('') : '<p class="muted small">Nothing to restock.</p>') +
+    '<p class="muted small" style="margin-top:10px">Updated ' + new Date(s.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '</p>';
+});
+</script></body></html>
