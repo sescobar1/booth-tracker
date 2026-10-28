@@ -200,6 +200,11 @@
   }
   fab.addEventListener('click', () => openQuick());
   // Links from the hub: #quick/sales or #quick/purchases opens Quick add straight away.
+  // Links from the hub: #go/restock (any page name) opens that page.
+  if (/^#go\/[a-z]+$/.test(location.hash)) {
+    const pg = location.hash.split('/')[1]; history.replaceState(null, '', location.pathname);
+    setTimeout(() => { try { go(pg); } catch (e) {} }, 400);
+  }
   if (/^#quick\/(sales|purchases)$/.test(location.hash)) {
     const t = location.hash.split('/')[1]; history.replaceState(null, '', location.pathname);
     setTimeout(() => { try { openQuick(t); } catch (e) {} }, 400);
