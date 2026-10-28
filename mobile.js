@@ -1598,25 +1598,69 @@
       img.src = url;
     });
   }
+  // Read the words and price on a tag or box right on the phone (Tesseract), then fill the form and check it.
+  const loadJs = (src, test) => new Promise((ok, no) => { if (test()) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => no(new Error('reader')); document.head.appendChild(t); });
+  async function readTag(blob, onProgress) {
+    const CDN = 'https://cdn.jsdelivr.net/npm/';
+    await loadJs(CDN + 'tesseract.js@5/dist/tesseract.min.js', () => window.Tesseract);
+    const w = await Tesseract.createWorker('eng', 1, { workerPath: CDN + 'tesseract.js@5/dist/worker.min.js', corePath: CDN + 'tesseract.js-core@5', langPath: CDN + '@tesseract.js-data/eng/4.0.0_best_int',
+      logger: m => { if (m.status === 'recognizing text' && onProgress) onProgress(Math.round(m.progress * 100)); } });
+    try { return (await w.recognize(blob)).data.text || ''; } finally { w.terminate(); }
+  }
+  // The price on the tag: a dollar amount, or a number with cents.
+  function tagPrice(text) {
+    const withSign = [...text.matchAll(/\$\s?(\d{1,4}(?:[.,]\d{2})?)/g)].map(m => Number(m[1].replace(',', '.')));
+    const cents = [...text.matchAll(/(?<![\d.])(\d{1,3}[.,]\d{2})(?![\d])/g)].map(m => Number(m[1].replace(',', '.')));
+    const all = (withSign.length ? withSign : cents).filter(n => n > 0 && n < 2000);
+    return all.length ? all[all.length - 1] : 0;
+  }
+  // The item name: words from the tag that you've used in your own sales and inventory, in the order they appear.
+  const TAG_JUNK = new Set('inch inches price sale each item size made china retail only save with this that your from ages warning choking hazard small parts children child years under brand quality original official product style color colors assorted includes contains www com barcode net weight count piece pieces pack value deal clearance regular reg was now off store tax total thank visit model number made usa imported toys toy'.split(' '));
+  // The item name: the real words on the tag, with words from your own sales and inventory first.
+  function tagName(text) {
+    const vocab = {}; salesFlat().concat(data.inventory || []).forEach(x => words(x.item || '').forEach(w => { vocab[w] = (vocab[w] || 0) + 1; }));
+    const seen = new Set(), got = [];
+    (text.toLowerCase().match(/[a-z][a-z'&-]{3,}/g) || []).forEach((r, at) => {
+      const w = words(r)[0]; if (!w || TAG_JUNK.has(r) || TAG_JUNK.has(w) || seen.has(w)) return;
+      seen.add(w); got.push({ r: r.replace(/(ies)$/, 'y').replace(/([^s])s$/, '$1'), at, known: vocab[w] || 0 });
+    });
+    return got.sort((a, b) => (b.known > 0) - (a.known > 0) || a.at - b.at).slice(0, 2).sort((a, b) => a.at - b.at).map(g => g.r).join(' ');
+  }
   async function onBuyPhoto(e) {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     const box = $('buyLens'), sync = window.boothSync, sb = sync && sync.client(), u = sync && sync.user();
-    const local = URL.createObjectURL(f);
-    box.innerHTML = '<img class="lens-thumb" alt="Your photo" src="' + local + '"><span class="helper">Getting your photo ready…</span>';
-    if (!sb || !u) { box.innerHTML = '<p class="helper">Sign in under <b>Import &amp; backup → Sync between devices</b> to use photo lookup.</p>'; return; }
-    try {
-      const blob = await shrink(f, 1280), dir = u.id, path = dir + '/' + Date.now() + '.jpg';
-      const up = await sb.storage.from('lens').upload(path, blob, { contentType: 'image/jpeg' });
-      if (up.error) throw up.error;
-      const pub = sb.storage.from('lens').getPublicUrl(path).data.publicUrl;
-      box.innerHTML = '<img class="lens-thumb" alt="Your photo" src="' + local + '"><div><a class="button lens-go" href="https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(pub) + '" target="_blank" rel="noopener">🔎 See what it is in Google Lens</a>' +
-        '<span class="helper">Lens shows what it is and prices online. Type the name above to see your own sales.</span></div>';
-      // Clear out photos older than a day.
-      sb.storage.from('lens').list(dir, { limit: 100 }).then(r => {
-        const old = (r.data || []).filter(o => Number(o.name.split('.')[0]) < Date.now() - DAY).map(o => dir + '/' + o.name);
-        if (old.length) sb.storage.from('lens').remove(old);
-      }).catch(() => {});
-    } catch (err) { box.innerHTML = '<p class="helper">The photo could not be uploaded. Check your signal and try again.</p>'; }
+    const local = URL.createObjectURL(f), thumb = '<img class="lens-thumb" alt="Your photo" src="' + local + '">';
+    let lensHtml = '', readHtml = '<span class="helper">📖 Reading the tag…</span>';
+    const draw = () => { box.innerHTML = thumb + '<div>' + readHtml + (lensHtml ? '<br>' + lensHtml : '') + '</div>'; };
+    draw();
+    let blob; try { blob = await shrink(f, 1600); } catch (err) { readHtml = '<span class="helper">That photo couldn\'t be opened. Try another.</span>'; draw(); return; }
+    // 1. Read the tag and run the check.
+    const reading = readTag(blob, pct => { readHtml = '<span class="helper">📖 Reading the tag… ' + pct + '%</span>'; draw(); }).then(text => {
+      const name = tagName(text), price = tagPrice(text);
+      if (name) $('buyItem').value = name;
+      if (price) { $('buyCost').value = price.toFixed(2); $('buyQty').value = $('buyQty').value || 1; }
+      if (name) { buyChecked = true; renderBuyCheck(); }
+      readHtml = name || price ? '<span class="helper">📖 Read from your photo: ' + (name ? '<b>' + esc(name) + '</b>' : '') + (name && price ? ' · ' : '') + (price ? '<b>' + money(price) + '</b>' : '') + '. Fix the name above if it\'s off, then tap <b>Check it</b>.</span>'
+        : '<span class="helper">📖 No words or price on this photo. Use Google Lens below, or type what it is.</span>';
+      if (!name) $('buyItem').focus();
+      draw();
+    }).catch(() => { readHtml = '<span class="helper">Couldn\'t read the photo (the reader needs internet the first time).</span>'; draw(); });
+    // 2. Google Lens for what it is and prices online (needs sync sign-in to host the photo for a day).
+    if (sb && u) {
+      try {
+        const dir = u.id, path = dir + '/' + Date.now() + '.jpg';
+        const up = await sb.storage.from('lens').upload(path, blob, { contentType: 'image/jpeg' });
+        if (up.error) throw up.error;
+        const pub = sb.storage.from('lens').getPublicUrl(path).data.publicUrl;
+        lensHtml = '<a class="button lens-go" href="https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(pub) + '" target="_blank" rel="noopener">🔎 Look it up in Google Lens</a><span class="helper">Lens finds what it is and what it sells for online.</span>';
+        sb.storage.from('lens').list(dir, { limit: 100 }).then(r => {
+          const old = (r.data || []).filter(o => Number(o.name.split('.')[0]) < Date.now() - DAY).map(o => dir + '/' + o.name);
+          if (old.length) sb.storage.from('lens').remove(old);
+        }).catch(() => {});
+      } catch (err) { lensHtml = '<span class="helper">Google Lens link unavailable right now (check your signal).</span>'; }
+    } else lensHtml = '<span class="helper">Sign in under <b>Import &amp; backup → Sync between devices</b> to also get a Google Lens link.</span>';
+    draw(); await reading;
+    $('buyResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   $('buyPhoto').addEventListener('change', onBuyPhoto);
   $('buyPhotoLib').addEventListener('change', onBuyPhoto);
