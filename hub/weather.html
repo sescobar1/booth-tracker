@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Weather</title><link rel="stylesheet" href="style.css">
+<style>.now{display:flex;align-items:center;gap:12px;font-size:42px;margin:4px 0 2px}.now .i{font-size:40px}#desc{font-size:14px;margin-bottom:14px}
+.days{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px;text-align:center;font-size:12px}.days div b{display:block;font-size:22px;font-weight:400;margin:4px 0}</style></head><body><div class="card">
+<h1>Weather <span class="muted" style="font-size:13px">Russellville</span></h1>
+<div class="now"><span class="i" id="i">⛅</span><span id="t">--°</span></div><div id="desc" class="muted">Loading…</div><div class="days" id="days"></div>
+</div><script>
+const W={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],45:['🌫️','Fog'],48:['🌫️','Fog'],51:['🌦️','Drizzle'],53:['🌦️','Drizzle'],55:['🌦️','Drizzle'],61:['🌧️','Rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],71:['🌨️','Snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],80:['🌦️','Showers'],81:['🌧️','Showers'],82:['⛈️','Heavy showers'],95:['⛈️','Thunderstorms'],96:['⛈️','Thunderstorms'],99:['⛈️','Thunderstorms']};
+const w=c=>W[c]||['🌡️',''];
+async function load(){try{
+const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=35.2784&longitude=-93.1338&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=America%2FChicago&forecast_days=5');
+const j=await r.json(),c=j.current;document.getElementById('t').textContent=Math.round(c.temperature_2m)+'°';
+document.getElementById('i').textContent=w(c.weather_code)[0];
+document.getElementById('desc').textContent=w(c.weather_code)[1]+' · High '+Math.round(j.daily.temperature_2m_max[0])+'° / Low '+Math.round(j.daily.temperature_2m_min[0])+'°';
+document.getElementById('days').innerHTML=j.daily.time.map((d,k)=>'<div>'+new Date(d+'T12:00').toLocaleDateString('en-US',{weekday:'short'})+'<b>'+w(j.daily.weather_code[k])[0]+'</b>'+Math.round(j.daily.temperature_2m_max[k])+'°</div>').join('');
+}catch(e){document.getElementById('desc').textContent='Weather unavailable right now.'}}
+load();setInterval(load,30*60000);
+</script></body></html>

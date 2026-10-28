@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clock</title><link rel="stylesheet" href="style.css">
+<style>.card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}svg{width:min(180px,70vw);height:auto}#d{font-size:15px}</style></head><body><div class="card">
+<svg viewBox="-100 -100 200 200" aria-label="Clock"><circle r="96" fill="#fff" stroke="#e6e2d8"/><g id="ticks"></g>
+<line id="h" y2="-48" stroke="#263428" stroke-width="5" stroke-linecap="round"/><line id="m" y2="-72" stroke="#263428" stroke-width="3" stroke-linecap="round"/><line id="s" y1="14" y2="-80" stroke="#b5654a" stroke-width="1.5" stroke-linecap="round"/><circle r="4" fill="#b5654a"/></svg>
+<div id="d" class="muted"></div></div><script>
+const g=document.getElementById('ticks');for(let i=0;i<60;i++){const a=i*6,l=i%5?4:9;g.innerHTML+=`<line y1="-88" y2="${-88+l}" stroke="${i%5?'#b9b5aa':'#263428'}" stroke-width="${i%5?1:2}" transform="rotate(${a})"/>`}
+function tick(){const n=new Date(),s=n.getSeconds(),mi=n.getMinutes()+s/60,h=n.getHours()%12+mi/60;
+for(const[id,a]of[['h',h*30],['m',mi*6],['s',s*6]])document.getElementById(id).setAttribute('transform',`rotate(${a})`);
+document.getElementById('d').textContent=n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' · '+n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+tick();setInterval(tick,1000);
+</script></body></html>

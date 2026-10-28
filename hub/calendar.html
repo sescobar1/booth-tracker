@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar</title><link rel="stylesheet" href="style.css">
+<style>
+table{width:100%;border-collapse:collapse;text-align:center}
+th{font-weight:400;font-size:12px;color:var(--muted);padding:4px 0 8px}
+td{font-size:14px;padding:5px 0}
+td span{display:inline-block;width:30px;line-height:30px;border-radius:50%}
+td.today span{background:var(--sage);color:#fff}
+td.other{color:#c9c6bd}
+</style></head><body><div class="card">
+<h1><span id="t"></span><span><button id="p" aria-label="Previous month">‹</button><button id="n" aria-label="Next month">›</button></span></h1>
+<table><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody id="b"></tbody></table>
+</div><script>
+let now=new Date(),y=now.getFullYear(),m=now.getMonth();
+function draw(){const first=new Date(y,m,1),start=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate();
+document.getElementById('t').textContent=first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+let h='',d=1-start;for(let r=0;r<6&&d<=days;r++){h+='<tr>';for(let c=0;c<7;c++,d++){const dt=new Date(y,m,d),cur=d>=1&&d<=days,t=dt.toDateString()===now.toDateString();
+h+='<td class="'+(t?'today':'')+(cur?'':' other')+'"><span>'+dt.getDate()+'</span></td>'}h+='</tr>'}
+document.getElementById('b').innerHTML=h}
+document.getElementById('p').onclick=()=>{m--;if(m<0){m=11;y--}draw()};
+document.getElementById('n').onclick=()=>{m++;if(m>11){m=0;y++}draw()};
+draw();setInterval(()=>{const n=new Date();if(n.toDateString()!==now.toDateString()){now=n;draw()}},60000);
+</script></body></html>
