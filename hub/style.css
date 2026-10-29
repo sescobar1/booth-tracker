@@ -1,8 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Lora:wght@400;500&display=swap');
-:root{--bg:#f6f4ee;--card:#fbfaf6;--ink:#263428;--muted:#7d857a;--sage:#7d9178;--sage-l:#dfe5d9;--line:#e6e2d8}
+:root{--q:#7d9178;--bg:#f3f1ea;--card:#fbfaf6;--ink:#263428;--muted:#7d857a;--sage:#7d9178;--sage-l:#dfe5d9;--line:#e6e2d8}
 *{box-sizing:border-box;margin:0}
 html,body{height:100%;background:var(--bg);color:var(--ink);font-family:Lora,Georgia,serif}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;height:100%;min-height:100vh}
+.card{position:relative;border:1px solid #ddd6c6;border-radius:16px;padding:20px 22px;height:100%;min-height:100vh;
+  background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--q) 5%,transparent) 0 18px,transparent 18px 36px,color-mix(in srgb,var(--q) 3%,transparent) 36px 40px,transparent 40px 56px),
+             repeating-linear-gradient(0deg,color-mix(in srgb,var(--q) 5%,transparent) 0 18px,transparent 18px 36px,color-mix(in srgb,var(--q) 3%,transparent) 36px 40px,transparent 40px 56px),var(--card)}
+/* the quilt stitch around every box */
+.card:before{content:'';position:absolute;inset:7px;border:1.5px dashed color-mix(in srgb,var(--q) 38%,transparent);border-radius:11px;pointer-events:none}
+h1{color:color-mix(in srgb,var(--q) 55%,var(--ink))}
 h1{font-family:Fraunces,Lora,Georgia,serif;font-weight:400;font-size:24px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .muted{color:var(--muted)}
 button{background:none;border:0;color:var(--ink);font:inherit;font-size:18px;cursor:pointer;padding:0 6px}
