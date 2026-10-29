@@ -14,7 +14,8 @@
 .pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:400px;box-shadow:0 10px 30px #0002}
 .pane h2{font-size:18px;font-weight:500;margin:0 0 4px}.pane select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;margin-top:4px}
 .ing{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;cursor:pointer}.ing input{margin:0}.ing small{color:var(--muted);font-size:11px}
-.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}</style>
+.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.logf{display:grid;grid-template-columns:1fr 128px 92px auto;gap:6px}.logf input,.logf select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;min-width:0}@media(max-width:480px){.logf{grid-template-columns:1fr 1fr}.logf #lN{grid-column:1/-1}}
+.rm{font-size:11px;color:var(--muted);opacity:.4;padding:0 0 0 6px}.rm:hover{opacity:1}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="shop.js"></script></head><body><div class="card">
 <h1>Meal planning</h1>
 <div class="tabs"><button data-tab="plan" class="on">This week</button><button data-tab="ideas">What to cook</button><button data-tab="hist">Last 30 days</button></div>
@@ -70,9 +71,12 @@ function draw() {
     const since = add(tdy(), -30), past = meals.filter(m => m.date >= since && m.date <= tdy()).sort((a, b) => b.date.localeCompare(a.date));
     const counts = {}; past.forEach(m => { const k = key(m.title); counts[k] = counts[k] || { t: m.title, n: 0 }; counts[k].n++; });
     const top = Object.values(counts).sort((a, b) => b.n - a.n).slice(0, 5);
-    el.innerHTML = past.length ? '<div class="lbl2" style="margin-top:0">Most often</div><div class="hist">' + top.map(c => '<span>' + esc(c.t) + '</span><span>' + c.n + '×</span>').join('') + '</div>' +
-      '<div class="lbl2">Every meal</div><div class="hist">' + past.map(m => '<span>' + esc(m.title) + (m.list && m.list !== 'Dinner' ? ' <small class="muted">' + esc(m.list) + '</small>' : '') + '</span><span>' + dt(m.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '</span>').join('') + '</div>'
-      : '<p class="muted small">No meals logged in the last 30 days yet. Plan them here or in the Planner and they\'ll show up.</p>';
+    const names = [...new Set(recipes.map(r => r.title).concat(meals.map(m => m.title)))].sort();
+    const form = '<form id="logF" class="logf"><input id="lN" list="lNames" placeholder="What did you eat? (Tacos, Chili…)" required><datalist id="lNames">' + names.map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>' +
+      '<input id="lD" type="date" value="' + add(tdy(), -1) + '" max="' + tdy() + '"><select id="lM"><option>Dinner</option><option>Lunch</option><option>Breakfast</option></select><button class="btn">Add</button></form>';
+    el.innerHTML = '<div class="lbl2" style="margin-top:0">Add something you\'ve eaten</div>' + form + (past.length ? '<div class="lbl2">Most often</div><div class="hist">' + top.map(c => '<span>' + esc(c.t) + '</span><span>' + c.n + '×</span>').join('') + '</div>' +
+      '<div class="lbl2">Every meal</div><div class="hist">' + past.map(m => '<span>' + esc(m.title) + (m.list && m.list !== 'Dinner' ? ' <small class="muted">' + esc(m.list) + '</small>' : '') + '</span><span>' + dt(m.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' <button class="rm" data-rm="' + m.id + '" title="Remove">✕</button></span>').join('') + '</div>'
+      : '<p class="muted small" style="margin-top:12px">Nothing logged in the last 30 days yet. Add what you\'ve eaten above.</p>');
   }
 }
 // Plan a meal: pick the day, then choose which ingredients go on the shopping list.
@@ -122,11 +126,20 @@ async function load() {
     .concat((fr.data || []).map(r => ({ title: r.title, src: 'Family Recipes', ing: lines(r.ingredients) })));
   draw();
 }
-document.addEventListener('click', e => {
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'logF') return; e.preventDefault();
+  const t = document.getElementById('lN').value.trim(), d = document.getElementById('lD').value, ml = document.getElementById('lM').value; if (!t || !d) return;
+  const r = recipes.find(x => key(x.title) === key(t));
+  const row = { id: uid(), kind: 'meal', title: r ? r.title : t.charAt(0).toUpperCase() + t.slice(1), date: d, list: ml, location: (r && r.pid) || '', notes: '', all_day: true, updated_at: now() };
+  meals.push(row); draw(); const n = document.getElementById('lN'); if (n) n.focus();
+  const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); }
+});
+document.addEventListener('click', async e => {
+  const rm = e.target.closest('[data-rm]'); if (rm) { const m = meals.find(x => x.id === rm.dataset.rm); if (!m || !confirm('Remove “' + m.title + '” on ' + m.date + '?')) return; meals = meals.filter(x => x !== m); draw(); return SB.from('planner_items').delete().eq('id', m.id); }
   const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; return draw(); }
   if (e.target.id === 'shuf') { seed++; return draw(); }
   const pd = e.target.closest('[data-pickday]'); if (pd) { tab = 'ideas'; draw(); return setTimeout(() => document.querySelectorAll('.card2').forEach(c => c.dataset.day = pd.dataset.pickday)); }
   const i = e.target.closest('[data-idea]'); if (i) plan(i.dataset.idea, i.dataset.day);
 });
-hubData(async sb => { SB = sb; if (document.querySelector('.sheet')) return; await load(); });
+hubData(async sb => { SB = sb; if (document.querySelector('.sheet') || (document.activeElement && document.activeElement.value)) return; await load(); });
 </script></body></html>
