@@ -15,7 +15,10 @@
 .pane h2{font-size:18px;font-weight:500;margin:0 0 4px}.pane select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;margin-top:4px}
 .ing{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;cursor:pointer}.ing input{margin:0}.ing small{color:var(--muted);font-size:11px}
 .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.logf{display:grid;grid-template-columns:1fr 128px 92px auto;gap:6px}.logf input,.logf select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;min-width:0}@media(max-width:480px){.logf{grid-template-columns:1fr 1fr}.logf #lN{grid-column:1/-1}}
-.rm{font-size:11px;color:var(--muted);opacity:.4;padding:0 0 0 6px}.rm:hover{opacity:1}</style>
+.rm{font-size:11px;color:var(--muted);opacity:.4;padding:0 0 0 6px}.rm:hover{opacity:1}.dn{display:flex;flex-direction:column;line-height:1.1}.dn b{font-size:20px;font-weight:400;color:var(--ink);letter-spacing:0}.dn i{font-style:normal;font-size:9.5px;background:var(--sage);color:#fff;border-radius:8px;padding:1px 5px;margin-top:3px;align-self:flex-start;letter-spacing:.06em}
+.md{align-items:start}.md.past{opacity:.6}.mi{display:flex;align-items:center;gap:4px;padding:1px 0}
+.madd{display:flex;gap:4px;margin-top:2px}.madd input{flex:1;min-width:0;font:inherit;font-size:13px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:3px 0;outline:none;color:var(--ink)}.madd input::placeholder{color:#b5b9b0}
+.madd select{font:inherit;font-size:11px;border:0;background:transparent;color:var(--muted);max-width:76px}.md:not(:hover):not(.now) .madd select{opacity:0}.md .pick{align-self:start}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="shop.js"></script></head><body><div class="card">
 <h1>Meal planning</h1>
 <div class="tabs"><button data-tab="plan" class="on">This week</button><button data-tab="ideas">What to cook</button><button data-tab="hist">Last 30 days</button></div>
@@ -55,11 +58,13 @@ function draw() {
   const el = document.getElementById('body'); el.className = '';
   if (tab === 'plan') {
     const ws = week(), order = { Breakfast: 0, Lunch: 1, Dinner: 2 };
-    el.innerHTML = ws.map(d => { const ms = meals.filter(m => m.date === d).sort((a, b) => (order[a.list] ?? 3) - (order[b.list] ?? 3));
-      const dinner = ms.some(m => m.list === 'Dinner');
-      return '<div class="md' + (d === tdy() ? ' now' : '') + '"><div class="dn">' + dt(d).toLocaleDateString('en-US', { weekday: 'short' }) + '</div><div class="ml">' +
-        (ms.length ? ms.map(m => (m.list && m.list !== 'Dinner' ? '<small>' + esc(m.list) + '</small>' : '') + esc(m.title)).join('<br>') : '<span class="empty">—</span>') + '</div>' +
-        (!dinner && d >= tdy() ? '<button class="pick" data-pickday="' + d + '">＋ dinner</button>' : '<span></span>') + '</div>'; }).join('') +
+    const names = [...new Set(recipes.map(r => r.title).concat(meals.map(m => m.title)))].sort();
+    el.innerHTML = '<datalist id="mNames">' + names.map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>' + ws.map(d => { const ms = meals.filter(m => m.date === d).sort((a, b) => (order[a.list] ?? 3) - (order[b.list] ?? 3));
+      const dinner = ms.some(m => m.list === 'Dinner'), isT = d === tdy(), past = d < tdy();
+      return '<div class="md' + (isT ? ' now' : '') + (past ? ' past' : '') + '"><div class="dn">' + dt(d).toLocaleDateString('en-US', { weekday: 'short' }) + '<b>' + dt(d).getDate() + '</b>' + (isT ? '<i>Today</i>' : '') + '</div><div class="ml">' +
+        ms.map(m => '<div class="mi">' + (m.list && m.list !== 'Dinner' ? '<small>' + esc(m.list) + '</small>' : '') + esc(m.title) + '<button class="rm" data-rm="' + m.id + '" title="Remove">✕</button></div>').join('') +
+        '<form class="madd" data-d="' + d + '"><input list="mNames" placeholder="' + (dinner ? '＋ add another' : '＋ What\'s for dinner?') + '"><select title="Which meal"><option' + (dinner ? '' : ' selected') + '>Dinner</option><option>Lunch</option><option' + (dinner ? ' selected' : '') + '>Breakfast</option></select></form></div>' +
+        (!dinner && !past ? '<button class="pick" data-pickday="' + d + '" title="Suggestions for this day">💡</button>' : '<span></span>') + '</div>'; }).join('') +
       (kids.length ? '<div class="lbl2">Dinner requests</div>' + kids.map(a => '<div class="md" style="grid-template-columns:1fr auto"><span>' + esc(a.title) + ' <small class="muted">· ' + esc(a.who) + '</small></span><button class="pick" data-idea="' + esc(a.title) + '">Plan it</button></div>').join('') : '') +
       '<div class="links"><button data-tab="ideas">💡 What should I cook?</button><a href="' + PL + '#meals/shop" target="_blank">🛒 Grocery list' + (shop.length ? ' · ' + shop.length : '') + '</a><a href="https://sescobar1.github.io/booth-tracker/recipes/" target="_blank">📖 Recipes</a></div>';
   } else if (tab === 'ideas') {
@@ -108,6 +113,21 @@ function plan(title, day) {
   s.querySelector('#pOnly').onclick = () => go(false);
   if (s.querySelector('#pAll')) s.querySelector('#pAll').onclick = () => go(true);
 }
+
+function askList(r) {
+  const have = new Set(shop.map(s => key(s.title))), ings = r.ing.map(l => ({ line: l, name: ingredientName(l), amt: amountOf(l) })).filter(x => x.name);
+  const s = document.createElement('div'); s.className = 'sheet';
+  s.innerHTML = '<div class="pane"><h2>Shopping list for ' + esc(r.title) + '?</h2><p class="muted small">Check what you need to buy.</p>' + ings.map((x, i) => { const on = have.has(key(x.name)), basic = BASICS.test(x.name);
+      return '<label class="ing"><input type="checkbox" data-i="' + i + '"' + (!on && !basic ? ' checked' : '') + (on ? ' disabled' : '') + '><span>' + esc(x.name) + (x.amt ? ' <small>' + esc(x.amt) + '</small>' : '') + '</span><small>' + (on ? 'on the list' : basic ? 'pantry basic?' : '') + '</small></label>'; }).join('') +
+    '<div class="acts"><button class="ghost" id="aNo">No thanks</button><button class="btn" id="aYes">Add to list</button></div></div>';
+  document.body.appendChild(s);
+  s.onclick = e => { if (e.target === s || e.target.id === 'aNo') s.remove(); };
+  s.querySelector('#aYes').onclick = async () => {
+    const rows = [...s.querySelectorAll('.ing input:checked')].map(c => { const x = ings[+c.dataset.i], k = x.name.toLowerCase();
+      return { id: uid(), kind: 'shop', title: x.name, list: aisleOf(x.line), notes: [x.amt, r.title].filter(Boolean).join(' · '), location: WM[k] || '', done: false, all_day: true, updated_at: now() }; });
+    s.remove(); if (rows.length) { const { error } = await SB.from('planner_items').insert(rows); if (error) return alert('Couldn\'t save: ' + error.message); } load();
+  };
+}
 async function load() {
   const [ml, rp, fr, sh, kd, st] = await Promise.all([
     SB.from('planner_items').select('id,title,date,list,location').eq('kind', 'meal').gte('date', add(tdy(), -120)),
@@ -127,6 +147,16 @@ async function load() {
   draw();
 }
 document.addEventListener('submit', async e => {
+  if (e.target.classList.contains('madd')) {
+    e.preventDefault(); const t = e.target.querySelector('input').value.trim(), d = e.target.dataset.d, ml = e.target.querySelector('select').value; if (!t) return;
+    const r = recipes.find(x => key(x.title) === key(t));
+    const row = { id: uid(), kind: 'meal', title: r ? r.title : t.charAt(0).toUpperCase() + t.slice(1), date: d, list: ml, location: (r && r.pid) || '', notes: '', all_day: true, updated_at: now() };
+    meals.push(row); draw();
+    const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); return; }
+    // A recipe with ingredients? Offer to put them on the shopping list.
+    if (r && r.ing.length && d >= tdy()) askList(r);
+    return;
+  }
   if (e.target.id !== 'logF') return; e.preventDefault();
   const t = document.getElementById('lN').value.trim(), d = document.getElementById('lD').value, ml = document.getElementById('lM').value; if (!t || !d) return;
   const r = recipes.find(x => key(x.title) === key(t));
