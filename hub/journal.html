@@ -46,7 +46,9 @@ textarea.vt{min-height:0;font-style:italic;color:#4e5a6b;overflow:hidden}.vr{tex
 ul.did{margin:0;padding-left:20px}ul.did li::marker{color:#a98bc4}.fed{font:inherit;font-size:14px;border:0;background:none;color:#7d9178;text-decoration:underline dotted;cursor:pointer;margin-left:6px}
 .fam{margin-top:2px}.fr{display:grid;grid-template-columns:78px 1fr auto;gap:6px;align-items:center;min-height:32px}.fn{font-size:19px}.fw{display:flex;gap:4px;flex-wrap:wrap}
 .fb{font-family:var(--hand);font-size:14px;line-height:1.2;border:1px dashed #d6cdbb;background:#fffaf0;border-radius:14px;padding:2px 8px;color:var(--ink2);cursor:pointer}.fb.on{border:1px solid #7d9178;background:#e6efe1}
-.fl{font-size:14px;color:#9a8f7a;white-space:nowrap}.frm{font:inherit;font-size:12px;border:0;background:none;color:#b65d5d;cursor:pointer;padding:0}</style>
+.fl{font-size:14px;color:#9a8f7a;white-space:nowrap}.frm{font:inherit;font-size:12px;border:0;background:none;color:#b65d5d;cursor:pointer;padding:0}.drinks{margin-top:2px}.dr{display:grid;grid-template-columns:28px minmax(0,1fr) 28px 150px;gap:6px;align-items:center;min-height:36px}
+.dbtn{font:inherit;font-size:20px;line-height:1;width:28px;height:28px;border-radius:50%;border:1px dashed #b9c7d6;background:#f4f8fb;color:#4f6f8f;cursor:pointer;padding:0}.dbtn.plus{border-style:solid;background:#e3eef7}
+.cups{font-size:20px;letter-spacing:1px;white-space:nowrap;overflow:hidden}.cups .none{font-size:15px;color:#b7bcc4;letter-spacing:0}.dn2{font-size:16px;line-height:18px}.dn2 b{font-weight:400;font-size:19px}.dn2 small{display:block;font-size:13px;color:#8a8f86}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js"></script></head><body><div class="wrap">
 <div class="top"><h1>My Journal</h1><div class="nav"><button id="prev" title="Day before">‹</button><button id="tdy">Today</button><button id="next" title="Next day">›</button></div></div>
 <div id="body" class="muted small">Opening your journal…</div>
@@ -55,7 +57,7 @@ const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧',
 const PROMPTS = ['What made you smile today?', 'What\'s been on your mind lately?', 'A moment you want to remember…', 'What did you learn today?', 'How did you take care of yourself?', 'What are you looking forward to?', 'Something you\'re proud of…', 'What would make tomorrow great?', 'Who made a difference for you today?', 'What\'s weighing on you, and one small next step?', 'Write a little letter to yourself…', 'Where did you see God / grace today?'];
 let recentAll = [], SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], timer, calMonth = day.slice(0, 7), pIdx = 0;
 const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
-const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '', cece_did: [], verse_ref: '', verse: '', family: {} });
+const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '', cece_did: [], verse_ref: '', verse: '', family: {}, drinks: {} });
 // How Cece was today: a 5-step scale (with colors for the month view), plus quick words and a note.
 const CECE = [['😄', 'Great', '#7fb069'], ['🙂', 'Good', '#b5cf7a'], ['😐', 'So-so', '#e8c95a'], ['😤', 'Rough', '#e8995a'], ['😭', 'Really hard', '#d9675f']];
 const CECE_TAGS = ['Kind', 'Helpful', 'Listened', 'Funny', 'Did chores', 'Good at school', 'Tired', 'Moody', 'Sassy', 'Argued', 'Talked back', 'Cried', 'Anxious', 'Sick', 'Stayed in room'];
@@ -73,6 +75,7 @@ function draw() {
         '<input class="line vr" data-f="verse_ref" value="' + esc(e.verse_ref || '') + '" placeholder="— Psalm 23:1"></div>' +
       glanceHtml() +
       '<p class="lbl">Today I feel…</p><div class="moods">' + MOODS.map(([i, n]) => '<button class="mood' + (e.mood === n ? ' on' : '') + '" data-mood="' + n + '" title="' + n + '">' + i + '</button>').join('') + '</div>' +
+      drinksHtml(e) +
       '<p class="lbl">I\'m grateful for…</p><ol class="g">' + [0, 1, 2].map(i => '<li><input class="line" data-g="' + i + '" value="' + esc((e.grateful || [])[i] || '') + '" placeholder="' + (i ? '' : 'my family, coffee, a good laugh…') + '"></li>').join('') + '</ol>' +
       '<p class="lbl">Highlight of the day</p><input class="line" data-f="highlight" value="' + esc(e.highlight) + '" placeholder="the best part was…">' +
       '<p class="lbl">Tomorrow I want to…</p><input class="line" data-f="tomorrow" value="' + esc(e.tomorrow) + '" placeholder="one thing that matters">' +
@@ -177,6 +180,16 @@ function familyHtml(e) {
         '<span class="fl">' + (w.length ? '✓ today' : last ? 'last: ' + last : '') + '</span></div>'; }).join('') +
     (famEdit ? '<div class="fr"><input class="line fadd" id="famNew" placeholder="add someone (Dad, Grandma…)" style="height:30px"></div>' : '') + '</div>';
 }
+
+// ---------- Drinks: 40 oz Stanleys of water and Diet Dr Thunders ----------
+const DRINKS = [['stanley', '💧', 'Stanley of water', '40 oz', 40, 3], ['thunder', '🥤', 'Diet Dr Thunder', 'cans', 12, 0]];
+function drinksHtml(e) {
+  const d = e.drinks || {};
+  return '<p class="lbl">Today I drank…</p><div class="drinks">' + DRINKS.map(([k, i, n, unit, oz, goal]) => { const c = d[k] || 0;
+    return '<div class="dr"><button class="dbtn" data-drink="' + k + '" data-d="-1" title="One less">–</button><span class="cups">' + (c ? i.repeat(Math.min(c, 8)) + (c > 8 ? ' +' + (c - 8) : '') : '<span class="none">none yet</span>') + '</span>' +
+      '<button class="dbtn plus" data-drink="' + k + '" data-d="1" title="Add one">+</button><span class="dn2"><b>' + c + '</b> ' + (k === 'stanley' ? (c === 1 ? 'Stanley' : 'Stanleys') : (c === 1 ? 'Diet Dr Thunder' : 'Diet Dr Thunders')) + '<small>' +
+      (k === 'stanley' ? (c * oz) + ' oz water' + (goal ? (c >= goal ? ' · goal met 🎉' : ' · goal ' + goal) : '') : (c * oz) + ' oz') + '</small></span></div>'; }).join('') + '</div>';
+}
 function pastHtml() {
   const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), t = isoDay(new Date());
   let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => '<span>' + x + '</span>').join('') + '<span></span>'.repeat((first.getDay() + 6) % 7);
@@ -196,9 +209,9 @@ function collect() {
 }
 function later() { clearTimeout(timer); const s = document.getElementById('saved'); if (s) s.textContent = 'writing…'; timer = setTimeout(save, 900); }
 async function save() {
-  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim() && !(e.cece_did || []).length && !(e.verse || '').trim() && !(e.verse_ref || '').trim() && !Object.values(e.family || {}).some(x => x.length);
+  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim() && !(e.cece_did || []).length && !(e.verse || '').trim() && !(e.verse_ref || '').trim() && !Object.values(e.family || {}).some(x => x.length) && !Object.values(e.drinks || {}).some(x => x);
   if (empty && !days.has(e.day)) return;
-  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', cece_did: e.cece_did || [], verse: e.verse || '', verse_ref: e.verse_ref || '', family: e.family || {}, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
+  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', cece_did: e.cece_did || [], verse: e.verse || '', verse_ref: e.verse_ref || '', family: e.family || {}, drinks: e.drinks || {}, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
   const s = document.getElementById('saved'); if (s) s.textContent = error ? 'couldn\'t save — check your signal' : 'saved ✓';
   if (!error) { const ra = recentAll.find(x => x.day === e.day); if (ra) Object.assign(ra, e); else recentAll.unshift({ ...e }); days.add(e.day); const r = recent.find(x => x.day === e.day); if (r) Object.assign(r, e); else { recent.unshift({ ...e }); recent.sort((a, b) => b.day.localeCompare(a.day)); recent = recent.slice(0, 10); } }
 }
@@ -215,6 +228,7 @@ document.addEventListener('input', e => {
   if (e.target.matches('[data-f],[data-g]')) { if (e.target.id === 'body2') grow(); if (e.target.classList.contains('vt')) { e.target.style.height = 'auto'; e.target.style.height = Math.ceil(e.target.scrollHeight / 32) * 32 + 'px'; } later(); }
 });
 document.addEventListener('click', async e => {
+  const dk = e.target.closest('[data-drink]'); if (dk) { collect(); const k = dk.dataset.drink, d = cur.drinks = { ...(cur.drinks || {}) }; d[k] = Math.max(0, (d[k] || 0) + Number(dk.dataset.d)); if (!d[k]) delete d[k]; await save(); draw(); return; }
   const fb = e.target.closest('[data-fam]'); if (fb) { collect(); const n = fb.dataset.fam, k = fb.dataset.way, f = cur.family = { ...(cur.family || {}) }, l = f[n] || []; f[n] = l.includes(k) ? l.filter(x => x !== k) : l.concat(k); if (!f[n].length) delete f[n]; await save(); draw(); return; }
   if (e.target.id === 'famEd') { collect(); famEdit = !famEdit; draw(); if (famEdit) { const n = document.getElementById('famNew'); if (n) n.focus(); } return; }
   const fr = e.target.closest('[data-frm]'); if (fr) { if (!(await ask('Take ' + fr.dataset.frm + ' off your check-in list?'))) return; collect(); FAM = FAM.filter(x => x !== fr.dataset.frm); hubSet(SB, 'familyPeople', { list: FAM }); draw(); return; }
