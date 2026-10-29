@@ -25,6 +25,7 @@
 <div id="body" class="muted small">Loading…</div>
 </div><script>
 const PL = 'https://sescobar1.github.io/booth-tracker/planner/';
+if (/[?&]bare\b/.test(location.search)) { document.querySelector('h1').style.display = 'none'; const c = document.querySelector('.card'); c.style.cssText = 'min-height:0;border:0;padding:0;background:transparent'; document.body.style.background = 'transparent'; }
 let SB, tab = 'plan', meals = [], recipes = [], shop = [], WM = {}, kids = [], seed = 0;
 const tdy = () => isoDay(new Date()), dt = d => new Date(d + 'T12:00');
 const add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };

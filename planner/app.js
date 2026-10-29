@@ -2915,12 +2915,14 @@ function viewMeals(sub) {
   $('view').innerHTML = mealTabs('plan') +
     '<div class="cal-head"><button type="button" class="ghost small" id="mPrev">‹</button><h2>' + esc(weekTitle(mealWeek)) + '</h2><button type="button" class="ghost small" id="mNext">›</button></div>' +
     '<div class="row-actions center"><button type="button" id="mShop">Add ingredients to shopping list</button><button type="button" class="ghost small" id="mCopy">Copy last week</button><button type="button" class="ghost small" id="mWeek">✨ Plan my week</button></div>' +
-    '<p class="helper center">' + planned + ' meals planned · tap any slot to fill it</p>' + ideasCard(days) +
+    '<p class="helper center">' + planned + ' meals planned · tap any slot to fill it</p>' +
+    '<details class="card pad hubmeals"' + (S().hubMealsOpen !== false ? ' open' : '') + '><summary><b>💡 What to cook · last 30 days · quick add</b></summary><iframe src="../hub/meals.html?bare=1&v=' + Date.now() + '" title="Meal planning"></iframe></details>' + ideasCard(days) +
     days.map(d => {
       const dt = new Date(d + 'T12:00'), ms = mealsOn(d);
       return '<div class="card pad mealday' + (d === today() ? ' today' : '') + '"><div class="mini-head"><h2>' + dt.toLocaleDateString([], { weekday: 'long' }) + ' <small>' + dt.toLocaleDateString([], { month: 'short', day: 'numeric' }) + '</small></h2></div>' +
         '<div class="mslots">' + SLOTS.map(s => { const m = ms.find(x => x.list === s); return '<button type="button" class="mslot' + (m ? ' set' : '') + (s === 'Dinner' ? ' main' : '') + '" data-meal="' + s + '" data-mealdate="' + d + '"><span>' + s + '</span><b>' + esc(m ? m.title : '+') + '</b></button>'; }).join('') + '</div></div>';
     }).join('');
+  const hm = $('view').querySelector('.hubmeals'); if (hm) hm.ontoggle = () => { S().hubMealsOpen = hm.open; window.save(); };
   $('mPrev').onclick = () => { mealWeek = addDays(mealWeek, -7); viewMeals(); };
   $('mNext').onclick = () => { mealWeek = addDays(mealWeek, 7); viewMeals(); };
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
@@ -2937,6 +2939,11 @@ function viewMeals(sub) {
 }
 const mealTabs = on => '<h1>Meals</h1><div class="toptabs"><a href="#meals"' + (on === 'plan' ? ' class="on"' : '') + '>Meal plan</a><a href="#meals/freezer"' + (on === 'freezer' ? ' class="on"' : '') + '>🥫 On hand</a><a href="#meals/shop"' + (on === 'shop' ? ' class="on"' : '') + '>Shopping list' + (shopCount() ? ' <small>' + shopCount() + '</small>' : '') + '</a><a href="#meals/recipes"' + (on === 'recipes' ? ' class="on"' : '') + '>Recipes</a></div>';
 const shopCount = () => data.items.filter(i => i.kind === 'shop' && !i.done).length;
+// Meals you've had before (any you typed in, too), most often first.
+function pastMeals(slot) {
+  const n = {}; data.items.filter(i => i.kind === 'meal' && i.title && (!slot || i.list === slot)).forEach(i => { const k = i.title.toLowerCase(); n[k] = n[k] || { t: i.title, c: 0 }; n[k].c++; });
+  return Object.values(n).sort((a, b) => b.c - a.c).slice(0, 12).map(x => x.t);
+}
 function editMeal(date, slot) {
   const cur = data.items.find(i => i.kind === 'meal' && i.date === date && i.list === slot);
   const rs = recipes(), fit = rs.filter(r => !r.list || r.list === slot), other = rs.filter(r => r.list && r.list !== slot);
@@ -2944,8 +2951,9 @@ function editMeal(date, slot) {
   openModal('<h2>' + esc(slot) + ' · ' + esc(fmtDate(date)) + '</h2>' +
     (ideas.length ? '<p class="lbl">🍳 From what you have</p><div class="catchips">' + ideas.map((m, n) => '<button type="button" class="chipbtn idea-chip' + (m.soon ? ' soon' : '') + '" data-idea="' + n + '">' + (m.soon ? '⏰ ' : '') + esc(m.title) + '<small>' + (m.need.length ? ' · need ' + m.need.length : ' · have it all') + '</small></button>').join('') + '</div>' : '') +
     (rs.length ? '<p class="lbl">From your recipes</p><div class="catchips">' + fit.concat(other).map(r => '<button type="button" class="chipbtn' + (cur && cur.location === r.id ? ' on' : '') + '" data-rec="' + r.id + '">' + esc(r.title) + '</button>').join('') + '</div>' : '<p class="helper">Tip: add recipes (Meals → Recipes) and their ingredients go on the shopping list for you.</p>') +
+    (pastMeals(slot).length ? '<p class="lbl">Meals you’ve made</p><div class="catchips">' + pastMeals(slot).map(t => '<button type="button" class="chipbtn" data-quick="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' : '') +
     '<p class="lbl">Quick picks</p><div class="catchips">' + ['Leftovers', 'Eat out', 'Takeout', 'Sandwiches', 'Cereal', 'School lunch'].map(x => '<button type="button" class="chipbtn" data-quick="' + x + '">' + x + '</button>').join('') + '</div>' +
-    '<label>Or type it<input id="mlTitle" value="' + esc(cur ? cur.title : '') + '" placeholder="Pot roast"></label>' +
+    '<label>Or type it<input id="mlTitle" list="mlNames" value="' + esc(cur ? cur.title : '') + '" placeholder="Pot roast"></label><datalist id="mlNames">' + [...new Set(rs.map(r => r.title).concat(pastMeals('')))].map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>' +
     '<label>Notes<input id="mlNotes" value="' + esc(cur ? cur.notes : '') + '" placeholder="Thaw meat the night before"></label>' +
     '<div class="row-actions"><button type="button" id="mlSave">Save</button><button type="button" class="ghost" id="mlCancel">Cancel</button>' + (cur ? '<button type="button" class="danger" id="mlDel">Clear</button>' : '') + '</div>' +
     (cur ? '<div class="row-actions"><button type="button" class="' + (cur.done ? 'ghost' : '') + '" id="mlCooked">' + (cur.done ? '✓ Cooked' : '✓ We cooked it') + '</button></div><p class="helper">“We cooked it” takes what you used out of 🥫 On hand.</p>' : ''));

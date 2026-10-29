@@ -618,3 +618,6 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 
 /* Day view: the time-block page */
 .dayframe { display: block; width: 100%; height: max(760px, calc(100vh - 210px)); border: 0; border-radius: var(--radius, 14px); background: transparent; }
+
+.hubmeals summary { cursor: pointer; list-style: none; }
+.hubmeals iframe { display: block; width: 100%; height: 560px; border: 0; margin-top: 10px; border-radius: 12px; background: transparent; }

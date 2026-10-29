@@ -75,7 +75,7 @@
     const s = document.createElement('div'); s.className = 'sheet';
     const ask = () => {
       s.innerHTML = '<div class="pane"><h2>Add a recipe for ' + esc(title) + '?</h2><p class="muted small">Then it can fill your shopping list next time you make it.</p>' +
-        '<div class="acts" style="justify-content:flex-start;flex-direction:column;align-items:stretch"><label class="btn" style="text-align:center;cursor:pointer">📄 Add from a file or photo<input type="file" id="rF" accept="image/*,.pdf,.docx,.txt,text/plain,application/pdf" hidden></label>' +
+        '<div class="acts" style="justify-content:flex-start;flex-direction:column;align-items:stretch"><label class="btn" style="text-align:center;cursor:pointer">📄 Add from a file or photo<input type="file" id="rF" accept="image/*,.pdf,.docx,.txt,text/plain,application/pdf" hidden style="display:none"></label>' +
         '<button class="ghost" id="rT">✍️ Type it in</button><button class="ghost" id="rN">Not now</button></div><p class="muted small" id="rMsg" style="margin-top:8px">Photos of recipe cards, cookbook pages, screenshots, PDFs, Word or text files.</p></div>';
       s.querySelector('#rN').onclick = () => s.remove();
       s.querySelector('#rT').onclick = () => form({ title, ingredients: [], steps: [] });

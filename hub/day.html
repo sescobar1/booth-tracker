@@ -26,8 +26,10 @@
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}.s{grid-template-columns:18px 1fr auto auto}.wm{font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:1px 7px;white-space:nowrap}.wm:hover{border-color:var(--sage);color:var(--ink)}
 .qa{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}.qal{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);width:100%}
 .chip{font-size:12.5px;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#fff;color:var(--ink)}.chip:hover{border-color:var(--sage)}.chip.have{background:var(--sage-l);border-color:var(--sage-l);color:var(--muted)}.chip.ed{border-style:dashed;color:var(--muted)}
-.sacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.sacts .ghost{text-decoration:none;color:var(--ink)}</style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="cal.js"></script></head><body><div class="card">
+.sacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.sacts .ghost{text-decoration:none;color:var(--ink)}.ing{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;cursor:pointer}.ing input{margin:0}.ing small{color:var(--muted);font-size:11px}
+.lb{display:block;font-size:12px;color:var(--muted);margin-top:9px}.lb input,.lb select,.lb textarea{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px;color:var(--ink);box-sizing:border-box}.lb textarea{font-size:13px}
+.pane h2{font-size:18px;font-weight:500;margin:0 0 4px}.pane select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="cal.js"></script><script src="recipeadd.js"></script></head><body><div class="card">
 <div class="top"><div><a class="back" href="weektodo.html">‹ Back to the week</a><h1 id="ttl">My day</h1></div><div class="strip" id="strip"></div></div>
 <div id="body" class="muted small">Loading…</div>
 </div><script>
@@ -70,7 +72,9 @@ function draw() {
     todos.map(t => '<div class="t' + (t.done ? ' on' : '') + '" draggable="true" data-id="' + t.id + '" style="border-left-color:' + colorOf(t) + '"><span class="ck">' + (t.done ? '✓' : '') + '</span><span class="tx">' + (t.priority ? '⭐ ' : '') + esc(t.title) + '</span><button class="x" title="Delete">✕</button></div>').join('') +
     '<form class="add" data-f="todo"><input placeholder="+ Add a to-do"></form><p class="hint">Same list as This week and Today. Drag one onto an hour to block time for it.</p></div>' +
     '<div class="box"><h2>🍽 Meals <a href="https://sescobar1.github.io/booth-tracker/planner/#meals" target="_blank">Meal planner ↗</a></h2>' +
-    MEALS.map(l => { const m = meal(l); return '<div class="ml"><span>' + l + '</span><input data-meal="' + l + '" value="' + esc(m ? m.title : '') + '" placeholder="What\'s for ' + l.toLowerCase() + '?"></div>'; }).join('') + '</div>' +
+    '<datalist id="mNames">' + mealNames().map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>' +
+    MEALS.map(l => { const m = meal(l); return '<div class="ml"><span>' + l + '</span><input list="mNames" data-meal="' + l + '" value="' + esc(m ? m.title : '') + '" placeholder="What\'s for ' + l.toLowerCase() + '?"></div>'; }).join('') +
+    (mealChips().length ? '<div class="qa"><span class="qal">Quick add · tap to fill the next open meal</span>' + mealChips().map(t => '<button class="chip" data-qmeal="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' : '') + '</div>' +
     '<div class="box"><h2>🛒 Shopping list <small>' + shop.filter(s => !s.done).length + ' to get</small></h2>' +
     shop.map(s => '<div class="s' + (s.done ? ' on' : '') + '" data-sid="' + s.id + '"><span class="ck">' + (s.done ? '✓' : '') + '</span><span class="tx">' + esc(s.title) + '</span><a class="wm" href="' + esc(storeUrl(s)) + '" target="_blank" title="Open on ' + esc(storeOf(s.location)) + '">' + esc(storeOf(s.location)) + (s.location ? ' ✓' : '') + '</a><button class="x" title="Remove">✕</button></div>').join('') +
     '<form class="add" data-f="shop"><input placeholder="+ Add to the list"></form>' +
@@ -123,6 +127,61 @@ async function addShop(title) {
   if (!onList(t)) await ins({ kind: 'shop', title: t, done: false, list: aisleOf(t), location: WM[k] || '', notes: WM[k] ? storeOf(WM[k]) : '', all_day: true });
   qs.counts = qs.counts || {}; qs.counts[k] = (qs.counts[k] || 0) + 1; hubSet(SB, 'shopQuick', qs);
 }
+
+// ---------- Meals: suggestions, quick add, recipes ----------
+let mq = { counts: {}, hidden: [] }, recs = [], recsLoaded = false;
+const mkey = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function ingredientName(line) {
+  const t = String(line).replace(/\(.*?\)/g, ' ').trim();
+  const name = t.replace(/^[\d\s\/.,½¼¾⅓⅔⅛-]+/, '').replace(/^(cups?|c\.|tbsp|tablespoons?|tsp|teaspoons?|lbs?|pounds?|oz|ounces?|cans?|pkgs?|packages?|packets?|bags?|boxes?|jars?|bunch(es)?|cloves?|heads?|large|small|medium|dozen|slices?|sticks?|bottles?|containers?|pints?|quarts?|gallons?|loaf|loaves)\.?\s+(of\s+)?/i, '').replace(/,.*$/, '').trim();
+  return (name || t).charAt(0).toUpperCase() + (name || t).slice(1);
+}
+const amountOf = line => (String(line).match(/^[\d\s\/.,½¼¾⅓⅔⅛-]+(?:\s*(?:cups?|c\.|tbsp|tablespoons?|tsp|teaspoons?|lbs?|pounds?|oz|ounces?|cans?|pkgs?|packages?|packets?|bags?|boxes?|jars?|bunch(?:es)?|cloves?|heads?|dozen|slices?|sticks?|bottles?|containers?|pints?|quarts?|gallons?|loaf|loaves)\.?)?/i) || [''])[0].trim();
+const BASICS = /^(salt|pepper|black pepper|water|ice|oil|olive oil|vegetable oil|cooking spray|sugar|flour|butter|garlic powder|onion powder|paprika|cinnamon|vanilla|baking soda|baking powder)$/i;
+const NO_RECIPE = /leftover|eat(ing)? out|take ?out|fast food|restaurant|delivery|drive.?thru|fend for|cereal|sandwich(es)?$|^out$|school lunch/i;
+function mealNames() { return [...new Set(recs.map(r => r.title).concat(Object.values(mq.counts || {}).map(v => v.t)))].sort(); }
+function mealChips() { const hide = new Set(mq.hidden || []); return Object.entries(mq.counts || {}).filter(([k]) => !hide.has(k)).sort((a, b) => b[1].n - a[1].n).slice(0, 12).map(([, v]) => v.t); }
+async function loadRecs() {
+  if (recsLoaded) return; recsLoaded = true;
+  const lines = t => String(t || '').split(/\n/).map(x => x.replace(/^[-•*]\s*/, '').trim()).filter(x => x && !/:$/.test(x));
+  const [rp, fr, q, hist] = await Promise.all([SB.from('planner_items').select('id,title,notes').eq('kind', 'recipe'), SB.from('family_recipes').select('title,ingredients').is('deleted_at', null),
+    hubGet(SB, 'mealQuick').catch(() => ({})), SB.from('planner_items').select('title').eq('kind', 'meal').gte('date', add(D, -120))]);
+  recs = (rp.data || []).map(r => ({ title: r.title, pid: r.id, ing: lines(r.notes) })).concat((fr.data || []).map(r => ({ title: r.title, ing: lines(r.ingredients) })));
+  mq = { counts: (q && q.counts) || {}, hidden: (q && q.hidden) || [] };
+  (hist.data || []).forEach(m => { const k = mkey(m.title); if (!mq.counts[k]) mq.counts[k] = { t: m.title, n: 1 }; });
+  draw();
+}
+function bump(t) { const k = mkey(t); if (!k) return; mq.counts[k] = { t, n: ((mq.counts[k] && mq.counts[k].n) || 0) + 1 }; mq.hidden = (mq.hidden || []).filter(h => h !== k); hubSet(SB, 'mealQuick', mq); }
+async function setMeal(l, v, m) {
+  const r = v && recs.find(x => mkey(x.title) === mkey(v)), title = r ? r.title : v ? v.charAt(0).toUpperCase() + v.slice(1) : '';
+  if (m && title) await upd(m.id, { title, location: (r && r.pid) || '' }); else if (m && !title) await SB.from('planner_items').delete().eq('id', m.id);
+  else if (title) await ins({ kind: 'meal', title, date: D, list: l, all_day: true, location: (r && r.pid) || '' });
+  await load();
+  if (!title || (m && mkey(m.title) === mkey(title))) return;
+  bump(title);
+  if (r && r.ing.length && D >= isoDay(new Date())) askList(r);
+  else if (!r && !NO_RECIPE.test(title)) {
+    let skip = []; try { skip = JSON.parse(localStorage.getItem('hubNoRecipe') || '[]'); } catch (e) {}
+    if (skip.includes(mkey(title))) return;
+    askRecipe(SB, title, rec => { recs.push(rec); if (D >= isoDay(new Date()) && rec.ing.length) askList(rec); });
+    const nn = document.querySelector('.sheet #rN'); if (nn) nn.addEventListener('click', () => { try { localStorage.setItem('hubNoRecipe', JSON.stringify(skip.concat(mkey(title)))); } catch (e) {} });
+  }
+}
+function askList(r) {
+  const have = new Set(shop.filter(x => !x.done).map(x => mkey(x.title))), ings = r.ing.map(l => ({ line: l, name: ingredientName(l), amt: amountOf(l) })).filter(x => x.name);
+  if (!ings.length) return;
+  const s = document.createElement('div'); s.className = 'sheet';
+  s.innerHTML = '<div class="pane"><h2 style="font-size:18px;font-weight:500;margin:0">Shopping list for ' + esc(r.title) + '?</h2><p class="muted small">Check what you need to buy.</p>' + ings.map((x, i) => { const on = have.has(mkey(x.name)), basic = BASICS.test(x.name);
+      return '<label class="ing"><input type="checkbox" data-i="' + i + '"' + (!on && !basic ? ' checked' : '') + (on ? ' disabled' : '') + '><span>' + esc(x.name) + (x.amt ? ' <small>' + esc(x.amt) + '</small>' : '') + '</span><small>' + (on ? 'on the list' : basic ? 'pantry basic?' : '') + '</small></label>'; }).join('') +
+    '<div class="acts"><button class="ghost" id="aNo">No thanks</button><button class="btn" id="aYes">Add to list</button></div></div>';
+  document.body.appendChild(s);
+  s.onclick = e => { if (e.target === s || e.target.id === 'aNo') s.remove(); };
+  s.querySelector('#aYes').onclick = async () => {
+    const rows = [...s.querySelectorAll('.ing input:checked')].map(c => { const x = ings[+c.dataset.i], k = x.name.toLowerCase();
+      return { id: uid(), kind: 'shop', title: x.name, list: aisleOf(x.line), notes: [x.amt, r.title].filter(Boolean).join(' · '), location: WM[k] || '', done: false, all_day: true, updated_at: now() }; });
+    s.remove(); if (rows.length) { const { error } = await SB.from('planner_items').insert(rows); if (error) return alert('Couldn\'t save: ' + error.message); } load();
+  };
+}
 async function load() {
   const day = D;
   const [a, b, r] = await Promise.all([
@@ -138,6 +197,7 @@ async function load() {
   try { const q = await hubGet(SB, 'shopQuick'); qs = { counts: q.counts || {}, hidden: q.hidden || [] }; } catch (e) {}
   if (extDay !== D) ext = [];
   draw();
+  loadRecs();
   // Then the connected calendars (Google, Outlook) and band events, same as the Planner calendar.
   try {
     const [st, band] = await Promise.all([SB.from('planner_settings').select('data').maybeSingle(), SB.from('vol_events').select('id,name,date,start_time,end_time,location').eq('date', D)]);
@@ -190,6 +250,8 @@ document.addEventListener('click', async e => {
   if (t) { const i = items.find(x => x.id === t.dataset.id); if (!i) return;
     if (e.target.closest('.x')) { if (!confirm('Delete “' + i.title + '”?')) return; items = items.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
     if (e.target.closest('.ck') || e.target.closest('.tx')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); } }
+  const qm = e.target.closest('[data-qmeal]');
+  if (qm) { const slot = ['Dinner', 'Lunch', 'Breakfast'].find(l => !items.some(i => i.kind === 'meal' && i.list === l)) || 'Dinner'; const m = items.find(i => i.kind === 'meal' && i.list === slot); return setMeal(slot, qm.dataset.qmeal, m); }
   if (e.target.id === 'qEd') { qEdit = !qEdit; return draw(); }
   const q = e.target.closest('[data-q]');
   if (q) { const u = q.dataset.q;
@@ -211,8 +273,7 @@ document.addEventListener('submit', async e => {
 });
 document.addEventListener('change', async e => {
   const l = e.target.dataset.meal; if (!l) return; const v = e.target.value.trim(), m = items.find(i => i.kind === 'meal' && i.list === l);
-  if (m && v) await upd(m.id, { title: v }); else if (m && !v) await SB.from('planner_items').delete().eq('id', m.id); else if (v) await ins({ kind: 'meal', title: v, date: D, list: l, all_day: true });
-  load();
+  await setMeal(l, v, m);
 });
 // Drag a to-do onto an hour to block time for it.
 let dragId = null;
