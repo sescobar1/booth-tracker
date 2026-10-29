@@ -552,8 +552,12 @@ setInterval(() => { const u = $('untilTxt'); if (u) u.textContent = untilText(u.
 let calMonth = '', calDay = '';
 let calMode = (() => { try { return localStorage.getItem(KEY + 'CalMode') || 'month'; } catch (e) { return 'month'; } })();
 const weekStart = iso => addDays(iso, -new Date(iso + 'T12:00').getDay());
+// On the hub, a day opens the hub's day page: time blocks, to-dos, meals and the shopping list.
+const EMBED = document.documentElement.classList.contains('embed');
+const openDayPage = d => { location.href = '../hub/day.html?from=cal&d=' + d; };
 function viewCalendar() {
   if (!calDay) calDay = today();
+  if (EMBED && calMode === 'day') calMode = 'month';
   calMonth = calDay.slice(0, 7);
   const seg = '<div class="segs viewseg">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(([k, l]) => '<button type="button" class="seg' + (calMode === k ? ' on' : '') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>';
   const title = calMode === 'month' ? monthName(calMonth) : calMode === 'week' ? weekTitle(weekStart(calDay)) : fmtDate(calDay, 'long');
@@ -571,7 +575,7 @@ function viewCalendar() {
   $('cToday').onclick = () => { calDay = today(); viewCalendar(); };
   if ($('cRefresh')) $('cRefresh').onclick = () => { toast('Refreshing…'); refreshAll(true); };
   $('cAdd').onclick = () => editItem(null, { kind: 'event', date: calDay });
-  $('view').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { calMode = b.dataset.mode; try { localStorage.setItem(KEY + 'CalMode', calMode); } catch (e) {} viewCalendar(); });
+  $('view').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { if (EMBED && b.dataset.mode === 'day') return openDayPage(calDay || today()); calMode = b.dataset.mode; try { localStorage.setItem(KEY + 'CalMode', calMode); } catch (e) {} viewCalendar(); });
 }
 function weekTitle(ws) {
   const we = addDays(ws, 6), a = new Date(ws + 'T12:00'), b = new Date(we + 'T12:00');
@@ -591,7 +595,7 @@ function drawMonth() {
   $('calBody').innerHTML = '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
     '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="ghost small" data-goday="' + calDay + '">Open day</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + mealsLine(calDay) + trackButtons(calDay) + '</div>';
   // On the hub the month fills the box, so tapping a day opens that day instead of the list underneath.
-  $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; if (document.documentElement.classList.contains('embed') && b.classList.contains('sel')) calMode = 'day'; viewCalendar(); });
+  $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; if (EMBED) return openDayPage(calDay); viewCalendar(); });
   wireCal();
 }
 // A little vine of leaves, like the top of a paper planner page.
@@ -792,7 +796,7 @@ const rowOpen = e => e.src === 'planner' ? 'data-item="' + e.id + '"' : e.link ?
 function wireCal() {
   wireRows($('calBody'));
   wireTrack($('calBody'), viewCalendar);
-  $('calBody').querySelectorAll('[data-goday]').forEach(b => b.onclick = () => { calDay = b.dataset.goday; calMode = 'day'; viewCalendar(); });
+  $('calBody').querySelectorAll('[data-goday]').forEach(b => b.onclick = () => { calDay = b.dataset.goday; if (EMBED) return openDayPage(calDay); calMode = 'day'; viewCalendar(); });
   $('calBody').querySelectorAll('[data-meal]').forEach(b => b.onclick = e => { e.stopPropagation(); editMeal(b.dataset.mealdate, b.dataset.meal); });
 }
 function legend() {

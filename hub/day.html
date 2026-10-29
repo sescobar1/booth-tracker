@@ -162,7 +162,9 @@ document.addEventListener('dragstart', e => { const t = e.target.closest('.t'); 
 document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
 document.addEventListener('dragover', e => { const h = e.target.closest('.hc'); if (!h || !dragId) return; e.preventDefault(); document.querySelectorAll('.over').forEach(x => x !== h && x.classList.remove('over')); h.classList.add('over'); });
 document.addEventListener('drop', async e => { const h = e.target.closest('.hc'); if (!h || !dragId) return; e.preventDefault(); const id = dragId; dragId = null; const st = h.dataset.h + ':00'; await upd(id, { start_time: st, end_time: endOf(st), all_day: false }); load(); });
-if (P.get('from') !== 'week') document.querySelector('.back').style.display = 'none';
+const back = document.querySelector('.back');
+if (P.get('from') === 'cal') { back.textContent = '‹ Back to the calendar'; back.href = '../planner/?embed=1#calendar'; }
+else if (P.get('from') !== 'week') back.style.display = 'none';
 strip();
 hubData(async sb => { SB = sb; await load(); }, 5);
 </script></body></html>
