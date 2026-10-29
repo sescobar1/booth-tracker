@@ -1,0 +1,114 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Journal</title><link rel="stylesheet" href="style.css">
+<style>
+@font-face{font-family:'Patrick Hand';src:url(../fonts/patrick-hand.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Pacifico';src:url(../fonts/pacifico.woff2) format('woff2');font-display:swap}
+:root{--paper:#fffdf6;--rule:#d9e3ea;--margin:#e8b4b0;--ink2:#2f3b4c;--hand:'Patrick Hand','Bradley Hand','Segoe Print',cursive}
+html,body{background:#efe9dc}
+body{background:radial-gradient(#e7dfcf 1px,transparent 1px) 0 0/18px 18px,#efe9dc}
+.wrap{max-width:1100px;margin:0 auto;padding:14px 12px 24px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.top h1{font-family:'Pacifico',cursive;font-weight:400;font-size:30px;color:#5b6b52;margin:0}
+.nav{display:flex;gap:6px;align-items:center}.nav button{font-family:var(--hand);font-size:17px;border:1px solid #d8cfbd;background:#fffaf0;border-radius:18px;padding:3px 12px;color:var(--ink2)}
+.nav button:hover{background:#fff}
+.book{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--paper);border-radius:6px 6px 6px 6px;box-shadow:0 1px 0 #e3dccb,0 3px 0 #ece6d8,0 5px 0 #e3dccb,0 14px 28px #0000002a}
+.book:before{content:'';position:absolute;top:0;bottom:0;left:50%;width:40px;transform:translateX(-50%);background:linear-gradient(90deg,transparent,#00000014 45%,#0000001f 50%,#00000014 55%,transparent);pointer-events:none}
+.ribbon{position:absolute;top:-6px;right:14px;width:22px;height:90px;background:#b65d5d;clip-path:polygon(0 0,100% 0,100% 100%,50% 82%,0 100%);box-shadow:0 2px 4px #0003;z-index:2}
+.pg{position:relative;padding:34px 34px 30px 58px;min-height:640px;font-family:var(--hand);color:var(--ink2);font-size:20px;line-height:32px;
+  background:linear-gradient(90deg,transparent 44px,var(--margin) 44px,var(--margin) 46px,transparent 46px),repeating-linear-gradient(transparent 0 31px,var(--rule) 31px 32px);background-position:0 0,0 22px}
+.pg.right{padding-left:40px;padding-right:52px;background:repeating-linear-gradient(transparent 0 31px,var(--rule) 31px 32px);background-position:0 22px}
+.date{font-size:34px;line-height:40px;margin:0 0 2px}.date small{display:block;font-size:19px;color:#8a8f86;line-height:24px}
+.lbl{font-family:var(--hand);font-size:17px;letter-spacing:.04em;color:#7a8c74;text-transform:none;margin:16px 0 0;line-height:32px}
+.moods{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.mood{font-size:24px;line-height:1;width:44px;height:44px;border-radius:50%;border:2px dashed #d6cdbb;background:#fffaf0;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center}
+.mood:hover{transform:rotate(-8deg) scale(1.08)}.mood.on{border:2px solid #7d9178;background:#eef3ea;transform:rotate(-6deg) scale(1.1)}
+.line{display:block;width:100%;border:0;background:transparent;font:inherit;color:var(--ink2);height:32px;padding:0;outline:none}
+.line::placeholder,textarea::placeholder{color:#b7bcc4}
+ol.g{margin:0;padding-left:22px}ol.g li::marker{color:#c39a6b}
+textarea{display:block;width:100%;border:0;background:transparent;font:inherit;color:var(--ink2);line-height:32px;resize:none;outline:none;padding:0;min-height:448px;overflow:hidden}
+.prompt{font-size:17px;color:#9a8f7a;margin:0 0 0;line-height:32px}.prompt b{color:#c39a6b;font-weight:400}.prompt button{font:inherit;color:#7d9178;border:0;background:none;cursor:pointer;padding:0 0 0 4px;text-decoration:underline dotted}
+.saved{position:absolute;right:16px;bottom:8px;font-size:15px;color:#9aa596}
+.sticker{position:absolute;right:56px;top:20px;font-size:30px;transform:rotate(12deg);opacity:.9}
+.past{margin-top:16px;background:#fffaf0;border-radius:8px;padding:12px 16px;box-shadow:0 4px 12px #00000014;font-family:var(--hand);color:var(--ink2)}
+.past h3{font-family:var(--hand);font-weight:400;font-size:22px;margin:0 0 6px;display:flex;justify-content:space-between}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;max-width:420px;text-align:center;font-size:16px}.cal span{color:#9a8f7a;font-size:14px}
+.cal button{font:inherit;border:0;background:none;border-radius:50%;width:34px;height:34px;margin:auto;cursor:pointer;color:var(--ink2)}
+.cal button.has{background:#dfe8da}.cal button.sel{outline:2px solid #b65d5d}.cal button.today{font-weight:700;color:#b65d5d}.cal button:disabled{opacity:.3;cursor:default}
+.recent{display:flex;gap:8px;overflow-x:auto;padding:6px 0 2px}.recent button{flex:0 0 auto;font:inherit;font-size:16px;text-align:left;border:1px solid #e3dccb;background:#fff;border-radius:6px;padding:6px 10px;max-width:220px;cursor:pointer;color:var(--ink2)}
+.recent small{display:block;color:#9a8f7a;font-size:13px}
+@media(max-width:760px){.book{grid-template-columns:1fr}.book:before{display:none}.pg{min-height:0}.pg.right{padding-left:58px;background:linear-gradient(90deg,transparent 44px,var(--margin) 44px,var(--margin) 46px,transparent 46px),repeating-linear-gradient(transparent 0 31px,var(--rule) 31px 32px);background-position:0 0,0 22px}.ribbon{right:24px}}
+.signin,.muted.small{font-family:Lora,serif}
+</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="wrap">
+<div class="top"><h1>My Journal</h1><div class="nav"><button id="prev" title="Day before">‹</button><button id="tdy">Today</button><button id="next" title="Next day">›</button></div></div>
+<div id="body" class="muted small">Opening your journal…</div>
+</div><script>
+const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧', 'Hard'], ['⛈', 'Rough'], ['🥰', 'Loved'], ['😴', 'Tired'], ['🙏', 'Thankful']];
+const PROMPTS = ['What made you smile today?', 'What\'s been on your mind lately?', 'A moment you want to remember…', 'What did you learn today?', 'How did you take care of yourself?', 'What are you looking forward to?', 'Something you\'re proud of…', 'What would make tomorrow great?', 'Who made a difference for you today?', 'What\'s weighing on you, and one small next step?', 'Write a little letter to yourself…', 'Where did you see God / grace today?'];
+let SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], timer, calMonth = day.slice(0, 7), pIdx = 0;
+const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
+const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '' });
+function draw() {
+  const e = cur || blank(), t = isoDay(new Date()), el = document.getElementById('body'); el.className = '';
+  pIdx = (dt(day).getDate() + dt(day).getMonth()) % PROMPTS.length;
+  const mood = MOODS.find(m => m[1] === e.mood);
+  el.innerHTML = '<div class="book"><div class="ribbon"></div>' +
+    '<div class="pg left">' + (mood ? '<div class="sticker">' + mood[0] + '</div>' : '') +
+      '<p class="date">' + dt(day).toLocaleDateString('en-US', { weekday: 'long' }) + '<small>' + dt(day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + (day === t ? ' · today' : '') + '</small></p>' +
+      '<p class="lbl">Today I feel…</p><div class="moods">' + MOODS.map(([i, n]) => '<button class="mood' + (e.mood === n ? ' on' : '') + '" data-mood="' + n + '" title="' + n + '">' + i + '</button>').join('') + '</div>' +
+      '<p class="lbl">I\'m grateful for…</p><ol class="g">' + [0, 1, 2].map(i => '<li><input class="line" data-g="' + i + '" value="' + esc((e.grateful || [])[i] || '') + '" placeholder="' + (i ? '' : 'my family, coffee, a good laugh…') + '"></li>').join('') + '</ol>' +
+      '<p class="lbl">Highlight of the day</p><input class="line" data-f="highlight" value="' + esc(e.highlight) + '" placeholder="the best part was…">' +
+      '<p class="lbl">Tomorrow I want to…</p><input class="line" data-f="tomorrow" value="' + esc(e.tomorrow) + '" placeholder="one thing that matters">' +
+    '</div>' +
+    '<div class="pg right"><p class="prompt"><b>✎</b> ' + esc(PROMPTS[pIdx]) + '<button id="newP" title="Another prompt">another</button></p>' +
+      '<textarea id="body2" data-f="body" placeholder="Dear diary…">' + esc(e.body) + '</textarea><span class="saved" id="saved"></span></div></div>' +
+    pastHtml();
+  grow();
+}
+function pastHtml() {
+  const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), t = isoDay(new Date());
+  let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => '<span>' + x + '</span>').join('') + '<span></span>'.repeat((first.getDay() + 6) % 7);
+  for (let k = 1; k <= n; k++) { const d = calMonth + '-' + String(k).padStart(2, '0'); cells += '<button data-day="' + d + '" class="' + (days.has(d) ? 'has ' : '') + (d === day ? 'sel ' : '') + (d === t ? 'today' : '') + '"' + (d > t ? ' disabled' : '') + '>' + k + '</button>'; }
+  return '<div class="past"><h3><span>📚 Past entries</span><span><button class="nav-m" data-m="-1" style="font:inherit;border:0;background:none;cursor:pointer">‹</button> ' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ' <button class="nav-m" data-m="1" style="font:inherit;border:0;background:none;cursor:pointer">›</button></span></h3>' +
+    '<div class="cal">' + cells + '</div>' +
+    (recent.length ? '<div class="recent">' + recent.map(r => '<button data-day="' + r.day + '"><small>' + dt(r.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (r.mood ? ' · ' + (MOODS.find(m => m[1] === r.mood) || [''])[0] : '') + '</small>' + esc((r.highlight || r.body || 'Entry').slice(0, 60)) + '</button>').join('') + '</div>' : '') + '</div>';
+}
+function grow() { const t = document.getElementById('body2'); if (!t) return; t.style.height = 'auto'; t.style.height = Math.max(448, Math.ceil(t.scrollHeight / 32) * 32) + 'px'; }
+function collect() {
+  const e = cur || blank();
+  document.querySelectorAll('[data-f]').forEach(i => { e[i.dataset.f] = i.value; });
+  e.grateful = [0, 1, 2].map(i => (document.querySelector('[data-g="' + i + '"]') || {}).value || '');
+  cur = e; return e;
+}
+function later() { clearTimeout(timer); const s = document.getElementById('saved'); if (s) s.textContent = 'writing…'; timer = setTimeout(save, 900); }
+async function save() {
+  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim());
+  if (empty && !days.has(e.day)) return;
+  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
+  const s = document.getElementById('saved'); if (s) s.textContent = error ? 'couldn\'t save — check your signal' : 'saved ✓';
+  if (!error) { days.add(e.day); const r = recent.find(x => x.day === e.day); if (r) Object.assign(r, e); else { recent.unshift({ ...e }); recent.sort((a, b) => b.day.localeCompare(a.day)); recent = recent.slice(0, 10); } }
+}
+async function open(d) {
+  if (cur) await save();
+  day = d; calMonth = d.slice(0, 7);
+  const { data } = await SB.from('journal_entries').select('*').eq('day', d).maybeSingle();
+  cur = data ? { ...data, grateful: data.grateful || [] } : null; draw();
+}
+document.addEventListener('input', e => { if (e.target.matches('[data-f],[data-g]')) { if (e.target.id === 'body2') grow(); later(); } });
+document.addEventListener('click', async e => {
+  const m = e.target.closest('[data-mood]'); if (m) { collect(); cur.mood = cur.mood === m.dataset.mood ? '' : m.dataset.mood; await save(); draw(); return; }
+  const d = e.target.closest('[data-day]'); if (d && !d.disabled) return open(d.dataset.day);
+  const nm = e.target.closest('.nav-m'); if (nm) { const [y, mo] = calMonth.split('-').map(Number), x = new Date(y, mo - 1 + Number(nm.dataset.m), 1); calMonth = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); collect(); return draw(); }
+  if (e.target.id === 'newP') { const p = document.querySelector('.prompt'); pIdx = (pIdx + 1) % PROMPTS.length; p.firstChild.nextSibling.textContent = ' ' + PROMPTS[pIdx]; return; }
+  if (e.target.id === 'prev') return open(add(day, -1));
+  if (e.target.id === 'next') { if (day < isoDay(new Date())) open(add(day, 1)); return; }
+  if (e.target.id === 'tdy') return open(isoDay(new Date()));
+});
+window.addEventListener('beforeunload', () => { if (timer) save(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && timer) save(); });
+hubData(async sb => {
+  if (SB) return; SB = sb;
+  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body').order('day', { ascending: false }).limit(400)]);
+  (list.data || []).forEach(r => days.add(r.day)); recent = (list.data || []).slice(0, 10);
+  await open(day);
+}, 600);
+</script></body></html>
