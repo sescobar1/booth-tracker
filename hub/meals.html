@@ -18,8 +18,8 @@
 .rm{font-size:11px;color:var(--muted);opacity:.4;padding:0 0 0 6px}.rm:hover{opacity:1}.dn{display:flex;flex-direction:column;line-height:1.1}.dn b{font-size:20px;font-weight:400;color:var(--ink);letter-spacing:0}.dn i{font-style:normal;font-size:9.5px;background:var(--sage);color:#fff;border-radius:8px;padding:1px 5px;margin-top:3px;align-self:flex-start;letter-spacing:.06em}
 .md{align-items:start}.md.past{opacity:.6}.mi{display:flex;align-items:center;gap:4px;padding:1px 0}
 .madd{display:flex;gap:4px;margin-top:2px}.madd input{flex:1;min-width:0;font:inherit;font-size:13px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:3px 0;outline:none;color:var(--ink)}.madd input::placeholder{color:#b5b9b0}
-.madd select{font:inherit;font-size:11px;border:0;background:transparent;color:var(--muted);max-width:76px}.md:not(:hover):not(.now) .madd select{opacity:0}.md .pick{align-self:start}</style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="shop.js"></script></head><body><div class="card">
+.madd select{font:inherit;font-size:11px;border:0;background:transparent;color:var(--muted);max-width:76px}.md:not(:hover):not(.now) .madd select{opacity:0}.md .pick{align-self:start}.lb{display:block;font-size:12px;color:var(--muted);margin-top:9px}.lb input,.lb select,.lb textarea{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px;color:var(--ink);box-sizing:border-box}.lb textarea{font-size:13px;line-height:1.4}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="shop.js"></script><script src="recipeadd.js"></script></head><body><div class="card">
 <h1>Meal planning</h1>
 <div class="tabs"><button data-tab="plan" class="on">This week</button><button data-tab="ideas">What to cook</button><button data-tab="hist">Last 30 days</button></div>
 <div id="body" class="muted small">Loading…</div>
@@ -128,6 +128,16 @@ function askList(r) {
     s.remove(); if (rows.length) { const { error } = await SB.from('planner_items').insert(rows); if (error) return alert('Couldn\'t save: ' + error.message); } load();
   };
 }
+
+// A meal with no recipe yet: offer to add one (not for things like leftovers or eating out, or ones you said no to).
+const NO_RECIPE = /leftover|eat(ing)? out|take ?out|fast food|restaurant|delivery|drive.?thru|fend for|cereal|sandwich(es)?$|^out$/i;
+function maybeRecipe(title, offerList) {
+  let skip = []; try { skip = JSON.parse(localStorage.getItem('hubNoRecipe') || '[]'); } catch (e) {}
+  if (NO_RECIPE.test(title) || skip.includes(key(title))) return;
+  askRecipe(SB, title, rec => { recipes.push(rec); draw(); if (offerList && rec.ing.length) askList(rec); });
+  // "Not now" means don't ask again for this meal.
+  const nn = document.querySelector('.sheet #rN'); if (nn) nn.addEventListener('click', () => { try { localStorage.setItem('hubNoRecipe', JSON.stringify(skip.concat(key(title)))); } catch (e) {} });
+}
 async function load() {
   const [ml, rp, fr, sh, kd, st] = await Promise.all([
     SB.from('planner_items').select('id,title,date,list,location').eq('kind', 'meal').gte('date', add(tdy(), -120)),
@@ -155,6 +165,7 @@ document.addEventListener('submit', async e => {
     const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); return; }
     // A recipe with ingredients? Offer to put them on the shopping list.
     if (r && r.ing.length && d >= tdy()) askList(r);
+    else if (!r) maybeRecipe(row.title, d >= tdy());
     return;
   }
   if (e.target.id !== 'logF') return; e.preventDefault();
@@ -162,7 +173,8 @@ document.addEventListener('submit', async e => {
   const r = recipes.find(x => key(x.title) === key(t));
   const row = { id: uid(), kind: 'meal', title: r ? r.title : t.charAt(0).toUpperCase() + t.slice(1), date: d, list: ml, location: (r && r.pid) || '', notes: '', all_day: true, updated_at: now() };
   meals.push(row); draw(); const n = document.getElementById('lN'); if (n) n.focus();
-  const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); }
+  const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); return; }
+  if (!r) maybeRecipe(row.title, false);
 });
 document.addEventListener('click', async e => {
   const rm = e.target.closest('[data-rm]'); if (rm) { const m = meals.find(x => x.id === rm.dataset.rm); if (!m || !confirm('Remove “' + m.title + '” on ' + m.date + '?')) return; meals = meals.filter(x => x !== m); draw(); return SB.from('planner_items').delete().eq('id', m.id); }
