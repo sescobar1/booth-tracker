@@ -97,7 +97,7 @@ function editBlock(i) {
   s.querySelector('#bOK').onclick = async () => { const st = s.querySelector('#bS').value; await upd(i.id, { title: s.querySelector('#bT').value.trim() || i.title, start_time: st, end_time: s.querySelector('#bE').value || (st ? endOf(st) : ''), all_day: !st }); close(); };
 }
 document.addEventListener('click', async e => {
-  const go = e.target.closest('[data-go]'); if (go) { D = go.dataset.go; history.replaceState(null, '', '?d=' + D); document.getElementById('body').innerHTML = '<p class="muted small">Loading…</p>'; return load(); }
+  const go = e.target.closest('[data-go]'); if (go) { D = go.dataset.go; history.replaceState(null, '', '?' + (P.get('from') ? 'from=' + P.get('from') + '&' : '') + 'd=' + D); document.getElementById('body').innerHTML = '<p class="muted small">Loading…</p>'; return load(); }
   const blk = e.target.closest('.blk');
   if (blk) { const i = items.find(x => x.id === blk.dataset.id); if (!i) return;
     if (e.target.closest('.ck')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); }
@@ -137,6 +137,7 @@ document.addEventListener('dragstart', e => { const t = e.target.closest('.t'); 
 document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
 document.addEventListener('dragover', e => { const h = e.target.closest('.hc'); if (!h || !dragId) return; e.preventDefault(); document.querySelectorAll('.over').forEach(x => x !== h && x.classList.remove('over')); h.classList.add('over'); });
 document.addEventListener('drop', async e => { const h = e.target.closest('.hc'); if (!h || !dragId) return; e.preventDefault(); const id = dragId; dragId = null; const st = h.dataset.h + ':00'; await upd(id, { start_time: st, end_time: endOf(st), all_day: false }); load(); });
+if (P.get('from') !== 'week') document.querySelector('.back').style.display = 'none';
 strip();
 hubData(async sb => { SB = sb; await load(); }, 5);
 </script></body></html>

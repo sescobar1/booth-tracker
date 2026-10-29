@@ -56,7 +56,7 @@ function draw() {
       rest.map(t => row(t, tdy)).join('') + (list.length ? '' : '<p class="muted small">Nothing yet. Add one below — tap ☆ to make it a Top 3.</p>') +
       '<form class="add" data-d="' + tdy + '"><input placeholder="+ Add a to-do for today"></form></div>';
   } else {
-    el.innerHTML = '<div class="wk">' + ds.map(d => '<div class="dy' + (d === tdy ? ' now' : d < tdy ? ' past' : '') + '" data-day="' + d + '"><a class="dh" href="day.html?d=' + d + '" title="Open this day: time blocks, meals, shopping"><b>' + dt(d).toLocaleDateString('en-US', { weekday: 'long' }) + '</b><span>' + dt(d).getDate() + ' ›</span></a>' +
+    el.innerHTML = '<div class="wk">' + ds.map(d => '<div class="dy' + (d === tdy ? ' now' : d < tdy ? ' past' : '') + '" data-day="' + d + '"><a class="dh" href="day.html?from=week&d=' + d + '" title="Open this day: time blocks, meals, shopping"><b>' + dt(d).toLocaleDateString('en-US', { weekday: 'long' }) + '</b><span>' + dt(d).getDate() + ' ›</span></a>' +
       onDay(d).map(t => row(t, d)).join('') + '<form class="add" data-d="' + d + '"><input placeholder="+ Add a to-do"></form></div>').join('') + '</div>';
     document.getElementById('rng').textContent = dt(ds[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + dt(ds[6]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
@@ -129,6 +129,6 @@ document.addEventListener('dragstart', e => { const r = e.target.closest('.t'); 
 document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.drag,.over').forEach(x => x.classList.remove('drag', 'over')); });
 document.addEventListener('dragover', e => { const d = e.target.closest('.dy'); if (!d || !dragId) return; e.preventDefault(); document.querySelectorAll('.over').forEach(x => x !== d && x.classList.remove('over')); d.classList.add('over'); });
 document.addEventListener('drop', async e => { const d = e.target.closest('.dy'); if (!d || !dragId) return; e.preventDefault(); const t = tasks.find(x => x.id === dragId); dragId = null; if (t && t.date !== d.dataset.day) await save(t, { date: d.dataset.day }); });
-if (ONE) { document.getElementById('h1').firstChild.textContent = 'Today '; document.getElementById('navs').innerHTML = '<a class="muted" style="text-decoration:none" href="day.html" title="Time blocks, meals and shopping for today">' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + ' · Open my day ›</a>'; }
+if (ONE) { document.getElementById('h1').firstChild.textContent = 'Today '; document.getElementById('navs').innerHTML = '<a class="muted" style="text-decoration:none" href="day.html?from=week" title="Time blocks, meals and shopping for today">' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + ' · Open my day ›</a>'; }
 hubData(async sb => { SB = sb; if (document.querySelector('.sheet') || (document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.value)) return; await load(); }, 5);
 </script></body></html>
