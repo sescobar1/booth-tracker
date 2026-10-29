@@ -47,7 +47,8 @@ Deno.serve(async (req: Request) => {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Planner//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:My Planner', 'X-WR-TIMEZONE:' + tz, 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'];
   for (const i of items) {
     const task = i.kind === 'task';
-    const timed = !task && !i.all_day && i.start_time;
+    // Tasks with a time (set on the hub) show at that time; other tasks are all-day.
+    const timed = !i.all_day && !!i.start_time;
     lines.push('BEGIN:VEVENT', 'UID:' + i.id + '@planner', 'DTSTAMP:' + stamp);
     if (timed) {
       lines.push('DTSTART;TZID=' + tz + ':' + day(i.date) + 'T' + hm(i.start_time));
