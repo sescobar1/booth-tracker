@@ -28,11 +28,12 @@
 .chip{font-size:12.5px;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#fff;color:var(--ink)}.chip:hover{border-color:var(--sage)}.chip.have{background:var(--sage-l);border-color:var(--sage-l);color:var(--muted)}.chip.ed{border-style:dashed;color:var(--muted)}
 .sacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.sacts .ghost{text-decoration:none;color:var(--ink)}.ing{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;cursor:pointer}.ing input{margin:0}.ing small{color:var(--muted);font-size:11px}
 .lb{display:block;font-size:12px;color:var(--muted);margin-top:9px}.lb input,.lb select,.lb textarea{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px;color:var(--ink);box-sizing:border-box}.lb textarea{font-size:13px}
-.pane h2{font-size:18px;font-weight:500;margin:0 0 4px}.pane select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}</style>
+.pane h2{font-size:18px;font-weight:500;margin:0 0 4px}.pane select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+.card{height:auto;min-height:0}.jbox{margin-top:14px}.jbox iframe{display:block;width:100%;height:900px;border:0;background:transparent}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js"></script><script src="recipeadd.js?v=5"></script></head><body><div class="card">
 <div class="top"><div><a class="back" href="weektodo.html">‹ Back to the week</a><h1 id="ttl">My day</h1></div><div class="strip" id="strip"></div></div>
 <div id="body" class="muted small">Loading…</div>
-</div><script>
+</div><div class="jbox"><iframe id="jf" title="Journal for this day"></iframe></div><script>
 const P = new URLSearchParams(location.search);
 let SB, D = P.get('d') || isoDay(new Date()), items = [], shop = [];
 const AREAS = { Work: '#6b8fb3', Home: '#7d9178', Kids: '#d39b6a', Booth: '#b07aa1', Band: '#d2b04c', Errands: '#8a8f86', ATU: '#6b8fb3' };
@@ -182,7 +183,10 @@ function askList(r) {
     s.remove(); if (rows.length) { const { error } = await SB.from('planner_items').insert(rows); if (error) return alert('Couldn\'t save: ' + error.message); } load();
   };
 }
+// Journal for this day sits under the time blocks.
+function setJ() { const f = document.getElementById('jf'); if (f && f.dataset.d !== D) { f.dataset.d = D; f.src = 'journal.html?embed=1&d=' + D; } }
 async function load() {
+  setJ();
   const day = D;
   const [a, b, r] = await Promise.all([
     SB.from('planner_items').select('id,kind,title,date,done,sort,priority,start_time,end_time,all_day,repeat,list,color').in('kind', ['event', 'task', 'meal']).lte('date', D).or('end_date.gte.' + D + ',date.eq.' + D),
