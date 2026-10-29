@@ -1,27 +1,132 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meals this week</title><link rel="stylesheet" href="style.css">
-<style>.md{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}.md:last-child{border-bottom:0}
-.md.now{background:var(--sage-l);margin:0 -10px;padding:7px 10px;border-radius:8px;border-bottom-color:transparent}
-.dn{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:2px}.ml small{color:var(--muted);font-size:11px;margin-right:4px}
-.empty{color:#b5b9b0;font-style:italic}.links{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.links a{font-size:13px;color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px}</style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
-<h1>Meals <span class="muted" style="font-size:13px">this week</span></h1><div id="body" class="muted small">Loading…</div>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meal planning</title><link rel="stylesheet" href="style.css">
+<style>.tabs{display:flex;gap:4px;margin:-4px 0 10px}.tabs button{font-size:13px;padding:5px 12px;border-radius:16px;border:1px solid var(--line)}.tabs button.on{background:var(--sage);border-color:var(--sage);color:#fff}
+.md{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.md:last-child{border-bottom:0}
+.md.now{background:var(--sage-l);margin:0 -10px;padding:6px 10px;border-radius:8px;border-bottom-color:transparent}
+.dn{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.ml small{color:var(--muted);font-size:11px;margin-right:4px}
+.empty{color:#b5b9b0;font-style:italic}.pick{font-size:12px;color:var(--sage);border:1px dashed var(--sage);border-radius:12px;padding:2px 9px}
+.sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.card2{border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:.15s}.card2:hover{border-color:var(--sage);background:#fbfcf9}
+.card2 b{font-weight:500;font-size:14px}.card2 small{font-size:11.5px;color:var(--muted)}
+.hist{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13.5px}.hist span:nth-child(even){color:var(--muted);font-size:12px;text-align:right}
+.lbl2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px;display:flex;justify-content:space-between;align-items:center}
+.links{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.links a,.links button{font-size:13px;color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;background:none}
+.sheet{position:fixed;inset:0;background:#26342855;display:flex;align-items:flex-start;justify-content:center;padding:14px;z-index:5;overflow:auto}
+.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:400px;box-shadow:0 10px 30px #0002}
+.pane h2{font-size:18px;font-weight:500;margin:0 0 4px}.pane select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;margin-top:4px}
+.ing{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:13.5px;cursor:pointer}.ing input{margin:0}.ing small{color:var(--muted);font-size:11px}
+.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="shop.js"></script></head><body><div class="card">
+<h1>Meal planning</h1>
+<div class="tabs"><button data-tab="plan" class="on">This week</button><button data-tab="ideas">What to cook</button><button data-tab="hist">Last 30 days</button></div>
+<div id="body" class="muted small">Loading…</div>
 </div><script>
-const P = 'https://sescobar1.github.io/booth-tracker/planner/';
-hubData(async sb => {
-  const ws = weekStart(new Date()), days = [...Array(7)].map((_, k) => { const d = new Date(ws); d.setDate(d.getDate() + k); return isoDay(d); }), tdy = isoDay(new Date());
-  const [ml, shop, kd] = await Promise.all([
-    sb.from('planner_items').select('title,date,list').eq('kind', 'meal').gte('date', days[0]).lte('date', days[6]),
-    sb.from('planner_items').select('id', { count: 'exact', head: true }).eq('kind', 'shop').eq('done', false),
-    sb.from('kid_dinners').select('who,title,status')
-  ]);
-  const by = {}; for (const m of ml.data || []) (by[m.date] = by[m.date] || []).push(m);
-  const order = { Breakfast: 0, Lunch: 1, Dinner: 2 };
-  const asks = (kd.data || []).filter(k => !k.status || k.status === 'new' || k.status === 'pending');
+const PL = 'https://sescobar1.github.io/booth-tracker/planner/';
+let SB, tab = 'plan', meals = [], recipes = [], shop = [], WM = {}, kids = [], seed = 0;
+const tdy = () => isoDay(new Date()), dt = d => new Date(d + 'T12:00');
+const add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
+const week = () => { const ws = isoDay(weekStart(new Date())); return [...Array(7)].map((_, k) => add(ws, k)); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), now = () => new Date().toISOString();
+const key = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const ago = d => { const n = Math.round((dt(tdy()) - dt(d)) / 864e5); return n === 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago'; };
+// Pantry basics most kitchens already have: left unchecked when adding a recipe to the list.
+const BASICS = /^(salt|pepper|black pepper|water|ice|oil|olive oil|vegetable oil|cooking spray|sugar|flour|butter|garlic powder|onion powder|paprika|cinnamon|vanilla|baking soda|baking powder)$/i;
+
+// Dinner ideas: Planner recipes and main dishes / soups from Family Recipes, plus anything you've cooked before.
+function ideas() {
+  const last = {}, times = {};
+  meals.forEach(m => { const k = key(m.title); times[k] = (times[k] || 0) + 1; if (!last[k] || m.date > last[k]) last[k] = m.date; });
+  const pool = new Map();
+  recipes.forEach(r => pool.set(key(r.title), r));
+  meals.filter(m => m.list === 'Dinner').forEach(m => { const k = key(m.title); if (!pool.has(k)) pool.set(k, { title: m.title, src: 'Made before', ing: [] }); });
+  const planned = new Set(meals.filter(m => m.date >= tdy()).map(m => key(m.title)));
+  const list = [...pool.entries()].filter(([k]) => !planned.has(k)).map(([k, r]) => {
+    const gap = last[k] ? Math.round((dt(tdy()) - dt(last[k])) / 864e5) : 999;
+    // Favorites you haven't had in a while score highest; anything from the last 10 days is held back.
+    const score = (gap < 10 ? -100 : 0) + Math.min(gap, 60) + (times[k] || 0) * 8 + ((k.length * 7 + seed * 13) % 17);
+    return { ...r, k, gap, times: times[k] || 0, score };
+  }).sort((a, b) => b.score - a.score);
+  const fresh = list.filter(r => r.gap >= 7);
+  return (fresh.length >= 3 ? fresh : list).slice(0, 6);
+}
+function draw() {
+  if (document.querySelector('.sheet')) return;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const el = document.getElementById('body'); el.className = '';
-  el.innerHTML = days.map(d => { const ms = (by[d] || []).sort((a, b) => (order[a.list] ?? 3) - (order[b.list] ?? 3));
-    return '<div class="md' + (d === tdy ? ' now' : '') + '"><div class="dn">' + new Date(d + 'T12:00').toLocaleDateString('en-US', { weekday: 'short' }) + '</div><div class="ml">' +
-      (ms.length ? ms.map(m => (m.list && m.list !== 'Dinner' ? '<small>' + esc(m.list) + '</small>' : '') + esc(m.title)).join('<br>') : '<span class="empty">—</span>') + '</div></div>'; }).join('') +
-    (asks.length ? '<div class="lbl">Dinner requests</div>' + asks.map(a => '<div class="row"><span>' + esc(a.title) + '</span><span class="pill">' + esc(a.who) + '</span></div>').join('') : '') +
-    '<div class="links"><a href="' + P + '#meals" target="_blank">🍽 Plan meals</a><a href="' + P + '#meals/shop" target="_blank">🛒 Grocery list' + (shop.count ? ' · ' + shop.count : '') + '</a><a href="https://sescobar1.github.io/booth-tracker/recipes/" target="_blank">📖 Recipes</a></div>';
+  if (tab === 'plan') {
+    const ws = week(), order = { Breakfast: 0, Lunch: 1, Dinner: 2 };
+    el.innerHTML = ws.map(d => { const ms = meals.filter(m => m.date === d).sort((a, b) => (order[a.list] ?? 3) - (order[b.list] ?? 3));
+      const dinner = ms.some(m => m.list === 'Dinner');
+      return '<div class="md' + (d === tdy() ? ' now' : '') + '"><div class="dn">' + dt(d).toLocaleDateString('en-US', { weekday: 'short' }) + '</div><div class="ml">' +
+        (ms.length ? ms.map(m => (m.list && m.list !== 'Dinner' ? '<small>' + esc(m.list) + '</small>' : '') + esc(m.title)).join('<br>') : '<span class="empty">—</span>') + '</div>' +
+        (!dinner && d >= tdy() ? '<button class="pick" data-pickday="' + d + '">＋ dinner</button>' : '<span></span>') + '</div>'; }).join('') +
+      (kids.length ? '<div class="lbl2">Dinner requests</div>' + kids.map(a => '<div class="md" style="grid-template-columns:1fr auto"><span>' + esc(a.title) + ' <small class="muted">· ' + esc(a.who) + '</small></span><button class="pick" data-idea="' + esc(a.title) + '">Plan it</button></div>').join('') : '') +
+      '<div class="links"><button data-tab="ideas">💡 What should I cook?</button><a href="' + PL + '#meals/shop" target="_blank">🛒 Grocery list' + (shop.length ? ' · ' + shop.length : '') + '</a><a href="https://sescobar1.github.io/booth-tracker/recipes/" target="_blank">📖 Recipes</a></div>';
+  } else if (tab === 'ideas') {
+    const list = ideas();
+    el.innerHTML = '<p class="muted small" style="margin:-2px 0 10px">Picked from your recipes and what you cook, skipping anything you\'ve had lately. Tap one to plan it.</p><div class="sg">' +
+      list.map(r => '<div class="card2" data-idea="' + esc(r.title) + '"><b>' + esc(r.title) + '</b><small>' + (r.times ? 'Had ' + r.times + '× · last ' + ago(meals.filter(m => key(m.title) === r.k).map(m => m.date).sort().pop()) : 'Haven\'t made it lately') + '</small><small>' + esc(r.src || '') + (r.ing && r.ing.length ? ' · ' + r.ing.length + ' ingredients' : '') + '</small></div>').join('') +
+      '</div><div class="links"><button id="shuf">🔀 Show me others</button></div>';
+  } else {
+    const since = add(tdy(), -30), past = meals.filter(m => m.date >= since && m.date <= tdy()).sort((a, b) => b.date.localeCompare(a.date));
+    const counts = {}; past.forEach(m => { const k = key(m.title); counts[k] = counts[k] || { t: m.title, n: 0 }; counts[k].n++; });
+    const top = Object.values(counts).sort((a, b) => b.n - a.n).slice(0, 5);
+    el.innerHTML = past.length ? '<div class="lbl2" style="margin-top:0">Most often</div><div class="hist">' + top.map(c => '<span>' + esc(c.t) + '</span><span>' + c.n + '×</span>').join('') + '</div>' +
+      '<div class="lbl2">Every meal</div><div class="hist">' + past.map(m => '<span>' + esc(m.title) + (m.list && m.list !== 'Dinner' ? ' <small class="muted">' + esc(m.list) + '</small>' : '') + '</span><span>' + dt(m.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '</span>').join('') + '</div>'
+      : '<p class="muted small">No meals logged in the last 30 days yet. Plan them here or in the Planner and they\'ll show up.</p>';
+  }
+}
+// Plan a meal: pick the day, then choose which ingredients go on the shopping list.
+function plan(title, day) {
+  const r = recipes.find(x => key(x.title) === key(title)) || { title, ing: [] };
+  const ws = [...Array(14)].map((_, k) => add(tdy(), k)), free = ws.find(d => !meals.some(m => m.date === d && m.list === 'Dinner')) || tdy();
+  const have = new Set(shop.map(s => key(s.title)));
+  const ings = r.ing.map(l => ({ line: l, name: ingredientName(l), amt: amountOf(l) })).filter(x => x.name);
+  const s = document.createElement('div'); s.className = 'sheet';
+  s.innerHTML = '<div class="pane"><h2>' + esc(r.title) + '</h2><p class="muted small">' + esc(r.src || '') + '</p>' +
+    '<label class="muted small" style="display:block;margin-top:10px">Day<select id="pD">' + ws.map(d => '<option value="' + d + '"' + (d === (day || free) ? ' selected' : '') + '>' + dt(d).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + (meals.some(m => m.date === d && m.list === 'Dinner') ? ' (has dinner)' : '') + '</option>').join('') + '</select></label>' +
+    '<label class="muted small" style="display:block;margin-top:8px">Meal<select id="pM"><option>Dinner</option><option>Lunch</option><option>Breakfast</option></select></label>' +
+    (ings.length ? '<div class="lbl2">Add ingredients to the shopping list?</div>' + ings.map((x, i) => { const on = have.has(key(x.name)), basic = BASICS.test(x.name);
+      return '<label class="ing"><input type="checkbox" data-i="' + i + '"' + (!on && !basic ? ' checked' : '') + (on ? ' disabled' : '') + '><span>' + esc(x.name) + (x.amt ? ' <small>' + esc(x.amt) + '</small>' : '') + '</span><small>' + (on ? 'on the list' : basic ? 'pantry basic?' : '') + '</small></label>'; }).join('')
+      : '<p class="muted small" style="margin-top:12px">No recipe with ingredients for this one. Add it in the Recipes app to get its shopping list next time.</p>') +
+    '<div class="acts"><button class="ghost" id="pX">Cancel</button>' + (ings.length ? '<button class="ghost" id="pOnly">Plan it, skip the list</button><button class="btn" id="pAll">Plan it + add to list</button>' : '<button class="btn" id="pOnly">Plan it</button>') + '</div></div>';
+  document.body.appendChild(s);
+  s.onclick = e => { if (e.target === s || e.target.id === 'pX') s.remove(); };
+  const go = async withList => {
+    const d = s.querySelector('#pD').value, ml = s.querySelector('#pM').value;
+    const m = { id: uid(), kind: 'meal', title: r.title, date: d, list: ml, location: r.pid || '', notes: r.src === 'Family Recipes' ? 'Family Recipes' : '', all_day: true, updated_at: now() };
+    const rows = [m];
+    if (withList) s.querySelectorAll('.ing input:checked').forEach(c => { const x = ings[+c.dataset.i], k = x.name.toLowerCase();
+      rows.push({ id: uid(), kind: 'shop', title: x.name, list: aisleOf(x.line), notes: [x.amt, r.title].filter(Boolean).join(' · '), location: WM[k] || '', done: false, all_day: true, updated_at: now() }); });
+    s.remove();
+    const { error } = await SB.from('planner_items').insert(rows); if (error) return alert('Couldn\'t save: ' + error.message);
+    tab = 'plan'; await load();
+  };
+  s.querySelector('#pOnly').onclick = () => go(false);
+  if (s.querySelector('#pAll')) s.querySelector('#pAll').onclick = () => go(true);
+}
+async function load() {
+  const [ml, rp, fr, sh, kd, st] = await Promise.all([
+    SB.from('planner_items').select('id,title,date,list,location').eq('kind', 'meal').gte('date', add(tdy(), -120)),
+    SB.from('planner_items').select('id,title,notes,list').eq('kind', 'recipe'),
+    SB.from('family_recipes').select('id,title,category,ingredients').is('deleted_at', null).in('category', ['Main dishes', 'Soups & stews']),
+    SB.from('planner_items').select('title').eq('kind', 'shop').eq('done', false),
+    SB.from('kid_dinners').select('who,title,status'),
+    SB.from('planner_settings').select('data').maybeSingle()
+  ]);
+  if (ml.error) throw ml.error;
+  meals = ml.data || []; shop = sh.data || [];
+  WM = (st.data && st.data.data && st.data.data.settings && st.data.data.settings.walmart) || {};
+  kids = (kd.data || []).filter(k => !k.status || k.status === 'new' || k.status === 'pending');
+  const lines = t => String(t || '').split(/\n/).map(x => x.replace(/^[-•*]\s*/, '').trim()).filter(x => x && !/:$/.test(x));
+  recipes = (rp.data || []).filter(r => !r.list || /dinner|lunch/i.test(r.list)).map(r => ({ title: r.title, pid: r.id, src: 'Planner recipe', ing: lines(r.notes) }))
+    .concat((fr.data || []).map(r => ({ title: r.title, src: 'Family Recipes', ing: lines(r.ingredients) })));
+  draw();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; return draw(); }
+  if (e.target.id === 'shuf') { seed++; return draw(); }
+  const pd = e.target.closest('[data-pickday]'); if (pd) { tab = 'ideas'; draw(); return setTimeout(() => document.querySelectorAll('.card2').forEach(c => c.dataset.day = pd.dataset.pickday)); }
+  const i = e.target.closest('[data-idea]'); if (i) plan(i.dataset.idea, i.dataset.day);
 });
+hubData(async sb => { SB = sb; if (document.querySelector('.sheet')) return; await load(); });
 </script></body></html>
