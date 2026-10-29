@@ -43,7 +43,10 @@ textarea{display:block;width:100%;border:0;background:transparent;font:inherit;c
 .ctags{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 2px}.ctag{font-family:var(--hand);font-size:15px;line-height:1.2;border:1px dashed #d6cdbb;background:#fffaf0;border-radius:14px;padding:3px 10px;color:var(--ink2);cursor:pointer}.ctag.on{border:1px solid #a98bc4;background:#efe6f6}
 .dots{display:flex;flex-wrap:wrap;gap:4px;max-width:420px}.dots i{width:14px;height:14px;border-radius:50%;display:block}.ck{font-size:15px;color:#8a8f86;margin:4px 0 0}.verse{margin:6px 0 4px;padding-left:12px;border-left:3px solid #c39a6b}.verse a{font-size:14px;color:#7d9178;margin-left:6px}
 textarea.vt{min-height:0;font-style:italic;color:#4e5a6b;overflow:hidden}.vr{text-align:right;color:#8a7a5e}
-ul.did{margin:0;padding-left:20px}ul.did li::marker{color:#a98bc4}</style>
+ul.did{margin:0;padding-left:20px}ul.did li::marker{color:#a98bc4}.fed{font:inherit;font-size:14px;border:0;background:none;color:#7d9178;text-decoration:underline dotted;cursor:pointer;margin-left:6px}
+.fam{margin-top:2px}.fr{display:grid;grid-template-columns:78px 1fr auto;gap:6px;align-items:center;min-height:32px}.fn{font-size:19px}.fw{display:flex;gap:4px;flex-wrap:wrap}
+.fb{font-family:var(--hand);font-size:14px;line-height:1.2;border:1px dashed #d6cdbb;background:#fffaf0;border-radius:14px;padding:2px 8px;color:var(--ink2);cursor:pointer}.fb.on{border:1px solid #7d9178;background:#e6efe1}
+.fl{font-size:14px;color:#9a8f7a;white-space:nowrap}.frm{font:inherit;font-size:12px;border:0;background:none;color:#b65d5d;cursor:pointer;padding:0}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js"></script></head><body><div class="wrap">
 <div class="top"><h1>My Journal</h1><div class="nav"><button id="prev" title="Day before">‹</button><button id="tdy">Today</button><button id="next" title="Next day">›</button></div></div>
 <div id="body" class="muted small">Opening your journal…</div>
@@ -52,7 +55,7 @@ const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧',
 const PROMPTS = ['What made you smile today?', 'What\'s been on your mind lately?', 'A moment you want to remember…', 'What did you learn today?', 'How did you take care of yourself?', 'What are you looking forward to?', 'Something you\'re proud of…', 'What would make tomorrow great?', 'Who made a difference for you today?', 'What\'s weighing on you, and one small next step?', 'Write a little letter to yourself…', 'Where did you see God / grace today?'];
 let recentAll = [], SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], timer, calMonth = day.slice(0, 7), pIdx = 0;
 const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
-const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '', cece_did: [], verse_ref: '', verse: '' });
+const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '', cece_did: [], verse_ref: '', verse: '', family: {} });
 // How Cece was today: a 5-step scale (with colors for the month view), plus quick words and a note.
 const CECE = [['😄', 'Great', '#7fb069'], ['🙂', 'Good', '#b5cf7a'], ['😐', 'So-so', '#e8c95a'], ['😤', 'Rough', '#e8995a'], ['😭', 'Really hard', '#d9675f']];
 const CECE_TAGS = ['Kind', 'Helpful', 'Listened', 'Funny', 'Did chores', 'Good at school', 'Tired', 'Moody', 'Sassy', 'Argued', 'Talked back', 'Cried', 'Anxious', 'Sick', 'Stayed in room'];
@@ -73,6 +76,7 @@ function draw() {
       '<p class="lbl">I\'m grateful for…</p><ol class="g">' + [0, 1, 2].map(i => '<li><input class="line" data-g="' + i + '" value="' + esc((e.grateful || [])[i] || '') + '" placeholder="' + (i ? '' : 'my family, coffee, a good laugh…') + '"></li>').join('') + '</ol>' +
       '<p class="lbl">Highlight of the day</p><input class="line" data-f="highlight" value="' + esc(e.highlight) + '" placeholder="the best part was…">' +
       '<p class="lbl">Tomorrow I want to…</p><input class="line" data-f="tomorrow" value="' + esc(e.tomorrow) + '" placeholder="one thing that matters">' +
+      familyHtml(e) +
     '</div>' +
     '<div class="pg right">' + ceceHtml(e) + '<p class="prompt"><b>✎</b> ' + esc(PROMPTS[pIdx]) + '<button id="newP" title="Another prompt">another</button></p>' +
       '<textarea id="body2" data-f="body" placeholder="Dear diary…">' + esc(e.body) + '</textarea><span class="saved" id="saved"></span></div></div>' +
@@ -155,6 +159,24 @@ function ceceMonth() {
   return '<div class="cmonth"><p class="nh" style="margin:10px 0 4px">💜 Cece this month</p><div class="dots">' + ds.map(d => { const c = CECE.find(x => x[1] === have[d]); return '<i title="' + d + (c ? ' · ' + c[1] : '') + '" style="background:' + (c ? c[2] : '#ece6d8') + '"></i>'; }).join('') + '</div>' +
     '<p class="ck">' + CECE.filter(c => counts[c[1]]).map(c => c[0] + ' ' + c[1] + ' ' + counts[c[1]]).join(' · ') + '</p></div>';
 }
+
+// ---------- Family check-ins: who you called or texted today, and how long it's been ----------
+let FAM = ['Mom', 'Tyler', 'Kendal', 'Andrew'], famEdit = false;
+const FAM_WAYS = [['call', '📞', 'Called'], ['text', '💬', 'Texted'], ['saw', '🤗', 'Saw']];
+function lastTalk(name) {
+  const d = recentAll.filter(r => r.day < day && r.family && (r.family[name] || []).length).map(r => r.day).sort().pop();
+  if (!d) return '';
+  const n = Math.round((dt(day) - dt(d)) / 864e5); return n === 1 ? 'yesterday' : n + ' days ago';
+}
+function familyHtml(e) {
+  const f = e.family || {};
+  return '<p class="lbl">📞 Family check-ins <button class="fed" id="famEd">' + (famEdit ? 'done' : 'edit') + '</button></p><div class="fam">' +
+    FAM.map(n => { const w = f[n] || [], last = lastTalk(n);
+      return '<div class="fr"><span class="fn">' + (famEdit ? '<button class="frm" data-frm="' + esc(n) + '" title="Remove">✕</button> ' : '') + esc(n) + '</span><span class="fw">' +
+        FAM_WAYS.map(([k, i, l]) => '<button class="fb' + (w.includes(k) ? ' on' : '') + '" data-fam="' + esc(n) + '" data-way="' + k + '" title="' + l + '">' + i + ' ' + l + '</button>').join('') + '</span>' +
+        '<span class="fl">' + (w.length ? '✓ today' : last ? 'last: ' + last : '') + '</span></div>'; }).join('') +
+    (famEdit ? '<div class="fr"><input class="line fadd" id="famNew" placeholder="add someone (Dad, Grandma…)" style="height:30px"></div>' : '') + '</div>';
+}
 function pastHtml() {
   const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), t = isoDay(new Date());
   let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => '<span>' + x + '</span>').join('') + '<span></span>'.repeat((first.getDay() + 6) % 7);
@@ -174,9 +196,9 @@ function collect() {
 }
 function later() { clearTimeout(timer); const s = document.getElementById('saved'); if (s) s.textContent = 'writing…'; timer = setTimeout(save, 900); }
 async function save() {
-  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim() && !(e.cece_did || []).length && !(e.verse || '').trim() && !(e.verse_ref || '').trim();
+  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim() && !(e.cece_did || []).length && !(e.verse || '').trim() && !(e.verse_ref || '').trim() && !Object.values(e.family || {}).some(x => x.length);
   if (empty && !days.has(e.day)) return;
-  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', cece_did: e.cece_did || [], verse: e.verse || '', verse_ref: e.verse_ref || '', updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
+  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', cece_did: e.cece_did || [], verse: e.verse || '', verse_ref: e.verse_ref || '', family: e.family || {}, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
   const s = document.getElementById('saved'); if (s) s.textContent = error ? 'couldn\'t save — check your signal' : 'saved ✓';
   if (!error) { const ra = recentAll.find(x => x.day === e.day); if (ra) Object.assign(ra, e); else recentAll.unshift({ ...e }); days.add(e.day); const r = recent.find(x => x.day === e.day); if (r) Object.assign(r, e); else { recent.unshift({ ...e }); recent.sort((a, b) => b.day.localeCompare(a.day)); recent = recent.slice(0, 10); } }
 }
@@ -187,11 +209,15 @@ async function open(d) {
   cur = data ? { ...data, grateful: data.grateful || [] } : null; draw();
   loadGlance(d);
 }
+document.addEventListener('keydown', e => { if (e.target.id === 'famNew' && e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v && !FAM.includes(v)) { collect(); FAM.push(v); hubSet(SB, 'familyPeople', { list: FAM }); draw(); const n = document.getElementById('famNew'); if (n) n.focus(); } } });
 document.addEventListener('input', e => {
   if (e.target.matches('[data-did]')) { const all = document.querySelectorAll('[data-did]'); if (e.target === all[all.length - 1] && e.target.value.trim()) { const li = document.createElement('li'); li.innerHTML = '<input class="line" data-did="' + all.length + '" value="">'; e.target.closest('ul').appendChild(li); } later(); return; }
   if (e.target.matches('[data-f],[data-g]')) { if (e.target.id === 'body2') grow(); if (e.target.classList.contains('vt')) { e.target.style.height = 'auto'; e.target.style.height = Math.ceil(e.target.scrollHeight / 32) * 32 + 'px'; } later(); }
 });
 document.addEventListener('click', async e => {
+  const fb = e.target.closest('[data-fam]'); if (fb) { collect(); const n = fb.dataset.fam, k = fb.dataset.way, f = cur.family = { ...(cur.family || {}) }, l = f[n] || []; f[n] = l.includes(k) ? l.filter(x => x !== k) : l.concat(k); if (!f[n].length) delete f[n]; await save(); draw(); return; }
+  if (e.target.id === 'famEd') { collect(); famEdit = !famEdit; draw(); if (famEdit) { const n = document.getElementById('famNew'); if (n) n.focus(); } return; }
+  const fr = e.target.closest('[data-frm]'); if (fr) { if (!(await ask('Take ' + fr.dataset.frm + ' off your check-in list?'))) return; collect(); FAM = FAM.filter(x => x !== fr.dataset.frm); hubSet(SB, 'familyPeople', { list: FAM }); draw(); return; }
   const cm = e.target.closest('[data-cece]'); if (cm) { collect(); cur.cece_mood = cur.cece_mood === cm.dataset.cece ? '' : cm.dataset.cece; await save(); draw(); return; }
   const ct = e.target.closest('[data-ctag]'); if (ct) { collect(); const t = ct.dataset.ctag, l = cur.cece_tags || []; cur.cece_tags = l.includes(t) ? l.filter(x => x !== t) : l.concat(t); await save(); draw(); return; }
   const m = e.target.closest('[data-mood]'); if (m) { collect(); cur.mood = cur.mood === m.dataset.mood ? '' : m.dataset.mood; await save(); draw(); return; }
@@ -206,7 +232,8 @@ window.addEventListener('beforeunload', () => { if (timer) save(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && timer) save(); });
 hubData(async sb => {
   if (SB) return; SB = sb;
-  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body,cece_mood').order('day', { ascending: false }).limit(400)]);
+  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body,cece_mood,family').order('day', { ascending: false }).limit(400)]);
+  try { const fp = await hubGet(sb, 'familyPeople'); if (fp && fp.list && fp.list.length) FAM = fp.list; } catch (x) {}
   recentAll = list.data || []; recentAll.forEach(r => days.add(r.day)); recent = recentAll.slice(0, 10);
   await open(day);
 }, 600);
