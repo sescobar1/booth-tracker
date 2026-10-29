@@ -24,14 +24,14 @@
 .pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:360px;box-shadow:0 10px 30px #0002}
 .pane label{display:block;font-size:12px;color:var(--muted);margin-top:10px}.pane input{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}</style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="cal.js"></script></head><body><div class="card">
 <div class="top"><div><a class="back" href="weektodo.html">‹ Back to the week</a><h1 id="ttl">My day</h1></div><div class="strip" id="strip"></div></div>
 <div id="body" class="muted small">Loading…</div>
 </div><script>
 const P = new URLSearchParams(location.search);
 let SB, D = P.get('d') || isoDay(new Date()), items = [], shop = [];
 const AREAS = { Work: '#6b8fb3', Home: '#7d9178', Kids: '#d39b6a', Booth: '#b07aa1', Band: '#d2b04c', Errands: '#8a8f86', ATU: '#6b8fb3' };
-const colorOf = i => i.kind === 'event' ? (i.color || '#8c7a6b') : (AREAS[i.list] || '#9aa596');
+const colorOf = i => i.kind === 'event' || i.kind === 'ext' ? (i.color || '#8c7a6b') : (AREAS[i.list] || '#9aa596');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), now = () => new Date().toISOString();
 const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
 const pad = n => String(n).padStart(2, '0');
@@ -46,8 +46,8 @@ function strip() {
 function draw() {
   if (document.querySelector('.sheet') || document.querySelector('.hin')) return;
   strip();
-  const timed = items.filter(i => (i.kind === 'event' || i.kind === 'task') && !i.all_day && i.start_time && i.date === D);
-  const allDay = items.filter(i => i.kind === 'event' && (i.all_day || !i.start_time));
+  const all = items.concat(ext), timed = all.filter(i => (i.kind === 'event' || i.kind === 'task' || i.kind === 'ext') && !i.all_day && i.start_time && i.date === D);
+  const allDay = all.filter(i => (i.kind === 'event' || i.kind === 'ext') && (i.all_day || !i.start_time));
   const todos = items.filter(i => i.kind === 'task' && i.date === D && (i.all_day || !i.start_time)).sort((a, b) => a.done - b.done || (b.priority || 0) - (a.priority || 0) || (a.sort || 0) - (b.sort || 0));
   const first = Math.min(6, ...timed.map(i => +i.start_time.slice(0, 2))), last = Math.max(21, ...timed.map(i => +i.start_time.slice(0, 2)));
   const nowH = D === isoDay(new Date()) ? new Date().getHours() : -1;
@@ -56,7 +56,7 @@ function draw() {
     const here = timed.filter(i => +i.start_time.slice(0, 2) === h).sort((a, b) => a.start_time.localeCompare(b.start_time));
     hours += '<div class="hr' + (h === nowH ? ' nowh' : '') + '"><span class="hl">' + ((h % 12) || 12) + ' ' + (h < 12 ? 'AM' : 'PM') + '</span><div class="hc" data-h="' + pad(h) + '">' +
       here.map(i => '<div class="blk' + (i.kind === 'task' && i.done ? ' done' : '') + '" data-id="' + i.id + '" style="--c:' + colorOf(i) + '">' + (i.kind === 'task' ? '<span class="ck">' + (i.done ? '✓' : '') + '</span>' : '') +
-        '<span>' + esc(i.title) + '</span><small>' + ampm(i.start_time) + (i.end_time ? '–' + ampm(i.end_time) : '') + '</small></div>').join('') + '</div></div>';
+        '<span>' + esc(i.title) + '</span><small>' + (i.cal ? esc(i.cal) + ' · ' : '') + ampm(i.start_time) + (i.end_time ? '–' + ampm(i.end_time) : '') + '</small></div>').join('') + '</div></div>';
   }
   const meal = l => items.find(i => i.kind === 'meal' && i.list === l);
   const el = document.getElementById('body'); el.className = '';
@@ -73,18 +73,42 @@ function draw() {
     '<form class="add" data-f="shop"><input placeholder="+ Add to the list"></form><p class="hint">Same grocery list as your Planner and the Meals box.</p></div>' +
     '</div></div>';
 }
+const RR = { daily: 'FREQ=DAILY', weekdays: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', weekly: 'FREQ=WEEKLY', biweekly: 'FREQ=WEEKLY;INTERVAL=2', monthly: 'FREQ=MONTHLY', yearly: 'FREQ=YEARLY' };
+let ext = [], extDay = '';
 async function load() {
-  const [a, b] = await Promise.all([
+  const day = D;
+  const [a, b, r] = await Promise.all([
     SB.from('planner_items').select('id,kind,title,date,done,sort,priority,start_time,end_time,all_day,repeat,list,color').in('kind', ['event', 'task', 'meal']).lte('date', D).or('end_date.gte.' + D + ',date.eq.' + D),
-    SB.from('planner_items').select('id,title,done,list').eq('kind', 'shop').order('done').order('list')
+    SB.from('planner_items').select('id,title,done,list').eq('kind', 'shop').order('done').order('list'),
+    // Repeating Planner events that started before this day.
+    SB.from('planner_items').select('id,kind,title,date,start_time,end_time,all_day,repeat,color').eq('kind', 'event').neq('repeat', '').lt('date', D)
   ]);
   if (a.error) throw a.error;
-  items = (a.data || []).filter(i => i.date === D || i.kind === 'event'); shop = (b.data || []).filter(s => !s.done).concat((b.data || []).filter(s => s.done).slice(0, 5));
+  items = (a.data || []).filter(i => i.date === D || i.kind === 'event');
+  (r.data || []).forEach(i => { if (RR[i.repeat] && !items.some(x => x.id === i.id) && expandRule({ start: i.date + (i.all_day || !i.start_time ? '' : 'T' + i.start_time), allDay: i.all_day || !i.start_time, rrule: RR[i.repeat] }, D, D).length) items.push({ ...i, date: D, rep: true }); });
+  shop = (b.data || []).filter(s => !s.done).concat((b.data || []).filter(s => s.done).slice(0, 5));
+  if (extDay !== D) ext = [];
   draw();
+  // Then the connected calendars (Google, Outlook) and band events, same as the Planner calendar.
+  try {
+    const [st, band] = await Promise.all([SB.from('planner_settings').select('data').maybeSingle(), SB.from('vol_events').select('id,name,date,start_time,end_time,location').eq('date', D)]);
+    const set = (st.data && st.data.data && st.data.data.settings) || {};
+    const cal = await calendarDay(SB, set.calendars || [], D);
+    if (day !== D) return;
+    ext = cal.map((o, k) => ({ id: 'ext-' + k, kind: 'ext', title: o.title, date: D, start_time: o.allDay ? '' : o.start, end_time: o.allDay ? '' : o.end, all_day: o.allDay, color: o.color, cal: o.cal, location: o.location }))
+      .concat(set.showBand === false ? [] : (band.data || []).map(e => ({ id: 'band-' + e.id, kind: 'ext', title: '🎺 ' + e.name, date: D, start_time: e.start_time || '', end_time: e.end_time || '', all_day: !e.start_time, color: '#b59f83', cal: 'Band Volunteers', location: e.location })));
+    extDay = D; draw();
+  } catch (e) { /* calendars are a bonus; the day still works without them */ }
 }
 const upd = async (id, f) => { const { error } = await SB.from('planner_items').update({ ...f, updated_at: now() }).eq('id', id); if (error) alert('Couldn\'t save: ' + error.message); };
 const ins = async row => { const { error } = await SB.from('planner_items').insert({ id: uid(), updated_at: now(), ...row }); if (error) alert('Couldn\'t save: ' + error.message); };
 const endOf = s => pad(Math.min(23, +s.slice(0, 2) + 1)) + s.slice(2);
+function info(i) {
+  const s = document.createElement('div'); s.className = 'sheet';
+  s.innerHTML = '<div class="pane"><h2 style="font-size:18px;font-weight:500;margin:0 0 6px">' + esc(i.title) + '</h2><p class="muted small">' + (i.all_day || !i.start_time ? 'All day' : ampm(i.start_time) + (i.end_time ? ' – ' + ampm(i.end_time) : '')) + (i.location ? ' · ' + esc(i.location) : '') + '</p>' +
+    '<p class="muted small" style="margin-top:8px">From your ' + esc(i.cal || 'calendar') + '. Change it there and it updates here.</p><div class="acts"><span></span><button class="btn" id="iOK">OK</button></div></div>';
+  document.body.appendChild(s); s.onclick = e => { if (e.target === s || e.target.id === 'iOK') s.remove(); };
+}
 function editBlock(i) {
   const s = document.createElement('div'); s.className = 'sheet';
   s.innerHTML = '<div class="pane"><label>' + (i.kind === 'task' ? 'To-do' : 'Time block') + '<input id="bT" value="' + esc(i.title) + '"></label><div class="g2"><label>Start<input id="bS" type="time" value="' + (i.start_time || '') + '"></label><label>End<input id="bE" type="time" value="' + (i.end_time || '') + '"></label></div>' +
@@ -99,7 +123,8 @@ function editBlock(i) {
 document.addEventListener('click', async e => {
   const go = e.target.closest('[data-go]'); if (go) { D = go.dataset.go; history.replaceState(null, '', '?' + (P.get('from') ? 'from=' + P.get('from') + '&' : '') + 'd=' + D); document.getElementById('body').innerHTML = '<p class="muted small">Loading…</p>'; return load(); }
   const blk = e.target.closest('.blk');
-  if (blk) { const i = items.find(x => x.id === blk.dataset.id); if (!i) return;
+  if (blk) { const x0 = ext.find(x => x.id === blk.dataset.id); if (x0) return info(x0);
+    const i = items.find(x => x.id === blk.dataset.id); if (!i) return; if (i.rep) return info(Object.assign({ cal: 'Planner (repeats ' + i.repeat + ')' }, i));
     if (e.target.closest('.ck')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); }
     return editBlock(i); }
   const hc = e.target.closest('.hc');
