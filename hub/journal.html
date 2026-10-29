@@ -37,8 +37,10 @@ textarea{display:block;width:100%;border:0;background:transparent;font:inherit;c
 .recent small{display:block;color:#9a8f7a;font-size:13px}
 @media(max-width:760px){.book{grid-template-columns:1fr}.book:before{display:none}.pg{min-height:0}.pg.right{padding-left:58px;background:linear-gradient(90deg,transparent 44px,var(--margin) 44px,var(--margin) 46px,transparent 46px),repeating-linear-gradient(transparent 0 31px,var(--rule) 31px 32px);background-position:0 0,0 22px}.ribbon{right:24px}}
 .signin,.muted.small{font-family:Lora,serif}
-</style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="wrap">
+.note{position:relative;background:#fff8c9;margin:14px 0 6px -8px;padding:10px 14px 8px;border-radius:2px;box-shadow:0 3px 8px #0000001f;transform:rotate(-.6deg);line-height:24px;font-size:17px}
+.tape{position:absolute;top:-10px;left:50%;width:84px;height:20px;margin-left:-42px;background:#e9dcc0cc;transform:rotate(-3deg);box-shadow:0 1px 2px #0001}
+.nh{margin:0 0 2px;font-size:16px;color:#9a7b3b}.nl{margin:2px 0}.nl b{font-weight:400}.nl .sub,.nl .tm{color:#8a8f86;font-size:15px}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js"></script></head><body><div class="wrap">
 <div class="top"><h1>My Journal</h1><div class="nav"><button id="prev" title="Day before">‹</button><button id="tdy">Today</button><button id="next" title="Next day">›</button></div></div>
 <div id="body" class="muted small">Opening your journal…</div>
 </div><script>
@@ -48,12 +50,15 @@ let SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], tim
 const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
 const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '' });
 function draw() {
+  if (document.getElementById('body2')) collect(); // keep what's being typed when the day's info arrives
+  const ae = document.activeElement, focusKey = ae && (ae.dataset.f || (ae.dataset.g != null ? 'g' + ae.dataset.g : '')), caret = ae && ae.selectionStart;
   const e = cur || blank(), t = isoDay(new Date()), el = document.getElementById('body'); el.className = '';
   pIdx = (dt(day).getDate() + dt(day).getMonth()) % PROMPTS.length;
   const mood = MOODS.find(m => m[1] === e.mood);
   el.innerHTML = '<div class="book"><div class="ribbon"></div>' +
     '<div class="pg left">' + (mood ? '<div class="sticker">' + mood[0] + '</div>' : '') +
       '<p class="date">' + dt(day).toLocaleDateString('en-US', { weekday: 'long' }) + '<small>' + dt(day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + (day === t ? ' · today' : '') + '</small></p>' +
+      glanceHtml() +
       '<p class="lbl">Today I feel…</p><div class="moods">' + MOODS.map(([i, n]) => '<button class="mood' + (e.mood === n ? ' on' : '') + '" data-mood="' + n + '" title="' + n + '">' + i + '</button>').join('') + '</div>' +
       '<p class="lbl">I\'m grateful for…</p><ol class="g">' + [0, 1, 2].map(i => '<li><input class="line" data-g="' + i + '" value="' + esc((e.grateful || [])[i] || '') + '" placeholder="' + (i ? '' : 'my family, coffee, a good laugh…') + '"></li>').join('') + '</ol>' +
       '<p class="lbl">Highlight of the day</p><input class="line" data-f="highlight" value="' + esc(e.highlight) + '" placeholder="the best part was…">' +
@@ -63,6 +68,59 @@ function draw() {
       '<textarea id="body2" data-f="body" placeholder="Dear diary…">' + esc(e.body) + '</textarea><span class="saved" id="saved"></span></div></div>' +
     pastHtml();
   grow();
+  if (focusKey) { const n = document.querySelector(focusKey[0] === 'g' && focusKey.length < 3 ? '[data-g="' + focusKey.slice(1) + '"]' : '[data-f="' + focusKey + '"]'); if (n) { n.focus(); try { n.setSelectionRange(caret, caret); } catch (x) {} } }
+}
+
+// ---------- From my day: appointments, work, meals, to-dos done, habits and spending flow in on their own ----------
+let G = null, gDay = '', SET = null;
+const WORKCAL = /outlook|atu|work/i, WORKWORD = /\b(work|shift|clinical|sim ?lab|simulation|class|lecture|office hours|advising|faculty|meeting|nur ?\d{4})\b/i;
+const ampm = s => { if (!s) return ''; const [h, m] = s.split(':').map(Number); return ((h % 12) || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+async function loadGlance(d) {
+  G = null; gDay = d;
+  const [pi, rep, st, band, tx, hb] = await Promise.all([
+    SB.from('planner_items').select('kind,title,start_time,end_time,all_day,done,list,repeat,date').in('kind', ['event', 'task', 'meal', 'track']).eq('date', d),
+    SB.from('planner_items').select('title,start_time,end_time,all_day,repeat,date').eq('kind', 'event').neq('repeat', '').lt('date', d),
+    SET ? Promise.resolve({ data: { data: SET } }) : SB.from('planner_settings').select('data').maybeSingle(),
+    SB.from('vol_events').select('name,start_time,end_time').eq('date', d),
+    SB.from('money_tx').select('amount,category,payee').eq('date', d).eq('type', 'expense'),
+    hubGet(SB, 'habits').catch(() => ({}))
+  ]);
+  if (gDay !== d) return;
+  SET = (st.data && st.data.data) || {}; const set = SET.settings || {};
+  const items = pi.data || [], RR = { daily: 'FREQ=DAILY', weekdays: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', weekly: 'FREQ=WEEKLY', biweekly: 'FREQ=WEEKLY;INTERVAL=2', monthly: 'FREQ=MONTHLY', yearly: 'FREQ=YEARLY' };
+  const ev = items.filter(i => i.kind === 'event' && !/^medrem-/.test(i.title || '')).map(i => ({ t: i.title, s: i.all_day ? '' : i.start_time, e: i.end_time, cal: 'Planner' }));
+  (rep.data || []).forEach(i => { if (RR[i.repeat] && expandRule({ start: i.date + (i.all_day || !i.start_time ? '' : 'T' + i.start_time), allDay: i.all_day || !i.start_time, rrule: RR[i.repeat] }, d, d).length) ev.push({ t: i.title, s: i.all_day ? '' : i.start_time, e: i.end_time, cal: 'Planner' }); });
+  (band.data || []).forEach(b => ev.push({ t: '🎺 ' + b.name, s: b.start_time || '', e: b.end_time || '', cal: 'Band' }));
+  const sp = (tx.data || []).filter(t => !/transfer/i.test(t.category || ''));
+  const tr = (set.trackers || []).filter(t => !t.cycle), habits = ((hb && hb.log) || {})[d] || [];
+  G = { ev, work: [], meals: items.filter(i => i.kind === 'meal'), done: items.filter(i => i.kind === 'task' && i.done).map(i => i.title),
+    habits: habits.concat(items.filter(i => i.kind === 'track').map(i => { const t = tr.find(x => x.id === i.list); return t ? t.icon + ' ' + t.name : null; }).filter(Boolean)),
+    spent: sp.reduce((a, t) => a + Number(t.amount), 0), spentN: sp.length };
+  draw();
+  // Connected calendars (Google, Outlook) take a moment longer.
+  try {
+    const cal = await calendarDay(SB, set.calendars || [], d); if (gDay !== d) return;
+    cal.forEach(o => G.ev.push({ t: o.title, s: o.allDay ? '' : o.start, e: o.allDay ? '' : o.end, cal: o.cal || '' }));
+    draw();
+  } catch (e) {}
+}
+function glanceHtml() {
+  if (!G || gDay !== day) return '<div class="note"><span class="tape"></span><p class="nh">📌 From my day</p><p class="nl muted">gathering your day…</p></div>';
+  const ev = G.ev.slice().sort((a, b) => (a.s || '00').localeCompare(b.s || '00'));
+  const work = ev.filter(e => WORKCAL.test(e.cal) || WORKWORD.test(e.t)), appts = ev.filter(e => !work.includes(e));
+  const span = l => { const t = l.filter(e => e.s); return t.length ? ampm(t[0].s) + '–' + ampm(t.map(e => e.e || e.s).sort().pop()) : 'all day'; };
+  const row = (i, txt) => '<p class="nl"><b>' + i + '</b> ' + txt + '</p>';
+  const evTxt = e => (e.s ? '<span class="tm">' + ampm(e.s) + '</span> ' : '') + esc(e.t);
+  const order = { Breakfast: 0, Lunch: 1, Dinner: 2 };
+  const parts = [
+    work.length ? row('💼', 'Worked · ' + span(work) + '<br><span class="sub">' + work.map(evTxt).join(' · ') + '</span>') : '',
+    appts.length ? row('🗓', appts.map(evTxt).join(' · ')) : '',
+    G.meals.length ? row('🍽', G.meals.sort((a, b) => (order[a.list] ?? 3) - (order[b.list] ?? 3)).map(m => '<span class="sub">' + esc((m.list || '').slice(0, 1)) + '</span> ' + esc(m.title)).join(' · ')) : '',
+    G.done.length ? row('✅', esc(G.done.slice(0, 6).join(' · ')) + (G.done.length > 6 ? ' +' + (G.done.length - 6) : '')) : '',
+    G.habits.length ? row('🌿', esc(G.habits.join(' · '))) : '',
+    G.spentN ? row('💵', 'Spent $' + G.spent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' · ' + G.spentN + ' purchase' + (G.spentN === 1 ? '' : 's')) : ''
+  ].filter(Boolean);
+  return '<div class="note"><span class="tape"></span><p class="nh">📌 From my day</p>' + (parts.length ? parts.join('') : '<p class="nl muted">Nothing on the books — a quiet day.</p>') + '</div>';
 }
 function pastHtml() {
   const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), t = isoDay(new Date());
@@ -92,6 +150,7 @@ async function open(d) {
   day = d; calMonth = d.slice(0, 7);
   const { data } = await SB.from('journal_entries').select('*').eq('day', d).maybeSingle();
   cur = data ? { ...data, grateful: data.grateful || [] } : null; draw();
+  loadGlance(d);
 }
 document.addEventListener('input', e => { if (e.target.matches('[data-f],[data-g]')) { if (e.target.id === 'body2') grow(); later(); } });
 document.addEventListener('click', async e => {
