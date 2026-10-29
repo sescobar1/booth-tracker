@@ -72,7 +72,7 @@ async function load() {
   // Unfinished one-time to-dos from the last two months move to today (once per load).
   if (!rolled) {
     rolled = true;
-    const { data: old } = await SB.from('planner_items').select('id,date,repeat').eq('kind', 'task').eq('done', false).lt('date', today()).gte('date', add(today(), -60)).not('id', 'like', 'gift-%');
+    const { data: old } = await SB.from('planner_items').select('id,date,repeat').eq('kind', 'task').eq('done', false).lt('date', today()).gte('date', add(today(), -60)).not('id', 'like', 'gift-%').not('id', 'like', 'lunch-%');
     const once = (old || []).filter(o => !o.repeat);
     if (once.length) await SB.from('planner_items').update({ date: today(), updated_at: now() }).in('id', once.map(o => o.id));
     // A missed repeating to-do jumps to its next day from today on, keeping its schedule.
