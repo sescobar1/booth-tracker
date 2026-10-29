@@ -18,7 +18,7 @@
 .rm{font-size:11px;color:var(--muted);opacity:.4;padding:0 0 0 6px}.rm:hover{opacity:1}.dn{display:flex;flex-direction:column;line-height:1.1}.dn b{font-size:20px;font-weight:400;color:var(--ink);letter-spacing:0}.dn i{font-style:normal;font-size:9.5px;background:var(--sage);color:#fff;border-radius:8px;padding:1px 5px;margin-top:3px;align-self:flex-start;letter-spacing:.06em}
 .md{align-items:start}.md.past{opacity:.6}.mi{display:flex;align-items:center;gap:4px;padding:1px 0}
 .madd{display:flex;gap:4px;margin-top:2px}.madd input{flex:1;min-width:0;font:inherit;font-size:13px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:3px 0;outline:none;color:var(--ink)}.madd input::placeholder{color:#b5b9b0}
-.madd select{font:inherit;font-size:11px;border:0;background:transparent;color:var(--muted);max-width:76px}.md:not(:hover):not(.now) .madd select{opacity:0}.md .pick{align-self:start}.lb{display:block;font-size:12px;color:var(--muted);margin-top:9px}.lb input,.lb select,.lb textarea{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px;color:var(--ink);box-sizing:border-box}.lb textarea{font-size:13px;line-height:1.4}</style>
+.madd select{font:inherit;font-size:11px;border:0;background:transparent;color:var(--muted);max-width:76px}.md:not(:hover):not(.now) .madd select{opacity:0}.md .pick{align-self:start}.lb{display:block;font-size:12px;color:var(--muted);margin-top:9px}.lb input,.lb select,.lb textarea{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px;color:var(--ink);box-sizing:border-box}.lb textarea{font-size:13px;line-height:1.4}.qchips{display:flex;flex-wrap:wrap;gap:6px}.qc{font-size:12.5px;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#fff;color:var(--ink)}.qc:hover{border-color:var(--sage);background:var(--sage-l)}.mini{font-size:11px;color:var(--muted);letter-spacing:0;text-transform:none}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="shop.js"></script><script src="recipeadd.js"></script></head><body><div class="card">
 <h1>Meal planning</h1>
 <div class="tabs"><button data-tab="plan" class="on">This week</button><button data-tab="ideas">What to cook</button><button data-tab="hist">Last 30 days</button></div>
@@ -66,6 +66,7 @@ function draw() {
         '<form class="madd" data-d="' + d + '"><input list="mNames" placeholder="' + (dinner ? '＋ add another' : '＋ What\'s for dinner?') + '"><select title="Which meal"><option' + (dinner ? '' : ' selected') + '>Dinner</option><option>Lunch</option><option' + (dinner ? ' selected' : '') + '>Breakfast</option></select></form></div>' +
         (!dinner && !past ? '<button class="pick" data-pickday="' + d + '" title="Suggestions for this day">💡</button>' : '<span></span>') + '</div>'; }).join('') +
       (kids.length ? '<div class="lbl2">Dinner requests</div>' + kids.map(a => '<div class="md" style="grid-template-columns:1fr auto"><span>' + esc(a.title) + ' <small class="muted">· ' + esc(a.who) + '</small></span><button class="pick" data-idea="' + esc(a.title) + '">Plan it</button></div>').join('') : '') +
+      quickRow() +
       '<div class="links"><button data-tab="ideas">💡 What should I cook?</button><a href="' + PL + '#meals/shop" target="_blank">🛒 Grocery list' + (shop.length ? ' · ' + shop.length : '') + '</a><a href="https://sescobar1.github.io/booth-tracker/recipes/" target="_blank">📖 Recipes</a></div>';
   } else if (tab === 'ideas') {
     const list = ideas();
@@ -108,7 +109,7 @@ function plan(title, day) {
       rows.push({ id: uid(), kind: 'shop', title: x.name, list: aisleOf(x.line), notes: [x.amt, r.title].filter(Boolean).join(' · '), location: WM[k] || '', done: false, all_day: true, updated_at: now() }); });
     s.remove();
     const { error } = await SB.from('planner_items').insert(rows); if (error) return alert('Couldn\'t save: ' + error.message);
-    tab = 'plan'; await load();
+    bump(r.title); tab = 'plan'; await load();
   };
   s.querySelector('#pOnly').onclick = () => go(false);
   if (s.querySelector('#pAll')) s.querySelector('#pAll').onclick = () => go(true);
@@ -138,6 +139,21 @@ function maybeRecipe(title, offerList) {
   // "Not now" means don't ask again for this meal.
   const nn = document.querySelector('.sheet #rN'); if (nn) nn.addEventListener('click', () => { try { localStorage.setItem('hubNoRecipe', JSON.stringify(skip.concat(key(title)))); } catch (e) {} });
 }
+
+// Quick add: meals you've entered before, most often first. Tap one to put it on a day.
+let mq = { counts: {}, hidden: [] }, mqEdit = false;
+function bump(title) { const k = key(title); if (!k) return; mq.counts[k] = { t: title, n: ((mq.counts[k] && mq.counts[k].n) || 0) + 1 }; mq.hidden = (mq.hidden || []).filter(h => h !== k); hubSet(SB, 'mealQuick', mq); }
+function quickList() {
+  const all = {}; meals.forEach(m => { const k = key(m.title); all[k] = all[k] || { t: m.title, n: 0 }; all[k].n++; });
+  Object.entries(mq.counts || {}).forEach(([k, v]) => { all[k] = { t: v.t, n: Math.max(v.n, (all[k] && all[k].n) || 0) }; });
+  const hide = new Set(mq.hidden || []);
+  return Object.entries(all).filter(([k]) => !hide.has(k)).sort((a, b) => b[1].n - a[1].n || a[1].t.localeCompare(b[1].t)).slice(0, 18).map(([, v]) => v.t);
+}
+function quickRow() {
+  const q = quickList(); if (!q.length) return '';
+  return '<div class="lbl2">Quick add' + (mqEdit ? ' · tap ✕ to remove' : ' · tap to plan') + '<button class="mini" id="mqEd">' + (mqEdit ? 'Done' : '✎ Edit') + '</button></div><div class="qchips">' +
+    q.map(t => '<button class="qc" data-qmeal="' + esc(t) + '">' + (mqEdit ? '✕ ' : '') + esc(t) + '</button>').join('') + '</div>';
+}
 async function load() {
   const [ml, rp, fr, sh, kd, st] = await Promise.all([
     SB.from('planner_items').select('id,title,date,list,location').eq('kind', 'meal').gte('date', add(tdy(), -120)),
@@ -149,6 +165,7 @@ async function load() {
   ]);
   if (ml.error) throw ml.error;
   meals = ml.data || []; shop = sh.data || [];
+  try { const q = await hubGet(SB, 'mealQuick'); mq = { counts: q.counts || {}, hidden: q.hidden || [] }; } catch (e) {}
   WM = (st.data && st.data.data && st.data.data.settings && st.data.data.settings.walmart) || {};
   kids = (kd.data || []).filter(k => !k.status || k.status === 'new' || k.status === 'pending');
   const lines = t => String(t || '').split(/\n/).map(x => x.replace(/^[-•*]\s*/, '').trim()).filter(x => x && !/:$/.test(x));
@@ -163,6 +180,7 @@ document.addEventListener('submit', async e => {
     const row = { id: uid(), kind: 'meal', title: r ? r.title : t.charAt(0).toUpperCase() + t.slice(1), date: d, list: ml, location: (r && r.pid) || '', notes: '', all_day: true, updated_at: now() };
     meals.push(row); draw();
     const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); return; }
+    bump(row.title);
     // A recipe with ingredients? Offer to put them on the shopping list.
     if (r && r.ing.length && d >= tdy()) askList(r);
     else if (!r) maybeRecipe(row.title, d >= tdy());
@@ -174,9 +192,13 @@ document.addEventListener('submit', async e => {
   const row = { id: uid(), kind: 'meal', title: r ? r.title : t.charAt(0).toUpperCase() + t.slice(1), date: d, list: ml, location: (r && r.pid) || '', notes: '', all_day: true, updated_at: now() };
   meals.push(row); draw(); const n = document.getElementById('lN'); if (n) n.focus();
   const { error } = await SB.from('planner_items').insert(row); if (error) { alert('Couldn\'t save: ' + error.message); meals = meals.filter(m => m !== row); draw(); return; }
+  bump(row.title);
   if (!r) maybeRecipe(row.title, false);
 });
 document.addEventListener('click', async e => {
+  if (e.target.id === 'mqEd') { mqEdit = !mqEdit; return draw(); }
+  const qm = e.target.closest('[data-qmeal]');
+  if (qm) { const t = qm.dataset.qmeal; if (mqEdit) { mq.hidden = (mq.hidden || []).concat(key(t)); delete mq.counts[key(t)]; draw(); return hubSet(SB, 'mealQuick', mq); } return plan(t); }
   const rm = e.target.closest('[data-rm]'); if (rm) { const m = meals.find(x => x.id === rm.dataset.rm); if (!m || !confirm('Remove “' + m.title + '” on ' + m.date + '?')) return; meals = meals.filter(x => x !== m); draw(); return SB.from('planner_items').delete().eq('id', m.id); }
   const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; return draw(); }
   if (e.target.id === 'shuf') { seed++; return draw(); }
