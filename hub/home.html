@@ -1,40 +1,46 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My day</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Lora:wght@400;500&display=swap">
 <style>
-/* The hub's front door: a quilt of the five hats Shaana wears. Each patch is pieced from its own plaid,
-   stitched to its neighbors, and shows what that part of life needs today. */
-:root{--ink:#263428;--muted:#6f776c;--linen:#f3f1ea;
-  --mom:#6e7d2f;--mom-b:#eef0dc;--teach:#3b6a4c;--teach-b:#e2ece3;--nurse:#5d8a6a;--nurse-b:#e6f0e7;--biz:#a7801f;--biz-b:#f5edd5;--vol:#9a6b1f;--vol-b:#f4e7cf}
+:root{
+  --ink:#443b32;--muted:#817669;--linen:#f2ecdf;--paper:#fffaf2;--line:#ded3c2;
+  --sage:#73816e;--sage-soft:#e5e9df;--rose:#a96f68;--rose-soft:#f3e8e1;--gold:#a77c48;
+  --mom:#73816e;--mom-b:#f2f1e8;--teach:#a96f68;--teach-b:#f5ece5;--nurse:#8c755b;--nurse-b:#f4eee3;--biz:#a47a43;--biz-b:#f5efe2;--vol:#75806b;--vol-b:#edf0e7
+}
 *{box-sizing:border-box;margin:0}
-html,body{background:var(--linen);color:var(--ink);font-family:Lora,Georgia,serif}
-.wrap{padding:6px 4px 8px}
-header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:6px 6px 16px}
-h1{font-family:Fraunces,Georgia,serif;font-weight:350;font-size:clamp(30px,4.4vw,46px);line-height:1.05;letter-spacing:-.01em;font-variation-settings:'SOFT' 100}
-h1 em{font-style:italic;font-weight:300}
-.sub{font-size:15px;color:var(--muted);margin-top:6px}
-.wx{display:flex;align-items:center;gap:10px;text-align:right}
-.wx b{font-family:Fraunces,serif;font-weight:350;font-size:34px;line-height:1}.wx span{font-size:13px;color:var(--muted);line-height:1.35}.wx i{font-style:normal;font-size:30px}
-.cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.cta a{font-size:13.5px;color:var(--ink);text-decoration:none;border:1px solid #d8d0bd;background:#fbfaf6;border-radius:20px;padding:6px 13px}.cta a:first-child{background:var(--ink);color:#f3f1ea;border-color:var(--ink)}.cta a:hover{border-color:var(--ink)}.cta a:focus-visible{outline:2px solid var(--teach);outline-offset:2px}
-.quilt{display:grid;grid-template-columns:repeat(5,1fr);border-radius:18px;overflow:hidden;box-shadow:0 1px 0 #fff inset,0 10px 24px -14px #2634284d;border:1px solid #d9d3c4}
-.p{position:relative;padding:18px 18px 16px;min-height:208px;display:flex;flex-direction:column;gap:8px;color:var(--ink);text-decoration:none;
-  background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--c) 9%,transparent) 0 14px,transparent 14px 28px,color-mix(in srgb,var(--c) 5%,transparent) 28px 31px,transparent 31px 44px),
-             repeating-linear-gradient(0deg,color-mix(in srgb,var(--c) 9%,transparent) 0 14px,transparent 14px 28px,color-mix(in srgb,var(--c) 5%,transparent) 28px 31px,transparent 31px 44px),var(--b)}
-.p+.p{border-left:1px solid #d9d3c4}
-.p:after{content:'';position:absolute;inset:7px;border:1.5px dashed color-mix(in srgb,var(--c) 45%,transparent);border-radius:11px;pointer-events:none}
-.p:hover:after{border-color:var(--c)}.p:focus-visible{outline:3px solid var(--c);outline-offset:-3px}
-.p h2{font-family:Fraunces,serif;font-weight:450;font-size:21px;color:var(--c);display:flex;align-items:center;gap:8px}
-.p h2 span{font-size:19px}
-.ln{font-size:13.5px;line-height:1.4}.ln small{display:block;font-size:12px;color:var(--muted)}
-.big{font-family:Fraunces,serif;font-weight:400;font-size:26px;line-height:1;color:var(--c)}
-.go{margin-top:auto;font-size:12.5px;color:var(--c)}
+html,body{background:radial-gradient(ellipse at 18% 0%,#fffaf0 0,transparent 42%),repeating-linear-gradient(0deg,#856f4d08 0 1px,transparent 1px 8px),var(--linen);color:var(--ink);font-family:Lora,Georgia,serif}
+.wrap{max-width:1700px;margin:0 auto;padding:12px 14px 18px}
+header{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:12px 8px 20px;border-bottom:1px solid #d9cebb;margin-bottom:16px}
+.eyebrow{font:600 10px/1.3 Lora,Georgia,serif;letter-spacing:.22em;color:var(--sage);text-transform:uppercase;margin-bottom:9px}
+h1{font-family:Fraunces,Georgia,serif;font-weight:350;font-size:clamp(32px,4.5vw,50px);line-height:1.02;letter-spacing:-.015em;color:var(--ink)}
+h1 em{font-style:italic;font-weight:300;color:var(--sage)}
+.sub{font-size:14px;color:var(--muted);margin-top:7px;line-height:1.5}
+.wx{display:flex;align-items:center;gap:12px;text-align:right;padding:12px 16px;background:#fffaf2;border:1px solid var(--line);border-radius:13px;box-shadow:0 5px 16px #604e3610}
+.wx b{font-family:Fraunces,serif;font-weight:350;font-size:32px;line-height:1;color:var(--sage)}
+.wx span{font-size:12px;color:var(--muted);line-height:1.4}.wx i{font-style:normal;font-size:26px}
+.cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.cta a{font-size:12.5px;color:var(--ink);text-decoration:none;border:1px solid #d8cbb6;background:#fffaf2;border-radius:7px;padding:8px 12px;box-shadow:0 2px 0 #e8dfd0}
+.cta a:first-child{background:var(--sage);color:#fffaf2;border-color:var(--sage);box-shadow:0 2px 0 #52614f}
+.cta a:hover{transform:translateY(-1px);box-shadow:0 4px 8px #5a4a3318}
+.cta a:focus-visible,.p:focus-visible{outline:2px solid var(--rose);outline-offset:3px}
+.life-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.p{position:relative;padding:19px 18px 16px;min-height:218px;display:flex;flex-direction:column;gap:8px;color:var(--ink);text-decoration:none;background:var(--paper);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:12px;box-shadow:0 7px 20px #58483212;overflow:visible;transition:transform .18s ease,box-shadow .18s ease}
+.p:before{content:'';position:absolute;top:-7px;left:22px;width:52px;height:13px;background:color-mix(in srgb,var(--b) 78%,#d3bd9d);border:1px solid #d5c4aa;border-radius:2px;transform:rotate(-3deg);opacity:.8}
+.p:nth-child(even):before{left:auto;right:22px;transform:rotate(3deg)}
+.p:hover{transform:translateY(-3px) rotate(-.15deg);box-shadow:0 12px 25px #5848321c}
+.p h2{font-family:Fraunces,serif;font-weight:450;font-size:21px;color:var(--c);display:flex;align-items:center;gap:9px;padding-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--c) 18%,transparent)}
+.p h2 span{font-size:18px;filter:saturate(.82)}
+.ln{font-size:13px;line-height:1.45;color:#51473d}.ln small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.big{font-family:Fraunces,serif;font-weight:400;font-size:27px;line-height:1;color:var(--c)}
+.go{margin-top:auto;padding-top:10px;font-size:11.5px;color:var(--c);border-top:1px dashed color-mix(in srgb,var(--c) 24%,transparent)}
 .load{color:var(--muted);font-size:13px}
-@media(max-width:900px){.quilt{grid-template-columns:1fr 1fr}.p+.p{border-left:0}.p{border-top:1px solid #d9d3c4}.p:nth-child(even){border-left:1px solid #d9d3c4}.p:last-child{grid-column:1/-1}}
-@media(max-width:520px){.quilt{grid-template-columns:1fr}.p:nth-child(even){border-left:0}.p{min-height:0}}
-@media(prefers-reduced-motion:no-preference){.quilt .p{animation:sew .5s ease-out both}.p:nth-child(2){animation-delay:.06s}.p:nth-child(3){animation-delay:.12s}.p:nth-child(4){animation-delay:.18s}.p:nth-child(5){animation-delay:.24s}@keyframes sew{from{opacity:0;transform:translateY(6px)}}}
+@media(max-width:1180px){.life-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.wrap{padding:8px}.life-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.p{min-height:205px;padding:17px 14px 14px}header{padding:10px 4px 16px}}
+@media(max-width:470px){.life-grid{grid-template-columns:1fr}.p{min-height:0}.wx{width:100%;justify-content:flex-start;text-align:left}}
+@media(prefers-reduced-motion:no-preference){.life-grid .p{animation:arrive .45s ease-out both}.p:nth-child(2){animation-delay:.05s}.p:nth-child(3){animation-delay:.1s}.p:nth-child(4){animation-delay:.15s}.p:nth-child(5){animation-delay:.2s}@keyframes arrive{from{opacity:0;transform:translateY(7px)}}}
 </style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js?v=2"></script></head><body><div class="wrap">
-<header><div><h1 id="hi">Hello, Shaana</h1><p class="sub" id="sub"></p><p class="cta"><a href="plan.html" target="_blank">✨ Plan my day</a><a href="day.html?v=5" target="_blank">⏰ Today’s time blocks</a><a href="quilt.html" target="_blank">🧵 My year quilt</a></p></div><div class="wx" id="wx"></div></header>
-<div class="quilt" id="body">
+<header><div><p class="eyebrow">Your everyday, thoughtfully gathered</p><h1 id="hi">Hello, Shaana</h1><p class="sub" id="sub"></p><p class="cta"><a href="plan.html" target="_blank">✨ Plan my day</a><a href="day.html?v=5" target="_blank">⏰ Today’s time blocks</a><a href="quilt.html" target="_blank">✦ My year in moments</a></p></div><div class="wx" id="wx"></div></header>
+<div class="life-grid" id="body">
   <a class="p" style="--c:var(--mom);--b:var(--mom-b)"><h2><span>👩‍👧‍👦</span>Mom</h2><p class="load">gathering…</p></a>
   <a class="p" style="--c:var(--teach);--b:var(--teach-b)"><h2><span>🍎</span>Teacher</h2><p class="load">gathering…</p></a>
   <a class="p" style="--c:var(--nurse);--b:var(--nurse-b)"><h2><span>🩺</span>Nurse</h2><p class="load">gathering…</p></a>
@@ -43,7 +49,7 @@ h1 em{font-style:italic;font-weight:300}
 </div></div>
 <script>
 const PAGES = { mom: 'https://www.notion.so/408c8baaa839816988d0f4572a091a7f', teach: 'https://www.notion.so/408c8baaa83981539a8bfe0eb8cb995d', nurse: 'https://www.notion.so/408c8baaa8398186b7e0e6d7613b374f', biz: 'https://www.notion.so/408c8baaa839812cbda8fa151152bc89', vol: 'https://www.notion.so/408c8baaa83981339d6ec2a05e4dbe6a' };
-const LINES = ['Nothing blooms all year — rest counts too.', 'One next right thing at a time.', 'What you water grows.', 'Your students remember how you made them feel.', 'Grace for yourself counts too.', 'Small stitches make a whole quilt.', 'Done is better than perfect.', 'Let the little wins count.', 'You are doing better than you think.', 'Make room for joy today.'];
+const LINES = ['Nothing blooms all year — rest counts too.', 'One next right thing at a time.', 'What you water grows.', 'Your students remember how you made them feel.', 'Grace for yourself counts too.', 'Every little win belongs somewhere.', 'Done is better than perfect.', 'Let the little wins count.', 'You are doing better than you think.', 'Make room for joy today.'];
 const now = new Date(), T = isoDay(now), dt = d => new Date(d + 'T12:00'), daysTo = d => Math.round((dt(d) - dt(T)) / 864e5);
 const ampm = s => { if (!s) return ''; const [h, m] = s.split(':').map(Number); return ((h % 12) || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
 const when = n => n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days';
