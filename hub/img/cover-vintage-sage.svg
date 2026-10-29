@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+<title id="title">Shaana's vintage journal hub</title>
+<desc id="desc">A warm paper journal, coffee cup, fountain pen, and handwritten notes in sage, parchment, and muted rose.</desc>
+<defs>
+  <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f4eee2"/><stop offset=".52" stop-color="#e9dfcd"/><stop offset="1" stop-color="#d7c9b2"/></linearGradient>
+  <linearGradient id="book" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fffdf6"/><stop offset="1" stop-color="#f6efdf"/></linearGradient>
+  <linearGradient id="sage" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#87917d"/><stop offset="1" stop-color="#657361"/></linearGradient>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="14" stdDeviation="13" flood-color="#554534" flood-opacity=".2"/></filter>
+  <pattern id="grain" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M0 12h44M0 33h44" stroke="#8c7655" stroke-opacity=".05"/><circle cx="7" cy="8" r="1" fill="#765f42" opacity=".08"/><circle cx="31" cy="29" r="1" fill="#765f42" opacity=".07"/></pattern>
+</defs>
+<rect width="1600" height="520" rx="28" fill="url(#paper)"/>
+<rect width="1600" height="520" rx="28" fill="url(#grain)"/>
+<path d="M0 416c242-48 427-29 617 5s438 55 983-24v123H0z" fill="#a7ad98" opacity=".28"/>
+<g transform="translate(195 93) rotate(-4 290 170)" filter="url(#shadow)">
+  <rect x="0" y="10" width="585" height="335" rx="16" fill="#9b8062"/>
+  <rect x="17" y="0" width="272" height="329" rx="10" fill="url(#book)"/>
+  <rect x="296" y="0" width="272" height="329" rx="10" fill="url(#book)"/>
+  <path d="M289 7v318" stroke="#c7b99f" stroke-width="9" opacity=".8"/>
+  <path d="M42 70h204M42 100h190M42 130h205M42 160h178M42 190h202M42 220h174M42 250h199M325 70h201M325 100h176M325 130h201M325 160h190M325 190h199M325 220h173M325 250h199" stroke="#aeb6a1" stroke-width="2" opacity=".55"/>
+  <text x="42" y="54" font-family="Georgia,serif" font-size="22" font-style="italic" fill="#71806b">little things to remember</text>
+  <text x="326" y="54" font-family="Georgia,serif" font-size="22" font-style="italic" fill="#a86f68">today, with grace</text>
+  <path d="M84 289c35-11 69-12 111-1M363 289c42-11 84-10 127 0" stroke="#b28758" stroke-width="3" stroke-linecap="round" opacity=".75"/>
+  <circle cx="522" cy="285" r="15" fill="#a86f68" opacity=".88"/><path d="M516 285h12M522 279v12" stroke="#fff7e9" stroke-width="2"/>
+</g>
+<g transform="translate(930 196) rotate(6)" filter="url(#shadow)">
+  <path d="M33 48h128v118c0 37-26 63-64 63s-64-26-64-63z" fill="#fbf6ea" stroke="#7e8875" stroke-width="8"/>
+  <path d="M160 76h30c32 0 35 68 0 68h-29" fill="none" stroke="#7e8875" stroke-width="12"/>
+  <ellipse cx="96" cy="48" rx="64" ry="15" fill="#7e8875"/>
+  <ellipse cx="96" cy="48" rx="50" ry="9" fill="#6b4936"/>
+  <path d="M56 26c-12-18 10-22 0-39M95 24c-13-20 9-25-1-43M132 27c-12-18 9-22 0-38" fill="none" stroke="#a86f68" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+  <text x="52" y="149" font-family="Georgia,serif" font-size="16" fill="#7a6753">slow morning</text>
+</g>
+<g transform="translate(1120 83) rotate(5)" filter="url(#shadow)">
+  <rect width="320" height="95" rx="7" fill="#dce1d3"/>
+  <path d="M18 20h180M18 40h250" stroke="#87917d" stroke-width="2" opacity=".5"/>
+  <text x="22" y="72" font-family="Georgia,serif" font-size="19" font-style="italic" fill="#53634f">make room for joy</text>
+  <circle cx="284" cy="28" r="12" fill="#b87c72"/><path d="M279 28h10M284 23v10" stroke="#fff8ee" stroke-width="2"/>
+</g>
+<g transform="translate(1098 337) rotate(-9)" filter="url(#shadow)">
+  <rect width="225" height="96" rx="4" fill="#f7e9df"/>
+  <path d="M18 25h188M18 48h162M18 70h140" stroke="#caa69b" stroke-width="2" opacity=".7"/>
+  <text x="18" y="20" font-family="Georgia,serif" font-size="13" letter-spacing="2" fill="#9b6a61">NOTES &amp; MOMENTS</text>
+</g>
+<g transform="translate(880 106) rotate(-18)" filter="url(#shadow)">
+  <rect x="0" y="0" width="18" height="205" rx="9" fill="url(#sage)"/>
+  <path d="M9 0v-18l9 18" fill="#b47b70"/>
+  <path d="M4 169h10" stroke="#e4ddcb" stroke-width="2"/>
+</g>
+<text x="72" y="106" font-family="Georgia,serif" font-size="18" letter-spacing="4" fill="#72806d">A LITTLE SPACE FOR EVERY DAY</text>
+<text x="72" y="192" font-family="Georgia,serif" font-size="65" fill="#443b32">Shaana's Hub</text>
+<text x="76" y="239" font-family="Georgia,serif" font-size="23" font-style="italic" fill="#817466">home · work · the moments in between</text>
+<path d="M78 274h340" stroke="#b47b70" stroke-width="3" stroke-linecap="round"/>
+<g fill="#a86f68"><circle cx="82" cy="312" r="5"/><circle cx="108" cy="312" r="5"/><circle cx="134" cy="312" r="5"/></g>
+<text x="161" y="319" font-family="Georgia,serif" font-size="16" letter-spacing="2" fill="#75816d">PLANNER · JOURNAL · LITTLE WINS</text>
+</svg>
