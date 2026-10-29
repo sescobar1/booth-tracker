@@ -48,7 +48,8 @@ ul.did{margin:0;padding-left:20px}ul.did li::marker{color:#a98bc4}.fed{font:inhe
 .fb{font-family:var(--hand);font-size:14px;line-height:1.2;border:1px dashed #d6cdbb;background:#fffaf0;border-radius:14px;padding:2px 8px;color:var(--ink2);cursor:pointer}.fb.on{border:1px solid #7d9178;background:#e6efe1}
 .fm{font-size:13px;color:#8a8f86;align-self:center;margin-left:4px}.fr.tr{grid-template-columns:minmax(150px,200px) 1fr auto}.fr.tr .fn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fl{font-size:14px;color:#9a8f7a;white-space:nowrap}.frm{font:inherit;font-size:12px;border:0;background:none;color:#b65d5d;cursor:pointer;padding:0}.drinks{margin-top:2px}.dr{display:grid;grid-template-columns:28px minmax(0,1fr) 28px 150px;gap:6px;align-items:center;min-height:36px}
 .dbtn{font:inherit;font-size:20px;line-height:1;width:28px;height:28px;border-radius:50%;border:1px dashed #b9c7d6;background:#f4f8fb;color:#4f6f8f;cursor:pointer;padding:0}.dbtn.plus{border-style:solid;background:#e3eef7}
-.cups{font-size:20px;letter-spacing:1px;white-space:nowrap;overflow:hidden}.cups .none{font-size:15px;color:#b7bcc4;letter-spacing:0}.dn2{font-size:16px;line-height:18px}.dn2 b{font-weight:400;font-size:19px}.dn2 small{display:block;font-size:13px;color:#8a8f86}.thrift{margin:0 0 16px}.tst small{color:#8a8f86;font-size:12px}.tst.on{border:1px solid #c39a6b;background:#f7ecdc}</style>
+.cups{font-size:20px;letter-spacing:1px;white-space:nowrap;overflow:hidden}.cups .none{font-size:15px;color:#b7bcc4;letter-spacing:0}.dn2{font-size:16px;line-height:18px}.dn2 b{font-weight:400;font-size:19px}.dn2 small{display:block;font-size:13px;color:#8a8f86}.thrift{margin:0 0 16px}.tst small{color:#8a8f86;font-size:12px}.tst.on{border:1px solid #c39a6b;background:#f7ecdc}
+.fth{display:flex;gap:5px;flex-wrap:wrap;margin:2px 0 4px}.care{margin-top:2px}.cr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:17px;color:#7a8c74;min-height:36px}.tm2{font-family:var(--hand);font-size:17px;color:var(--ink2);border:0;border-bottom:1px dashed #c9c0ad;background:transparent;padding:0 2px;width:112px}.hrs{font-size:15px;background:#e9e3f3;color:#5b4e7a;border-radius:12px;padding:0 9px;line-height:24px}.sc{font-size:19px;line-height:1;width:34px;height:34px;border-radius:50%;border:1.5px dashed #d6cdbb;background:#fffaf0;cursor:pointer;padding:0}.sc.on{border:2px solid #7d9178;background:#eef3ea;transform:scale(1.1)}.stp{width:90px;display:inline-block;border-bottom:1px dashed #c9c0ad;height:28px;font-size:17px}.fb.hd.on{border-color:#d9675f;background:#fbe7e4}.pray{margin:0 0 16px}.pr{display:flex;justify-content:space-between;gap:8px;align-items:center;min-height:32px;font-size:18px;line-height:22px}.pr small{font-size:13px;color:#9a8f7a}.pr>span:last-child{display:flex;gap:6px;flex:0 0 auto}.pr.ans>span:first-child{color:#7d9178}.mtl{font-size:17px;margin:0;line-height:26px}.mtl b{font-weight:400;font-size:19px}.mtl small{color:#8a8f86;font-size:13px}.mtl .sep{color:#c9c0ad;margin:0 7px}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js"></script></head><body><div class="wrap">
 <div class="top"><h1>My Journal</h1><div class="nav"><button id="prev" title="Day before">‹</button><button id="tdy">Today</button><button id="next" title="Next day">›</button></div></div>
 <div id="body" class="muted small">Opening your journal…</div>
@@ -57,13 +58,15 @@ const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧',
 const PROMPTS = ['What made you smile today?', 'What\'s been on your mind lately?', 'A moment you want to remember…', 'What did you learn today?', 'How did you take care of yourself?', 'What are you looking forward to?', 'Something you\'re proud of…', 'What would make tomorrow great?', 'Who made a difference for you today?', 'What\'s weighing on you, and one small next step?', 'Write a little letter to yourself…', 'Where did you see God / grace today?'];
 let recentAll = [], SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], timer, calMonth = day.slice(0, 7), pIdx = 0;
 const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
-const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '', cece_did: [], verse_ref: '', verse: '', family: {}, drinks: {}, thrift: {} });
+const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '', cece_did: [], verse_ref: '', verse: '', family: {}, drinks: {}, thrift: {}, sleep: {}, move: {}, faith: {}, body_feel: {}, eli_mood: '', eli_tags: [], eli_note: '', eli_did: [] });
 // How Cece was today: a 5-step scale (with colors for the month view), plus quick words and a note.
 const CECE = [['😄', 'Great', '#7fb069'], ['🙂', 'Good', '#b5cf7a'], ['😐', 'So-so', '#e8c95a'], ['😤', 'Rough', '#e8995a'], ['😭', 'Really hard', '#d9675f']];
 const CECE_TAGS = ['Kind', 'Helpful', 'Listened', 'Funny', 'Did chores', 'Good at school', 'Tired', 'Moody', 'Sassy', 'Argued', 'Talked back', 'Cried', 'Anxious', 'Sick', 'Stayed in room'];
+const ELI_TAGS = ['Kind', 'Helpful', 'Listened', 'Funny', 'Played well', 'Shared', 'Good at school', 'Tired', 'Cranky', 'Hyper', 'Whiny', 'Meltdown', 'Cried', 'Didn\'t listen', 'Sick'];
+const KIDS = { cece: { name: 'Cece', icon: '💜', pr: 'she', tags: CECE_TAGS, ex: 'cleaned her room, made a new friend, got in trouble at school…' }, eli: { name: 'Eli', icon: '💙', pr: 'he', tags: ELI_TAGS, ex: 'learned a new word, built a fort, helped feed the dog…' } };
 function draw() {
   if (document.getElementById('body2')) collect(); // keep what's being typed when the day's info arrives
-  const ae = document.activeElement, focusKey = ae && (ae.dataset.f || (ae.dataset.g != null ? 'g' + ae.dataset.g : '') || (ae.dataset.did != null ? 'did' + ae.dataset.did : '') || (ae.dataset.tf ? 'tf' : '')), caret = ae && ae.selectionStart;
+  const ae = document.activeElement, focusKey = ae && (ae.dataset.f || (ae.dataset.g != null ? 'g' + ae.dataset.g : '') || (ae.dataset.did != null ? 'did' + ae.dataset.kid + ':' + ae.dataset.did : '') || (ae.dataset.j ? 'j:' + ae.dataset.j : '') || (ae.dataset.tf ? 'tf' : '')), caret = ae && ae.selectionStart;
   const e = cur || blank(), t = isoDay(new Date()), el = document.getElementById('body'); el.className = '';
   pIdx = (dt(day).getDate() + dt(day).getMonth()) % PROMPTS.length;
   const mood = MOODS.find(m => m[1] === e.mood);
@@ -72,20 +75,20 @@ function draw() {
       '<p class="date">' + dt(day).toLocaleDateString('en-US', { weekday: 'long' }) + '<small>' + dt(day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + (day === t ? ' · today' : '') + '</small></p>' +
       '<div class="verse"><p class="lbl" style="margin:0">📖 Verse of the day <a href="https://www.biblegateway.com/" target="_blank" title="Find today\'s verse">find one ↗</a></p>' +
         '<textarea class="vt" data-f="verse" rows="2" placeholder="“The Lord is my shepherd; I shall not want.”">' + esc(e.verse || '') + '</textarea>' +
-        '<input class="line vr" data-f="verse_ref" value="' + esc(e.verse_ref || '') + '" placeholder="— Psalm 23:1"></div>' +
+        '<input class="line vr" data-f="verse_ref" value="' + esc(e.verse_ref || '') + '" placeholder="— Psalm 23:1">' + faithHtml(e) + '</div>' +
       glanceHtml() +
       '<p class="lbl">Today I feel…</p><div class="moods">' + MOODS.map(([i, n]) => '<button class="mood' + (e.mood === n ? ' on' : '') + '" data-mood="' + n + '" title="' + n + '">' + i + '</button>').join('') + '</div>' +
-      drinksHtml(e) +
+      drinksHtml(e) + careHtml(e) +
       '<p class="lbl">I\'m grateful for…</p><ol class="g">' + [0, 1, 2].map(i => '<li><input class="line" data-g="' + i + '" value="' + esc((e.grateful || [])[i] || '') + '" placeholder="' + (i ? '' : 'my family, coffee, a good laugh…') + '"></li>').join('') + '</ol>' +
       '<p class="lbl">Highlight of the day</p><input class="line" data-f="highlight" value="' + esc(e.highlight) + '" placeholder="the best part was…">' +
       '<p class="lbl">Tomorrow I want to…</p><input class="line" data-f="tomorrow" value="' + esc(e.tomorrow) + '" placeholder="one thing that matters">' +
       familyHtml(e) +
     '</div>' +
-    '<div class="pg right">' + ceceHtml(e) + thriftHtml(e) + '<p class="prompt"><b>✎</b> ' + esc(PROMPTS[pIdx]) + '<button id="newP" title="Another prompt">another</button></p>' +
+    '<div class="pg right">' + kidHtml(e, 'cece') + kidHtml(e, 'eli') + prayerHtml() + thriftHtml(e) + '<p class="prompt"><b>✎</b> ' + esc(PROMPTS[pIdx]) + '<button id="newP" title="Another prompt">another</button></p>' +
       '<textarea id="body2" data-f="body" placeholder="Dear diary…">' + esc(e.body) + '</textarea><span class="saved" id="saved"></span></div></div>' +
     pastHtml();
   grow();
-  if (focusKey) { const n = document.querySelector(focusKey === 'tf' ? '[data-tf="found"]' : /^did\d+$/.test(focusKey) ? '[data-did="' + focusKey.slice(3) + '"]' : focusKey[0] === 'g' && focusKey.length < 3 ? '[data-g="' + focusKey.slice(1) + '"]' : '[data-f="' + focusKey + '"]'); if (n) { n.focus(); try { n.setSelectionRange(caret, caret); } catch (x) {} } }
+  if (focusKey) { const n = document.querySelector(focusKey === 'tf' ? '[data-tf="found"]' : /^did\w+:\d+$/.test(focusKey) ? '[data-kid="' + focusKey.slice(3).split(':')[0] + '"][data-did="' + focusKey.split(':')[1] + '"]' : focusKey.startsWith('j:') ? '[data-j="' + focusKey.slice(2) + '"]' : focusKey[0] === 'g' && focusKey.length < 3 ? '[data-g="' + focusKey.slice(1) + '"]' : '[data-f="' + focusKey + '"]'); if (n) { n.focus(); try { n.setSelectionRange(caret, caret); } catch (x) {} } }
 }
 
 // ---------- From my day: appointments, work, meals, to-dos done, habits and spending flow in on their own ----------
@@ -143,26 +146,80 @@ function glanceHtml() {
 }
 
 // Always one empty line at the end, so there's room to add another.
-const didLines = e => { const l = (e.cece_did || []).filter(x => x && x.trim()); return l.concat(['']).concat(l.length ? [] : ['']); };
-function ceceHtml(e) {
-  const tags = e.cece_tags || [];
-  return '<div class="cece"><p class="lbl" style="margin-top:0">💜 How was Cece today?</p><div class="moods">' +
-    CECE.map(([i, n, c]) => '<button class="mood cm' + (e.cece_mood === n ? ' on' : '') + '" data-cece="' + n + '" title="' + n + '" style="--cc:' + c + '">' + i + '</button>').join('') +
-    (e.cece_mood ? '<span class="cl">' + esc(e.cece_mood) + '</span>' : '') + '</div>' +
-    '<div class="ctags">' + CECE_TAGS.map(t => '<button class="ctag' + (tags.includes(t) ? ' on' : '') + '" data-ctag="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' +
-    '<input class="line" data-f="cece_note" value="' + esc(e.cece_note || '') + '" placeholder="what happened, what helped…">' +
-    '<p class="lbl">Things she did</p><ul class="did">' + didLines(e).map((t, i) => '<li><input class="line" data-did="' + i + '" value="' + esc(t) + '" placeholder="' + (i ? '' : 'cleaned her room, made a new friend, got in trouble at school…') + '"></li>').join('') + '</ul></div>';
+const didLines = (e, k) => { const l = (e[k + '_did'] || []).filter(x => x && x.trim()); return l.concat(['']).concat(l.length ? [] : ['']); };
+function kidHtml(e, k) {
+  const K = KIDS[k], tags = e[k + '_tags'] || [], mood = e[k + '_mood'];
+  return '<div class="cece"><p class="lbl" style="margin-top:' + (k === 'cece' ? 0 : 6) + 'px">' + K.icon + ' How was ' + K.name + ' today?</p><div class="moods">' +
+    CECE.map(([i, n, c]) => '<button class="mood cm' + (mood === n ? ' on' : '') + '" data-kid="' + k + '" data-kmood="' + n + '" title="' + n + '" style="--cc:' + c + '">' + i + '</button>').join('') +
+    (mood ? '<span class="cl">' + esc(mood) + '</span>' : '') + '</div>' +
+    '<div class="ctags">' + K.tags.map(t => '<button class="ctag' + (tags.includes(t) ? ' on' : '') + '" data-kid="' + k + '" data-ktag="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' +
+    '<input class="line" data-f="' + k + '_note" value="' + esc(e[k + '_note'] || '') + '" placeholder="what happened, what helped…">' +
+    '<p class="lbl">Things ' + K.pr + ' did</p><ul class="did">' + didLines(e, k).map((t, i) => '<li><input class="line" data-kid="' + k + '" data-did="' + i + '" value="' + esc(t) + '" placeholder="' + (i ? '' : K.ex) + '"></li>').join('') + '</ul></div>';
 }
 
-// Cece this month: one dot per day, colored by how her day went.
-function ceceMonth() {
-  const [y, m] = calMonth.split('-').map(Number), n = new Date(y, m, 0).getDate(), have = {}; recentAll.forEach(r => { if (r.cece_mood) have[r.day] = r.cece_mood; });
-  if (cur && cur.cece_mood) have[cur.day] = cur.cece_mood;
-  const ds = [...Array(n)].map((_, k) => calMonth + '-' + String(k + 1).padStart(2, '0')), logged = ds.filter(d => have[d]);
+// ---------- Taking care of me: sleep, movement, how my body feels ----------
+const jget = (e, path) => { const [o, k] = path.split('.'); return (e[o] || {})[k]; };
+const jset = (e, path, v) => { const [o, k] = path.split('.'); const x = e[o] = { ...(e[o] || {}) }; if (v === '' || v == null || v === false) delete x[k]; else x[k] = v; };
+function sleepHrs(s) { if (!s || !s.bed || !s.wake) return null; const m = t => { const [h, n] = t.split(':').map(Number); return h * 60 + n; }; let d = m(s.wake) - m(s.bed); if (d <= 0) d += 1440; return d / 60; }
+const REST = ['😵', '🥱', '😐', '🙂', '😌'], FEEL = ['🤒', '😣', '😐', '🙂', '💪'], MOVES = [['walk', '🚶', 'Walk'], ['workout', '🏋️', 'Workout'], ['stretch', '🧘', 'Stretch'], ['outside', '🌳', 'Outside']];
+function careHtml(e) {
+  const s = e.sleep || {}, mv = e.move || {}, b = e.body_feel || {}, h = sleepHrs(s);
+  const scale = (path, faces, cur) => faces.map((f, i) => '<button class="sc' + (cur == i + 1 ? ' on' : '') + '" data-jv="' + path + '" data-v="' + (i + 1) + '" title="' + (i + 1) + ' of 5">' + f + '</button>').join('');
+  return '<p class="lbl">🌙 Last night I slept…</p><div class="care">' +
+    '<span class="cr">bed <input type="time" class="tm2" data-j="sleep.bed" value="' + esc(s.bed || '') + '"> woke <input type="time" class="tm2" data-j="sleep.wake" value="' + esc(s.wake || '') + '">' +
+    (h != null ? '<span class="hrs">' + (Math.round(h * 4) / 4) + ' hrs</span>' : '') + '</span>' +
+    '<span class="cr">rested? ' + scale('sleep.rest', REST, s.rest) + '</span></div>' +
+    '<p class="lbl">👟 I moved…</p><div class="care"><span class="cr">' + MOVES.map(([k, i, l]) => '<button class="fb' + (mv[k] ? ' on' : '') + '" data-jt="move.' + k + '">' + i + ' ' + l + '</button>').join('') +
+    '<input type="number" inputmode="numeric" min="0" class="line stp" data-j="move.steps" value="' + esc(mv.steps || '') + '" placeholder="steps"></span></div>' +
+    '<p class="lbl">🩺 My body feels…</p><div class="care"><span class="cr">' + scale('body_feel.rating', FEEL, b.rating) +
+    '<button class="fb' + (b.headache ? ' on hd' : '') + '" data-jt="body_feel.headache">🤕 Headache</button></span></div>' +
+    '<input class="line" data-j="body_feel.note" value="' + esc(b.note || '') + '" placeholder="sore back, migraine at 3, felt great after my walk…">';
+}
+
+// ---------- Faith: Bible and prayer checks, plus a running prayer list ----------
+let PRAY = [], prShowAns = false;
+function faithHtml(e) {
+  const f = e.faith || {};
+  return '<div class="fth"><button class="fb' + (f.bible ? ' on' : '') + '" data-jt="faith.bible">📖 Read my Bible</button><button class="fb' + (f.prayed ? ' on' : '') + '" data-jt="faith.prayed">🙏 Prayed</button><button class="fb' + (f.church ? ' on' : '') + '" data-jt="faith.church">⛪ Church</button></div>';
+}
+const shortD = d => dt(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function prayerHtml() {
+  const open = PRAY.filter(p => !p.answered), ans = PRAY.filter(p => p.answered).sort((a, b) => b.answered.localeCompare(a.answered));
+  return '<div class="pray"><p class="lbl" style="margin-top:6px">🙏 Praying for…' + (ans.length ? ' <button class="fed" id="prAns">' + (prShowAns ? 'hide' : 'show') + ' answered (' + ans.length + ')</button>' : '') + '</p>' +
+    open.map(p => '<div class="pr"><span>' + esc(p.text) + ' <small>since ' + shortD(p.added) + '</small></span><span><button class="fb" data-pans="' + p.id + '" title="God answered this">🙌 Answered</button><button class="frm" data-prm="' + p.id + '" title="Remove">✕</button></span></div>').join('') +
+    '<input class="line" id="prNew" placeholder="add a prayer request, then Enter">' +
+    (prShowAns && ans.length ? '<p class="lbl">🙌 Answered prayers</p>' + ans.map(p => '<div class="pr ans"><span>' + esc(p.text) + ' <small>' + shortD(p.added) + ' → ' + shortD(p.answered) + '</small></span><span><button class="frm" data-pun="' + p.id + '" title="Not answered yet">↺</button></span></div>').join('') : '') + '</div>';
+}
+const savePray = () => hubSet(SB, 'prayerList', { list: PRAY });
+
+// Each kid this month: one dot per day, colored by how their day went.
+function kidMonth(k) {
+  const f = k + '_mood', [y, m] = calMonth.split('-').map(Number), n = new Date(y, m, 0).getDate(), have = {}; recentAll.forEach(r => { if (r[f]) have[r.day] = r[f]; });
+  if (cur && cur[f]) have[cur.day] = cur[f];
+  const ds = [...Array(n)].map((_, i) => calMonth + '-' + String(i + 1).padStart(2, '0')), logged = ds.filter(d => have[d]);
   if (!logged.length) return '';
   const counts = {}; logged.forEach(d => counts[have[d]] = (counts[have[d]] || 0) + 1);
-  return '<div class="cmonth"><p class="nh" style="margin:10px 0 4px">💜 Cece this month</p><div class="dots">' + ds.map(d => { const c = CECE.find(x => x[1] === have[d]); return '<i title="' + d + (c ? ' · ' + c[1] : '') + '" style="background:' + (c ? c[2] : '#ece6d8') + '"></i>'; }).join('') + '</div>' +
+  return '<div class="cmonth"><p class="nh" style="margin:10px 0 4px">' + KIDS[k].icon + ' ' + KIDS[k].name + ' this month</p><div class="dots">' + ds.map(d => { const c = CECE.find(x => x[1] === have[d]); return '<i title="' + d + (c ? ' · ' + c[1] : '') + '" style="background:' + (c ? c[2] : '#ece6d8') + '"></i>'; }).join('') + '</div>' +
     '<p class="ck">' + CECE.filter(c => counts[c[1]]).map(c => c[0] + ' ' + c[1] + ' ' + counts[c[1]]).join(' · ') + '</p></div>';
+}
+// Month totals: drinks, movement, sleep, headaches.
+function monthTotals() {
+  const rows = recentAll.filter(r => r.day.slice(0, 7) === calMonth).map(r => r.day === day && cur ? cur : r);
+  if (cur && cur.day.slice(0, 7) === calMonth && !rows.includes(cur)) rows.push(cur);
+  const sum = f => rows.reduce((a, r) => a + (Number(f(r)) || 0), 0);
+  const st = sum(r => (r.drinks || {}).stanley), th = sum(r => (r.drinks || {}).thunder), wDays = rows.filter(r => (r.drinks || {}).stanley).length;
+  const walks = sum(r => !!(r.move || {}).walk), wo = sum(r => !!(r.move || {}).workout), steps = sum(r => (r.move || {}).steps);
+  const sl = rows.map(r => sleepHrs(r.sleep)).filter(x => x != null), hd = sum(r => !!(r.body_feel || {}).headache);
+  const bible = sum(r => !!(r.faith || {}).bible);
+  const bits = [
+    st ? '💧 <b>' + st + '</b> Stanley' + (st === 1 ? '' : 's') + ' <small>(' + (st * 40).toLocaleString() + ' oz · ' + (st / wDays).toFixed(1) + '/day)</small>' : '',
+    th ? '🥤 <b>' + th + '</b> Diet Dr Thunder' + (th === 1 ? '' : 's') : '',
+    walks ? '🚶 <b>' + walks + '</b> walk' + (walks === 1 ? '' : 's') : '', wo ? '🏋️ <b>' + wo + '</b> workout' + (wo === 1 ? '' : 's') : '',
+    steps ? '👟 <b>' + steps.toLocaleString() + '</b> steps' : '',
+    sl.length ? '😴 <b>' + (sl.reduce((a, b) => a + b, 0) / sl.length).toFixed(1) + '</b> hrs avg sleep' : '',
+    hd ? '🤕 <b>' + hd + '</b> headache day' + (hd === 1 ? '' : 's') : '', bible ? '📖 <b>' + bible + '</b> Bible day' + (bible === 1 ? '' : 's') : ''
+  ].filter(Boolean);
+  return bits.length ? '<div class="mt"><p class="nh" style="margin:10px 0 4px">📊 This month</p><p class="mtl">' + bits.join('<span class="sep">·</span>') + '</p></div>' : '';
 }
 
 // ---------- Family check-ins: who you called or texted today, and how long it's been ----------
@@ -222,7 +279,7 @@ function pastHtml() {
   for (let k = 1; k <= n; k++) { const d = calMonth + '-' + String(k).padStart(2, '0'); cells += '<button data-day="' + d + '" class="' + (days.has(d) ? 'has ' : '') + (d === day ? 'sel ' : '') + (d === t ? 'today' : '') + '"' + (d > t ? ' disabled' : '') + '>' + k + '</button>'; }
   return '<div class="past"><h3><span>📚 Past entries</span><span><button class="nav-m" data-m="-1" style="font:inherit;border:0;background:none;cursor:pointer">‹</button> ' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ' <button class="nav-m" data-m="1" style="font:inherit;border:0;background:none;cursor:pointer">›</button></span></h3>' +
     '<div class="cal">' + cells + '</div>' +
-    ceceMonth() +
+    monthTotals() + kidMonth('cece') + kidMonth('eli') +
     (recent.length ? '<div class="recent">' + recent.map(r => '<button data-day="' + r.day + '"><small>' + dt(r.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (r.mood ? ' · ' + (MOODS.find(m => m[1] === r.mood) || [''])[0] : '') + '</small>' + esc((r.highlight || r.body || 'Entry').slice(0, 60)) + '</button>').join('') + '</div>' : '') + '</div>';
 }
 function grow() { document.querySelectorAll('textarea.vt').forEach(v => { v.style.height = 'auto'; v.style.height = Math.max(64, Math.ceil(v.scrollHeight / 32) * 32) + 'px'; }); const t = document.getElementById('body2'); if (!t) return; t.style.height = 'auto'; t.style.height = Math.max(448, Math.ceil(t.scrollHeight / 32) * 32) + 'px'; }
@@ -231,14 +288,15 @@ function collect() {
   document.querySelectorAll('[data-f]').forEach(i => { e[i.dataset.f] = i.value; });
   e.grateful = [0, 1, 2].map(i => (document.querySelector('[data-g="' + i + '"]') || {}).value || '');
   const tf = document.querySelector('[data-tf="found"]'); if (tf) e.thrift = { ...(e.thrift || {}), found: tf.value };
-  if (document.querySelector('[data-did]')) e.cece_did = [...document.querySelectorAll('[data-did]')].map(i => i.value).filter(x => x.trim());
+  Object.keys(KIDS).forEach(k => { if (document.querySelector('[data-kid="' + k + '"][data-did]')) e[k + '_did'] = [...document.querySelectorAll('[data-kid="' + k + '"][data-did]')].map(i => i.value).filter(x => x.trim()); });
+  document.querySelectorAll('[data-j]').forEach(i => jset(e, i.dataset.j, i.value.trim()));
   cur = e; return e;
 }
 function later() { clearTimeout(timer); const s = document.getElementById('saved'); if (s) s.textContent = 'writing…'; timer = setTimeout(save, 900); }
 async function save() {
-  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim() && !(e.cece_did || []).length && !(e.verse || '').trim() && !(e.verse_ref || '').trim() && !Object.values(e.family || {}).some(x => x.length) && !Object.values(e.drinks || {}).some(x => x) && !((e.thrift || {}).stores || []).length && !((e.thrift || {}).found || '').trim();
+  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim() && !(e.cece_did || []).length && !(e.verse || '').trim() && !(e.verse_ref || '').trim() && !Object.values(e.family || {}).some(x => x.length) && !Object.values(e.drinks || {}).some(x => x) && !((e.thrift || {}).stores || []).length && !((e.thrift || {}).found || '').trim() && !['sleep', 'move', 'faith', 'body_feel'].some(k => Object.keys(e[k] || {}).length) && !e.eli_mood && !(e.eli_tags || []).length && !(e.eli_note || '').trim() && !(e.eli_did || []).length;
   if (empty && !days.has(e.day)) return;
-  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', cece_did: e.cece_did || [], verse: e.verse || '', verse_ref: e.verse_ref || '', family: e.family || {}, drinks: e.drinks || {}, thrift: e.thrift || {}, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
+  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', cece_did: e.cece_did || [], verse: e.verse || '', verse_ref: e.verse_ref || '', family: e.family || {}, drinks: e.drinks || {}, thrift: e.thrift || {}, sleep: e.sleep || {}, move: e.move || {}, faith: e.faith || {}, body_feel: e.body_feel || {}, eli_mood: e.eli_mood || '', eli_tags: e.eli_tags || [], eli_note: e.eli_note || '', eli_did: e.eli_did || [], updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
   const s = document.getElementById('saved'); if (s) s.textContent = error ? 'couldn\'t save — check your signal' : 'saved ✓';
   if (!error) { const ra = recentAll.find(x => x.day === e.day); if (ra) Object.assign(ra, e); else recentAll.unshift({ ...e }); days.add(e.day); const r = recent.find(x => x.day === e.day); if (r) Object.assign(r, e); else { recent.unshift({ ...e }); recent.sort((a, b) => b.day.localeCompare(a.day)); recent = recent.slice(0, 10); } }
 }
@@ -250,10 +308,12 @@ async function open(d) {
   loadGlance(d);
 }
 document.addEventListener('keydown', e => { if (e.target.id === 'stNew' && e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v && !STORES.includes(v)) { collect(); STORES.push(v); hubSet(SB, 'thriftStores', { list: STORES }); draw(); const i = document.getElementById('stNew'); if (i) i.focus(); } } });
+document.addEventListener('keydown', e => { if (e.target.id === 'prNew' && e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (!v) return; collect(); PRAY.push({ id: Date.now().toString(36), text: v, added: day }); savePray(); draw(); const n = document.getElementById('prNew'); if (n) n.focus(); } });
 document.addEventListener('keydown', e => { if (e.target.id === 'famNew' && e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v && !FAM.includes(v)) { collect(); FAM.push(v); hubSet(SB, 'familyPeople', { list: FAM }); draw(); const n = document.getElementById('famNew'); if (n) n.focus(); } } });
 document.addEventListener('input', e => {
-  if (e.target.matches('[data-did]')) { const all = document.querySelectorAll('[data-did]'); if (e.target === all[all.length - 1] && e.target.value.trim()) { const li = document.createElement('li'); li.innerHTML = '<input class="line" data-did="' + all.length + '" value="">'; e.target.closest('ul').appendChild(li); } later(); return; }
+  if (e.target.matches('[data-did]')) { const all = document.querySelectorAll('[data-kid="' + e.target.dataset.kid + '"][data-did]'); if (e.target === all[all.length - 1] && e.target.value.trim()) { const li = document.createElement('li'); li.innerHTML = '<input class="line" data-kid="' + e.target.dataset.kid + '" data-did="' + all.length + '" value="">'; e.target.closest('ul').appendChild(li); } later(); return; }
   if (e.target.matches('[data-tf]')) { later(); return; }
+  if (e.target.matches('[data-j]')) { later(); return; }
   if (e.target.matches('[data-f],[data-g]')) { if (e.target.id === 'body2') grow(); if (e.target.classList.contains('vt')) { e.target.style.height = 'auto'; e.target.style.height = Math.ceil(e.target.scrollHeight / 32) * 32 + 'px'; } later(); }
 });
 document.addEventListener('click', async e => {
@@ -265,8 +325,14 @@ document.addEventListener('click', async e => {
   const fb = e.target.closest('[data-fam]'); if (fb) { collect(); const n = fb.dataset.fam, k = fb.dataset.way, f = cur.family = { ...(cur.family || {}) }, l = f[n] || []; f[n] = l.includes(k) ? l.filter(x => x !== k) : l.concat(k); if (!f[n].length) delete f[n]; await save(); draw(); return; }
   if (e.target.id === 'famEd') { collect(); famEdit = !famEdit; draw(); if (famEdit) { const n = document.getElementById('famNew'); if (n) n.focus(); } return; }
   const fr = e.target.closest('[data-frm]'); if (fr) { if (!(await ask('Take ' + fr.dataset.frm + ' off your check-in list?'))) return; collect(); FAM = FAM.filter(x => x !== fr.dataset.frm); hubSet(SB, 'familyPeople', { list: FAM }); draw(); return; }
-  const cm = e.target.closest('[data-cece]'); if (cm) { collect(); cur.cece_mood = cur.cece_mood === cm.dataset.cece ? '' : cm.dataset.cece; await save(); draw(); return; }
-  const ct = e.target.closest('[data-ctag]'); if (ct) { collect(); const t = ct.dataset.ctag, l = cur.cece_tags || []; cur.cece_tags = l.includes(t) ? l.filter(x => x !== t) : l.concat(t); await save(); draw(); return; }
+  const cm = e.target.closest('[data-kmood]'); if (cm) { collect(); const f = cm.dataset.kid + '_mood'; cur[f] = cur[f] === cm.dataset.kmood ? '' : cm.dataset.kmood; await save(); draw(); return; }
+  const ct = e.target.closest('[data-ktag]'); if (ct) { collect(); const f = ct.dataset.kid + '_tags', t = ct.dataset.ktag, l = cur[f] || []; cur[f] = l.includes(t) ? l.filter(x => x !== t) : l.concat(t); await save(); draw(); return; }
+  const jt = e.target.closest('[data-jt]'); if (jt) { collect(); jset(cur, jt.dataset.jt, !jget(cur, jt.dataset.jt)); await save(); draw(); return; }
+  const jv = e.target.closest('[data-jv]'); if (jv) { collect(); const v = Number(jv.dataset.v); jset(cur, jv.dataset.jv, jget(cur, jv.dataset.jv) == v ? '' : v); await save(); draw(); return; }
+  const pa = e.target.closest('[data-pans]'); if (pa) { collect(); const p = PRAY.find(x => x.id === pa.dataset.pans); if (p) { p.answered = day; savePray(); draw(); } return; }
+  const pu = e.target.closest('[data-pun]'); if (pu) { collect(); const p = PRAY.find(x => x.id === pu.dataset.pun); if (p) { delete p.answered; savePray(); draw(); } return; }
+  const pr = e.target.closest('[data-prm]'); if (pr) { const p = PRAY.find(x => x.id === pr.dataset.prm); if (!p || !(await ask('Take “' + p.text + '” off your prayer list?'))) return; collect(); PRAY = PRAY.filter(x => x !== p); savePray(); draw(); return; }
+  if (e.target.id === 'prAns') { collect(); prShowAns = !prShowAns; draw(); return; }
   const m = e.target.closest('[data-mood]'); if (m) { collect(); cur.mood = cur.mood === m.dataset.mood ? '' : m.dataset.mood; await save(); draw(); return; }
   const d = e.target.closest('[data-day]'); if (d && !d.disabled) return open(d.dataset.day);
   const nm = e.target.closest('.nav-m'); if (nm) { const [y, mo] = calMonth.split('-').map(Number), x = new Date(y, mo - 1 + Number(nm.dataset.m), 1); calMonth = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); collect(); return draw(); }
@@ -275,12 +341,14 @@ document.addEventListener('click', async e => {
   if (e.target.id === 'next') { if (day < isoDay(new Date())) open(add(day, 1)); return; }
   if (e.target.id === 'tdy') return open(isoDay(new Date()));
 });
+document.addEventListener('change', e => { if (e.target.matches('input[type=time][data-j]')) { collect(); save(); draw(); } });
 window.addEventListener('beforeunload', () => { if (timer) save(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && timer) save(); });
 hubData(async sb => {
   if (SB) return; SB = sb;
-  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body,cece_mood,family,thrift').order('day', { ascending: false }).limit(400)]);
+  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body,cece_mood,eli_mood,family,thrift,drinks,sleep,move,faith,body_feel').order('day', { ascending: false }).limit(400)]);
   try { const ts = await hubGet(sb, 'thriftStores'); if (ts && ts.list && ts.list.length) STORES = ts.list; } catch (x) {}
+  try { const pl = await hubGet(sb, 'prayerList'); if (pl && pl.list) PRAY = pl.list; } catch (x) {}
   try { const fp = await hubGet(sb, 'familyPeople'); if (fp && fp.list && fp.list.length) FAM = fp.list; } catch (x) {}
   recentAll = list.data || []; recentAll.forEach(r => days.add(r.day)); recent = recentAll.slice(0, 10);
   await open(day);
