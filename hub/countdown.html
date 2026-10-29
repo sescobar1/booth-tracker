@@ -1,11 +1,11 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Countdown</title><link rel="stylesheet" href="style.css">
-<style>.cd{display:flex;align-items:center;gap:14px;padding:8px 0;border-bottom:1px solid var(--line)}.cd:last-child{border-bottom:0}
+<style>.card{height:auto;min-height:100vh}.cd{display:flex;align-items:center;gap:14px;padding:8px 0;border-bottom:1px solid var(--line)}.cd:last-child{border-bottom:0}
 .n{min-width:58px;text-align:center;font-size:28px;line-height:1}.n small{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:3px}
 .cd.bday .n{color:#c97f9b}.cd.anniv .n{color:#b08a3e}.cd.soon{background:linear-gradient(90deg,#fdf3e7,transparent);border-radius:10px}
 .t{flex:1;font-size:15px}.t small{display:block;color:var(--muted);font-size:12px}.x{opacity:0;font-size:14px;color:var(--muted)}.cd:hover .x{opacity:1}
 .add{display:none;gap:6px;margin-top:10px;flex-wrap:wrap}.add.on{display:flex}.add input,.add select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;flex:1;min-width:110px;background:#fff;color:var(--ink)}
 .add .hint{width:100%;font-size:11.5px;color:var(--muted)}.more{font-size:12px;color:var(--muted);border:0;background:none;padding:6px 0 0;text-decoration:underline dotted}</style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="card">
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js?v=2"></script></head><body><div class="card">
 <h1>Countdown <button id="plus" title="Add a date">+</button></h1>
 <form class="add" id="add"><input id="nm" placeholder="What / who" autocomplete="off"><select id="ty"><option value="once">📅 One time</option><option value="bday">🎂 Birthday</option><option value="anniv">💍 Anniversary</option></select><input id="dt" type="date"><button class="btn">Add</button>
 <p class="hint" id="hint">Birthdays and anniversaries come back every year. Put the year they were born or married to show the age or years.</p></form>
@@ -13,18 +13,49 @@
 </div><script>
 // One-time dates, plus birthdays (the same family birthday list the rest of the hub uses) and anniversaries that repeat every year.
 const START = [['State Marching', '2026-11-05'], ['Thanksgiving', '2026-11-26'], ['Last day of fall semester', '2026-12-11'], ['Christmas', '2026-12-25']];
-let SB, S = null, BD = [], all = false;
+let SB, S = null, BD = [], CAL = [], all = false;
 const ord = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
 // Next time a month-day comes around (today counts).
 function nextOf(md) {
   const t = new Date(); t.setHours(0, 0, 0, 0); const [m, d] = md.split('-').map(Number);
   let x = new Date(t.getFullYear(), m - 1, d); if (x < t) x = new Date(t.getFullYear() + 1, m - 1, d); return x;
 }
+// Birthdays and anniversaries already on your calendars ("Mia’s birthday", "Birthday - Dad", "Tyler & Perry’s anniversary").
+function occasionOf(t) {
+  const anniv = /anniversary/i.test(t), bday = /\b(birthday|bday|b-day)\b|🎂/i.test(t);
+  if (!anniv && !bday) return null;
+  if (/\b(buy|wrap|card|gift|party|plan|order|bake|pick ?up)\b/i.test(t) && !/^happy\b/i.test(t)) return null;
+  let n = t.replace(/[\u{1F300}-\u{1FAFF}☀-➿️]/gu, ' ').replace(/[’']s\b/gi, '')
+    .replace(/\b(happy|birthday|bday|b-day|anniversary|wedding|celebration|day|of|the|for|to)\b/gi, ' ')
+    .replace(/\b\d+(st|nd|rd|th)?\b/gi, ' ').replace(/[()\-–—:!.,#|/]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(our|my|us)\b\s*/i, '').trim();
+  if (n.length > 30) return null;
+  if (!n && !anniv) return null;
+  n = n.replace(/\b\w/g, c => c.toUpperCase());
+  return { k: anniv ? 'anniv' : 'bday', name: n };
+}
+const same = (a, b) => { a = a.toLowerCase(); b = b.toLowerCase(); return a === b || a.split(' ')[0] === b.split(' ')[0]; };
+async function loadCalendar() {
+  try {
+    const t = isoDay(new Date()), end = isoDay(new Date(Date.now() + 366 * 864e5));
+    const [st, pi] = await Promise.all([SB.from('planner_settings').select('data').maybeSingle(), SB.from('planner_items').select('title,date,repeat').eq('kind', 'event')]);
+    const cals = ((st.data && st.data.data && st.data.data.settings) || {}).calendars || [];
+    const ev = (await calendarRange(SB, cals, t, end)).map(o => ({ title: o.title, date: o.date }))
+      .concat((pi.data || []).filter(i => i.repeat === 'yearly' || i.date >= t).map(i => ({ title: i.title, date: i.date })));
+    const seen = {}; CAL = [];
+    ev.forEach(e => { const o = occasionOf(e.title || ''); if (!o) return; const md = e.date.slice(5), key = o.k + '|' + o.name.toLowerCase() + '|' + md; if (seen[key]) return; seen[key] = 1;
+      if (o.k === 'bday' && BD.some(b => b.md === md && same(b.name, o.name))) return;
+      if (o.k === 'anniv' && (S.anniv || []).some(a => a.md === md)) return;
+      if ((S.hidden || []).includes(key)) return;
+      CAL.push({ ...o, md, key }); });
+    draw();
+  } catch (e) {}
+}
 function rows() {
   const t = new Date(), out = []; t.setHours(0, 0, 0, 0);
   const days = x => Math.round((x - t) / 864e5);
   S.list.forEach((x, i) => { const d = new Date(x[1] + 'T00:00'); if (d >= t) out.push({ k: 'once', name: x[0], d, days: days(d), rm: 'o' + i }); });
   BD.forEach(b => { const d = nextOf(b.md), y = b.year; out.push({ k: 'bday', name: '🎂 ' + b.name + '’s birthday' + (y ? ' · turns ' + (d.getFullYear() - y) : ''), d, days: days(d), rm: 'b' + b.id }); });
+  CAL.forEach(c => { const d = nextOf(c.md); out.push({ k: c.k, name: (c.k === 'bday' ? '🎂 ' + c.name + '\u2019s birthday' : '💍 ' + (c.name ? c.name + '\u2019s anniversary' : 'Our anniversary')), d, days: days(d), rm: 'c' + c.key, cal: 1 }); });
   (S.anniv || []).forEach((a, i) => { const d = nextOf(a.md); out.push({ k: 'anniv', name: '💍 ' + a.name + (a.year ? ' · ' + ord(d.getFullYear() - a.year) : ''), d, days: days(d), rm: 'a' + i }); });
   return out.sort((a, b) => a.days - b.days);
 }
@@ -32,7 +63,7 @@ function draw() {
   const el = document.getElementById('body'); el.className = '';
   const r = rows(), show = all ? r : r.slice(0, 6);
   el.innerHTML = (show.length ? show.map(x => '<div class="cd ' + x.k + (x.days <= 7 && x.k !== 'once' ? ' soon' : '') + '"><div class="n">' + (x.days || '🎉') + '<small>' + (x.days === 0 ? 'today' : x.days === 1 ? 'day' : 'days') + '</small></div><div class="t">' + esc(x.name) +
-    '<small>' + x.d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '</small></div><button class="x" data-rm="' + x.rm + '" title="Remove">✕</button></div>').join('') : '<p class="muted small">Tap + to add a date.</p>') +
+    '<small>' + x.d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (x.cal ? ' · from your calendar' : '') + '</small></div><button class="x" data-rm="' + esc(x.rm) + '" title="Remove">✕</button></div>').join('') : '<p class="muted small">Tap + to add a date.</p>') +
     (r.length > 6 ? '<button class="more" id="more">' + (all ? 'show fewer' : 'show all ' + r.length) + '</button>' : '');
 }
 const save = () => hubSet(SB, 'countdown', S);
@@ -52,7 +83,8 @@ document.getElementById('add').addEventListener('submit', async e => {
 document.addEventListener('click', async e => {
   if (e.target.id === 'more') { all = !all; draw(); return; }
   const b = e.target.closest('[data-rm]'); if (!b) return; const k = b.dataset.rm[0], v = b.dataset.rm.slice(1);
-  if (k === 'o') S.list.splice(+v, 1);
+  if (k === 'c') { (S.hidden = S.hidden || []).push(v); CAL = CAL.filter(c => c.key !== v); }
+  else if (k === 'o') S.list.splice(+v, 1);
   else if (k === 'a') S.anniv.splice(+v, 1);
   else { const x = BD.find(y => y.id === v); if (!(await ask('Take ' + x.name + '’s birthday off? It comes off your family birthday list everywhere.'))) return; await SB.from('family_birthdays').delete().eq('id', v); BD = BD.filter(y => y !== x); draw(); return; }
   draw(); await save();
@@ -63,6 +95,6 @@ hubData(async sb => {
   if (d && d.list) S = d;
   else { let old = null; try { old = JSON.parse(localStorage.getItem('hubCountdown')); } catch (x) {} S = { list: old || START, anniv: [], bdYears: {} }; save(); }
   BD = (bd.data || []).map(b => ({ ...b, year: (S.bdYears || {})[b.name + '|' + b.md] || null }));
-  draw();
+  draw(); loadCalendar();
 }, 30);
 </script></body></html>

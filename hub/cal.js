@@ -133,5 +133,23 @@ window.calendarDay = async function (sb, cals, day) {
   }
   return out;
 };
+// Every connected calendar's events between two days (same 30-minute keeping as calendarDay).
+window.calendarRange = async function (sb, cals, from, to) {
+  const out = [];
+  for (const c of (cals || []).filter(c => c.on !== false && c.url)) {
+    let events = null;
+    try { const k = 'hubCal_' + c.id, hit = JSON.parse(sessionStorage.getItem(k) || 'null'); if (hit && Date.now() - hit.at < 30 * 60000) events = hit.events; } catch (e) {}
+    if (!events) {
+      try {
+        const { data: text, error } = await sb.functions.invoke('planner-ics', { body: { url: calendarFeedUrl(c.url) } });
+        if (error) throw error;
+        events = parseIcs(typeof text === 'string' ? text : await new Response(text).text());
+        try { sessionStorage.setItem('hubCal_' + c.id, JSON.stringify({ at: Date.now(), events })); } catch (e) {}
+      } catch (e) { continue; }
+    }
+    calendarOccurrences(events, from, to).forEach(o => out.push(Object.assign(o, { cal: c.name, color: c.color })));
+  }
+  return out;
+};
 window.expandRule = expandRule;
 })();
