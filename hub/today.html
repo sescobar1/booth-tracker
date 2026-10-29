@@ -51,7 +51,7 @@ const VERSES = [
 ];
 const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧', 'Hard'], ['⛈', 'Rough'], ['🥰', 'Loved'], ['😴', 'Tired'], ['🙏', 'Thankful']];
 const DRINKS = [['stanley', '💧', ['Stanley of water', 'Stanleys of water'], 40, 3], ['thunder', '🥤', ['Diet Dr Thunder', 'Diet Dr Thunders'], 12, 0]];
-let SB, E = null, D = '';
+let SB, E = null, D = '', ERR = '';
 const doy = () => { const n = new Date(); return Math.floor((n - new Date(n.getFullYear(), 0, 0)) / 864e5); };
 function draw() {
   if (document.activeElement && document.activeElement.id === 'joyIn' && document.activeElement.value) return;
@@ -66,12 +66,12 @@ function draw() {
     (d.stanley >= 3 ? '<p class="ok">💧 Water goal met — proud of you!</p>' : '') +
     '<div class="hd"><span>One good thing</span>' + (g.length ? '<span style="text-transform:none;letter-spacing:0">' + g.length + ' today</span>' : '') + '</div>' +
     '<form class="joy" id="joyF"><input id="joyIn" placeholder="' + (g.length ? '…and another' : 'something I’m grateful for') + '" autocomplete="off"><button>Add</button></form>' +
-    '<p class="ok" id="ok">' + (g.length ? '🙏 ' + esc(g[g.length - 1]) : '') + '</p>';
+    '<p class="ok" id="ok"' + (ERR ? ' style="color:#a5543b">' + esc(ERR) : '>') + (ERR ? '' : g.length ? '🙏 ' + esc(g[g.length - 1]) : '') + '</p>';
 }
 async function save(fields) {
   Object.assign(E, fields);
   const { error } = await SB.from('journal_entries').upsert({ day: D, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
-  if (error) { const o = document.getElementById('ok'); if (o) o.textContent = 'Couldn’t save — check your signal.'; }
+  ERR = error ? 'Couldn’t save: ' + error.message : '';
 }
 document.addEventListener('click', async e => {
   const m = e.target.closest('[data-mood]'); if (m) { await save({ mood: E.mood === m.dataset.mood ? '' : m.dataset.mood }); draw(); return; }
@@ -85,7 +85,8 @@ document.addEventListener('submit', async e => {
 });
 hubData(async sb => {
   SB = sb; D = isoDay(new Date());
-  const { data } = await sb.from('journal_entries').select('day,mood,drinks,grateful,verse,verse_ref').eq('day', D).maybeSingle();
+  const { data, error } = await sb.from('journal_entries').select('day,mood,drinks,grateful,verse,verse_ref').eq('day', D).maybeSingle();
+  ERR = error ? 'Couldn’t load today: ' + error.message : '';
   E = data || { day: D, drinks: {}, grateful: [] };
   draw();
 }, 5);
