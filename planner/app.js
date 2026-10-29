@@ -3195,7 +3195,7 @@ function viewShop() {
     '<div class="quickbar"><input id="shopAdd" placeholder="Add an item… “paper towels”, “2 gallons milk”"><button type="button" id="shopGo">Add</button></div>' +
     '<div class="card pad grocbox"><div id="grocBox">' + (signedIn() ? '🧾 Loading this month’s grocery spending…' : '🧾 Sign in to see grocery spending.') + '</div><div class="row-actions tight"><button type="button" class="small" id="shopLog">🧾 Log this trip' + (got.length ? ' (' + got.length + ' in the cart)' : '') + '</button></div></div>' +
     usualsHtml(need) +
-    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><a class="button ghost" href="https://www.samsclub.com/" target="_blank" rel="noopener">Open Sam’s Club</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + '</div>' +
+    '<div class="row-actions"><a class="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener">Open Walmart</a><a class="button ghost" href="https://www.samsclub.com/" target="_blank" rel="noopener">Open Sam’s Club</a><button type="button" class="ghost small" id="shopCopy">Copy list</button><button type="button" class="ghost small" id="shopSend">📤 Send to Salvador</button>' + (got.length ? '<button type="button" class="ghost small" id="shopClear">Clear ' + got.length + ' checked</button>' : '') + (items.length ? '<button type="button" class="ghost small" id="shopClearAll">Clear list</button>' : '') + '</div>' +
     '<p class="helper">📤 <b>Send to Salvador</b> texts him the list. For a live list he can check off at the store, sign in to this Planner on his phone with your account (More → Account and sync): changes show up on both phones.</p>' +
     '<p class="helper">Tap the store button (Walmart, or the store you saved for that item) to find each item and add it to your cart (pickup or delivery). Check it off here as you go. To always open the exact product you buy, tap an item and paste its Walmart link.</p>' +
     (groups.length ? groups.map(([a, l]) => '<div class="card pad"><h3>' + esc(a) + '</h3>' + l.map(row).join('') + '</div>').join('') : '<div class="card pad"><p class="helper">Your list is empty. Plan meals, then tap <b>Add ingredients to shopping list</b>, or add items above.</p></div>') +
@@ -3226,6 +3226,7 @@ function viewShop() {
     location.href = 'sms:&body=' + encodeURIComponent(text);
   };
   if ($('shopClear')) $('shopClear').onclick = () => { data.items = data.items.filter(i => !(i.kind === 'shop' && i.done)); window.save(); viewShop(); };
+  if ($('shopClearAll')) $('shopClearAll').onclick = () => { if (!confirm('Clear the whole shopping list (' + items.length + ' items)?')) return; data.items = data.items.filter(i => i.kind !== 'shop'); window.save(); viewShop(); };
   if ($('shopGot')) $('shopGot').onclick = () => { showGot = !showGot; viewShop(); };
 }
 // Things you always buy at a certain store (saved links), as one-tap buttons, grouped by store.

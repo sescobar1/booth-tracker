@@ -23,7 +23,10 @@
 .sheet{position:fixed;inset:0;background:#26342855;display:flex;align-items:flex-start;justify-content:center;padding:20px;z-index:5}
 .pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:360px;box-shadow:0 10px 30px #0002}
 .pane label{display:block;font-size:12px;color:var(--muted);margin-top:10px}.pane input{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}</style>
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}.s{grid-template-columns:18px 1fr auto auto}.wm{font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:1px 7px;white-space:nowrap}.wm:hover{border-color:var(--sage);color:var(--ink)}
+.qa{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}.qal{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);width:100%}
+.chip{font-size:12.5px;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#fff;color:var(--ink)}.chip:hover{border-color:var(--sage)}.chip.have{background:var(--sage-l);border-color:var(--sage-l);color:var(--muted)}.chip.ed{border-style:dashed;color:var(--muted)}
+.sacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.sacts .ghost{text-decoration:none;color:var(--ink)}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script><script src="cal.js"></script></head><body><div class="card">
 <div class="top"><div><a class="back" href="weektodo.html">‹ Back to the week</a><h1 id="ttl">My day</h1></div><div class="strip" id="strip"></div></div>
 <div id="body" class="muted small">Loading…</div>
@@ -69,17 +72,62 @@ function draw() {
     '<div class="box"><h2>🍽 Meals <a href="https://sescobar1.github.io/booth-tracker/planner/#meals" target="_blank">Meal planner ↗</a></h2>' +
     MEALS.map(l => { const m = meal(l); return '<div class="ml"><span>' + l + '</span><input data-meal="' + l + '" value="' + esc(m ? m.title : '') + '" placeholder="What\'s for ' + l.toLowerCase() + '?"></div>'; }).join('') + '</div>' +
     '<div class="box"><h2>🛒 Shopping list <small>' + shop.filter(s => !s.done).length + ' to get</small></h2>' +
-    shop.map(s => '<div class="s' + (s.done ? ' on' : '') + '" data-sid="' + s.id + '"><span class="ck">' + (s.done ? '✓' : '') + '</span><span class="tx">' + esc(s.title) + '</span><span class="aisle">' + esc(s.list || '') + '</span><button class="x" title="Remove">✕</button></div>').join('') +
-    '<form class="add" data-f="shop"><input placeholder="+ Add to the list"></form><p class="hint">Same grocery list as your Planner and the Meals box.</p></div>' +
+    shop.map(s => '<div class="s' + (s.done ? ' on' : '') + '" data-sid="' + s.id + '"><span class="ck">' + (s.done ? '✓' : '') + '</span><span class="tx">' + esc(s.title) + '</span><a class="wm" href="' + esc(storeUrl(s)) + '" target="_blank" title="Open on ' + esc(storeOf(s.location)) + '">' + esc(storeOf(s.location)) + (s.location ? ' ✓' : '') + '</a><button class="x" title="Remove">✕</button></div>').join('') +
+    '<form class="add" data-f="shop"><input placeholder="+ Add to the list"></form>' +
+    '<div class="qa"><span class="qal">Quick add' + (qEdit ? ' · tap ✕ to remove' : '') + '</span>' + usuals().map(u => '<button class="chip' + (onList(u) ? ' have' : '') + '" data-q="' + esc(u) + '">' + (qEdit ? '✕ ' : onList(u) ? '✓ ' : '＋ ') + esc(u) + '</button>').join('') + '<button class="chip ed" id="qEd">' + (qEdit ? 'Done' : '✎ Edit') + '</button></div>' +
+    '<div class="sacts"><a class="ghost" href="https://www.walmart.com/cart" target="_blank">🛒 Open Walmart</a>' + (shop.some(s => s.done) ? '<button class="ghost" id="clrGot">Clear checked</button>' : '') + (shop.length ? '<button class="ghost del" id="clrAll">Clear list</button>' : '') + '</div>' +
+    '<p class="hint">Same list as your Planner. The store button opens Walmart (or the exact product you saved in the Planner).</p></div>' +
     '</div></div>';
 }
 const RR = { daily: 'FREQ=DAILY', weekdays: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', weekly: 'FREQ=WEEKLY', biweekly: 'FREQ=WEEKLY;INTERVAL=2', monthly: 'FREQ=MONTHLY', yearly: 'FREQ=YEARLY' };
 let ext = [], extDay = '';
+
+// ---------- Shopping: store links, aisles and quick adds ----------
+let WM = {}, qs = { counts: {}, hidden: [] }, qEdit = false;
+const STARTERS = ['Milk', 'Eggs', 'Bread', 'Bananas', 'Coffee', 'Paper towels', 'Toilet paper', 'Dog food', 'Chicken breast', 'Cheese', 'Capri suns', 'Vanilla syrup'];
+const STORES = [[/walmart\.com/i, 'Walmart'], [/samsclub\.com/i, 'Sam’s Club'], [/target\.com/i, 'Target'], [/amazon\./i, 'Amazon'], [/kroger\.com/i, 'Kroger'], [/costco\.com/i, 'Costco']];
+const storeOf = url => { if (!url) return 'Walmart'; const x = STORES.find(([re]) => re.test(url)); return x ? x[1] : 'Store'; };
+const storeUrl = i => i.location && /^https:\/\//i.test(i.location) ? i.location : 'https://www.walmart.com/search?q=' + encodeURIComponent(i.title);
+const AISLES = [
+  ['Produce', /lettuce|tomato|onion|garlic|pepper|potato|carrot|celery|banana|apple|berr|grape|lemon|lime|avocado|cilantro|spinach|broccoli|corn|cucumber|fruit|vegetable|salad|mushroom|zucchini|green bean|orange|herb|parsley|jalape/i],
+  ['Meat & seafood', /beef|chicken|pork|turkey|sausage|bacon|ham|steak|shrimp|fish|salmon|tuna|ground|hot dog|pepperoni|meat/i],
+  ['Dairy & eggs', /milk|cheese|butter|egg|yogurt|cream|sour cream|half.and.half|creamer/i],
+  ['Bakery & bread', /bread|bun|tortilla|roll|bagel|muffin|biscuit|croissant|pita/i],
+  ['Frozen', /frozen|ice cream|pizza|fries|tater|waffle/i],
+  ['Pantry', /rice|pasta|spaghetti|noodle|sauce|bean|soup|broth|stock|flour|sugar|oil|vinegar|spice|seasoning|salt|pepper|cereal|oat|peanut butter|jelly|syrup|can|taco shell|chip|cracker|ketchup|mustard|mayo|dressing|honey|pancake mix|salsa|cookie|snack|granola/i],
+  ['Drinks', /water|soda|juice|coffee|tea|gatorade|drink/i],
+  ['Household', /paper|towel|toilet|soap|detergent|trash|foil|wrap|bag|dish|cleaner|wipes|shampoo|toothpaste|diaper|napkin|plate|cup/i]
+];
+// Canned/boxed things are pantry and "garlic bread" is bakery, so those are checked before produce.
+const AISLE_CHECK = ['Frozen', 'Bakery & bread', 'Pantry*', 'Meat & seafood', 'Dairy & eggs', 'Produce', 'Pantry', 'Drinks', 'Household'];
+const PANTRY_FIRST = /goldfish|crackers?|peanut butter|cream of|\bcans?\b|canned|jar|packets?|box(ed)?|seasoning|sauce|\bmix\b|diced|crushed|dried|broth/i;
+function aisleOf(text) {
+  for (const a of AISLE_CHECK) {
+    if (a === 'Pantry*') { if (PANTRY_FIRST.test(text)) return 'Pantry'; continue; }
+    if (AISLES.find(x => x[0] === a)[1].test(text)) return a;
+  }
+  return 'Other';
+}
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+const onList = u => shop.some(s => !s.done && s.title.toLowerCase() === u.toLowerCase());
+// Things you buy often: what you've added before (most often first), your saved store links, then a few staples.
+function usuals() {
+  const seen = new Set(), out = [], hide = new Set((qs.hidden || []).map(x => x.toLowerCase()));
+  const push = t => { const k = t.toLowerCase(); if (!t || seen.has(k) || hide.has(k)) return; seen.add(k); out.push(cap(t)); };
+  Object.entries(qs.counts || {}).sort((a, b) => b[1] - a[1]).forEach(([t]) => push(t));
+  Object.keys(WM).forEach(push); STARTERS.forEach(push);
+  return out.slice(0, 24);
+}
+async function addShop(title) {
+  const t = cap(title.trim()), k = t.toLowerCase(); if (!t) return;
+  if (!onList(t)) await ins({ kind: 'shop', title: t, done: false, list: aisleOf(t), location: WM[k] || '', notes: WM[k] ? storeOf(WM[k]) : '', all_day: true });
+  qs.counts = qs.counts || {}; qs.counts[k] = (qs.counts[k] || 0) + 1; hubSet(SB, 'shopQuick', qs);
+}
 async function load() {
   const day = D;
   const [a, b, r] = await Promise.all([
     SB.from('planner_items').select('id,kind,title,date,done,sort,priority,start_time,end_time,all_day,repeat,list,color').in('kind', ['event', 'task', 'meal']).lte('date', D).or('end_date.gte.' + D + ',date.eq.' + D),
-    SB.from('planner_items').select('id,title,done,list').eq('kind', 'shop').order('done').order('list'),
+    SB.from('planner_items').select('id,title,done,list,location').eq('kind', 'shop').order('done').order('list'),
     // Repeating Planner events that started before this day.
     SB.from('planner_items').select('id,kind,title,date,start_time,end_time,all_day,repeat,color').eq('kind', 'event').neq('repeat', '').lt('date', D)
   ]);
@@ -87,12 +135,14 @@ async function load() {
   items = (a.data || []).filter(i => i.date === D || i.kind === 'event');
   (r.data || []).forEach(i => { if (RR[i.repeat] && !items.some(x => x.id === i.id) && expandRule({ start: i.date + (i.all_day || !i.start_time ? '' : 'T' + i.start_time), allDay: i.all_day || !i.start_time, rrule: RR[i.repeat] }, D, D).length) items.push({ ...i, date: D, rep: true }); });
   shop = (b.data || []).filter(s => !s.done).concat((b.data || []).filter(s => s.done).slice(0, 5));
+  try { const q = await hubGet(SB, 'shopQuick'); qs = { counts: q.counts || {}, hidden: q.hidden || [] }; } catch (e) {}
   if (extDay !== D) ext = [];
   draw();
   // Then the connected calendars (Google, Outlook) and band events, same as the Planner calendar.
   try {
     const [st, band] = await Promise.all([SB.from('planner_settings').select('data').maybeSingle(), SB.from('vol_events').select('id,name,date,start_time,end_time,location').eq('date', D)]);
     const set = (st.data && st.data.data && st.data.data.settings) || {};
+    WM = set.walmart || {};
     const cal = await calendarDay(SB, set.calendars || [], D);
     if (day !== D) return;
     ext = cal.map((o, k) => ({ id: 'ext-' + k, kind: 'ext', title: o.title, date: D, start_time: o.allDay ? '' : o.start, end_time: o.allDay ? '' : o.end, all_day: o.allDay, color: o.color, cal: o.cal, location: o.location }))
@@ -140,6 +190,14 @@ document.addEventListener('click', async e => {
   if (t) { const i = items.find(x => x.id === t.dataset.id); if (!i) return;
     if (e.target.closest('.x')) { if (!confirm('Delete “' + i.title + '”?')) return; items = items.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
     if (e.target.closest('.ck') || e.target.closest('.tx')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); } }
+  if (e.target.id === 'qEd') { qEdit = !qEdit; return draw(); }
+  const q = e.target.closest('[data-q]');
+  if (q) { const u = q.dataset.q;
+    if (qEdit) { qs.hidden = (qs.hidden || []).concat(u); if (qs.counts) delete qs.counts[u.toLowerCase()]; draw(); return hubSet(SB, 'shopQuick', qs); }
+    if (onList(u)) return; q.classList.add('have'); await addShop(u); return load(); }
+  if (e.target.id === 'clrGot') { const ids = shop.filter(x => x.done).map(x => x.id); shop = shop.filter(x => !x.done); draw(); return SB.from('planner_items').delete().in('id', ids); }
+  if (e.target.id === 'clrAll') { if (!confirm('Clear the whole shopping list (' + shop.length + ' items)?')) return; const ids = shop.map(x => x.id); shop = []; draw(); return SB.from('planner_items').delete().in('id', ids); }
+  if (e.target.closest('.wm')) return;
   const s = e.target.closest('.s');
   if (s) { const i = shop.find(x => x.id === s.dataset.sid); if (!i) return;
     if (e.target.closest('.x')) { shop = shop.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
@@ -148,7 +206,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('submit', async e => {
   e.preventDefault(); const inp = e.target.querySelector('input'), v = inp.value.trim(); if (!v) return; inp.value = '';
   if (e.target.dataset.f === 'todo') await ins({ kind: 'task', title: v, date: D, done: false, all_day: true, list: 'Home', sort: Date.now() % 1e9 });
-  else await ins({ kind: 'shop', title: v, done: false, list: 'Other', all_day: true });
+  else await addShop(v);
   await load(); const again = document.querySelector('form[data-f="' + e.target.dataset.f + '"] input'); if (again) again.focus();
 });
 document.addEventListener('change', async e => {
