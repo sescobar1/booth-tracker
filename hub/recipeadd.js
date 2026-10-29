@@ -76,14 +76,16 @@
     const ask = () => {
       s.innerHTML = '<div class="pane"><h2>Add a recipe for ' + esc(title) + '?</h2><p class="muted small">Then it can fill your shopping list next time you make it.</p>' +
         '<div class="acts" style="justify-content:flex-start;flex-direction:column;align-items:stretch"><label class="btn" style="text-align:center;cursor:pointer">📄 Add from a file or photo<input type="file" id="rF" accept="image/*,.pdf,.docx,.txt,text/plain,application/pdf" hidden style="display:none"></label>' +
-        '<button class="ghost" id="rT">✍️ Type it in</button><button class="ghost" id="rN">Not now</button></div><p class="muted small" id="rMsg" style="margin-top:8px">Photos of recipe cards, cookbook pages, screenshots, PDFs, Word or text files.</p></div>';
+        '<button class="ghost" id="rT">✍️ Type it in</button><button class="ghost" id="rN">Not now</button></div><p class="muted small" id="rMsg" style="margin-top:8px">Photos of recipe cards, cookbook pages, screenshots, PDFs, Word or text files — or copy a picture and press Ctrl+V (⌘V) to paste it.</p></div>';
       s.querySelector('#rN').onclick = () => s.remove();
       s.querySelector('#rT').onclick = () => form({ title, ingredients: [], steps: [] });
-      s.querySelector('#rF').onchange = async e => {
-        const f = e.target.files[0]; if (!f) return; const say = t => { const m = s.querySelector('#rMsg'); if (m) m.textContent = t; };
+      const go = async f => { const say = t => { const m = s.querySelector('#rMsg'); if (m) m.textContent = t; };
         try { const r = await readFile(sb, f, say); r.title = title || r.title; form(r, true); }
-        catch (err) { say('Couldn\'t read that file (' + err.message + '). Try a clearer photo, or type it in.'); }
-      };
+        catch (err) { say('Couldn\'t read that file (' + err.message + '). Try a clearer photo, or type it in.'); } };
+      s.querySelector('#rF').onchange = e => { const f = e.target.files[0]; if (f) go(f); };
+      // Or paste a copied picture or screenshot (Ctrl+V / ⌘V) while this box is open.
+      const onPaste = e => { if (!s.isConnected) return document.removeEventListener('paste', onPaste); if (!s.querySelector('#rF')) return; const i = [...((e.clipboardData && e.clipboardData.items) || [])].find(x => x.kind === 'file' && x.type.startsWith('image/')); if (!i) return; e.preventDefault(); const b = i.getAsFile(); go(new File([b], 'pasted.' + (b.type.split('/')[1] || 'png'), { type: b.type })); };
+      document.addEventListener('paste', onPaste);
     };
     const form = (r, fromFile) => {
       const sec = r.section && SECTIONS.includes(r.section) ? r.section : 'Main dishes';

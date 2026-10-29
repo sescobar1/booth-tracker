@@ -152,6 +152,7 @@
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .hint { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
     #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 14px; z-index: 60; max-width: 90%; text-align: center; }
+    .drop.over { outline: 3px dashed currentColor; outline-offset: 4px; }
     .secadd { float: right; font-size: .8rem; font-weight: 500; text-decoration: none; border: 1px solid currentColor; border-radius: 14px; padding: 2px 10px; opacity: .75; margin-top: 4px; }
     .secadd:hover { opacity: 1; }
     .secbtn { display: inline-block; margin: 4px 0 12px; }
@@ -553,7 +554,7 @@
     let pics = r ? (r.photos || []).map(p => Object.assign({}, p)) : [];
     const removed = [];
     app.innerHTML = '<a class="back" href="' + (r ? '#' + r.id : '#') + '">‹ Cancel</a><h1 class="rtitle">' + (r ? 'Edit recipe' : 'Add a recipe') + '</h1>' +
-      '<div class="card"><div class="drop"><b>📸 Photos</b><p class="hint">The recipe card, cookbook page, or the finished dish. Add as many as you like. The first one is the cover.</p><div class="row"><button type="button" id="cam">📷 Take a photo</button><button type="button" class="ghost" id="lib">🖼 Choose photos</button></div>' +
+      '<div class="card"><div class="drop"><b>📸 Photos</b><p class="hint">The recipe card, cookbook page, or the finished dish. Add as many as you like. The first one is the cover.</p><div class="row"><button type="button" id="cam">📷 Take a photo</button><button type="button" class="ghost" id="lib">🖼 Choose photos</button><button type="button" class="ghost" id="pst">📋 Paste a photo</button></div><p class="hint" id="pstMsg">Copied a picture or screenshot? Tap Paste, or press Ctrl+V (⌘V on a Mac). You can also drag photos here.</p>' +
       '<input type="file" id="fCam" accept="image/*" capture="environment" hidden><input type="file" id="fLib" accept="image/*" multiple hidden></div><div class="thumbs" id="thumbs"></div><div class="readbox" id="readBox" hidden><button type="button" id="readGo">✨ Type it out for me</button><p class="hint" id="readMsg">Reads the writing in your photos and fills in the recipe below.</p></div>' +
       '<label for="eT">Recipe name</label><input id="eT" value="' + esc(r ? r.title : '') + '" placeholder="Grandma’s chicken and dumplings" required>' +
       '<div class="two"><div><label for="eC">Section</label><select id="eC">' + CATS.map(c => '<option' + (r && sectionOf(r) === c || !r && c === (CATS.includes(preCat) ? preCat : 'Main dishes') ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div><div><label for="eF">From</label><input id="eF" value="' + esc(r ? r.from : '') + '" placeholder="Grandma, Aunt Rosa…"></div></div>' +
@@ -590,6 +591,24 @@
     $('cam').onclick = () => $('fCam').click(); $('lib').onclick = () => $('fLib').click();
     $('fCam').onchange = e => { add(e.target.files); e.target.value = ''; };
     $('fLib').onchange = e => { add(e.target.files); e.target.value = ''; };
+    // Paste a copied picture or screenshot: the Paste button, Ctrl+V / ⌘V anywhere on the form, or drag photos onto the box.
+    const named = b => new File([b], 'pasted-' + Date.now() + '.' + ((b.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), { type: b.type });
+    $('pst').onclick = async () => {
+      const m = $('pstMsg');
+      try {
+        const items = await navigator.clipboard.read(), got = [];
+        for (const it of items) { const t = it.types.find(x => x.startsWith('image/')); if (t) got.push(named(await it.getType(t))); }
+        if (got.length) { add(got); m.textContent = '✓ Pasted ' + (got.length === 1 ? 'the photo' : got.length + ' photos') + '.'; } else m.textContent = 'There’s no picture copied right now. Copy a photo or take a screenshot first, then tap Paste.';
+      } catch (e) { m.innerHTML = 'This page can’t open your clipboard from the button here. Press <b>Ctrl+V</b> (<b>⌘V</b> on a Mac), or on a phone press and hold in the Notes box and tap <b>Paste</b>.'; }
+    };
+    document.onpaste = e => {
+      if (!$('thumbs')) { document.onpaste = null; return; }
+      const files = [...((e.clipboardData && e.clipboardData.items) || [])].filter(i => i.kind === 'file' && i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
+      if (!files.length) return; e.preventDefault(); add(files.map(f => f.name && f.name !== 'image.png' ? f : named(f))); $('pstMsg').textContent = '✓ Pasted ' + (files.length === 1 ? 'the photo' : files.length + ' photos') + '.';
+    };
+    const drop = app.querySelector('.drop');
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); }; drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = [...e.dataTransfer.files].filter(x => x.type.startsWith('image/')); if (f.length) add(f); };
     draw();
     $('save').onclick = async () => {
       const title = $('eT').value.trim(); if (!title) { toast('Give the recipe a name.'); $('eT').focus(); return; }
