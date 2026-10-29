@@ -1,4 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Money snapshot</title><link rel="stylesheet" href="style.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Money snapshot</title><link rel="stylesheet" href="style.css"><style>.lbt{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:2px 0 10px}.lbt button{font-size:11px;border:1px solid var(--line);border-radius:10px;padding:5px 2px;line-height:1.25;color:var(--muted)}.lbt button b{display:block;font-weight:500;font-size:13px;color:var(--ink)}.lbt button.on{background:var(--sage-l);border-color:var(--sage)}
+.lbr{display:grid;grid-template-columns:22px 1fr auto;gap:6px;font-size:14px;align-items:baseline;padding-top:2px}.lbm{font-size:13px;color:var(--muted);text-align:center}.lbmore{display:inline-block;margin-top:8px;font-size:12px;color:var(--muted)}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="card">
 <h1>Money <span class="muted" style="font-size:13px" id="mo"></span></h1><div id="body" class="muted small">Loading…</div>
 </div><script>
@@ -19,12 +20,27 @@ hubData(async sb => {
   const spent = (a, b) => T.filter(t => t.type === 'expense' && !skip(t.category) && t.date >= a && t.date <= b).reduce((s, t) => s + Number(t.amount), 0);
   const inc = T.filter(t => t.type === 'income' && !skip(t.category) && t.date >= mStart && t.date <= today).reduce((s, t) => s + Number(t.amount), 0);
   const thisM = spent(mStart, today), lastM = spent(lStart, lSame), diff = thisM - lastM;
-  const cats = {}; for (const t of T) if (t.type === 'expense' && !skip(t.category) && t.date >= mStart && t.date <= today) cats[t.category || 'Other'] = (cats[t.category || 'Other'] || 0) + Number(t.amount);
-  const top = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3), max = top[0]?.[1] || 1;
+  // Leaderboard: what you spent the most on today, this week, this month and this year.
+  const ws = new Date(now); ws.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const P = { day: ['Today', today], week: ['Week', isoDay(ws)], month: ['Month', mStart], year: ['Year', y + '-01-01'] };
+  const board = from => { const c = {}; T.filter(t => t.type === 'expense' && !skip(t.category) && t.date >= from && t.date <= today).forEach(t => { const k = t.category || 'Uncategorized'; c[k] = (c[k] || 0) + Number(t.amount); });
+    const rows = Object.entries(c).sort((a, b) => b[1] - a[1]); return { rows, total: rows.reduce((s, r) => s + r[1], 0) }; };
+  const B = Object.fromEntries(Object.entries(P).map(([k, [, from]]) => [k, board(from)]));
+  window.LB = { B, P, on: window.LB ? window.LB.on : 'month' };
   const el = document.getElementById('body'); el.className = '';
   el.innerHTML = bal.map(b => '<div class="lbl">' + esc(b.name) + '</div><div class="big">' + $money(b.v) + '</div>').join('') +
     '<div class="lbl">Spent this month</div><div class="row"><span class="big" style="font-size:24px">' + $money(thisM) + '</span><span class="pill' + (diff > 0 ? ' warn' : '') + '">' + (diff > 0 ? '▲ ' : '▼ ') + $money(Math.abs(diff)) + ' vs. last month</span></div>' +
     '<div class="row"><span class="muted">Money in</span><span>' + $money(inc) + '</span></div>' +
-    (top.length ? '<div class="lbl">Top categories</div>' + top.map(([c, v]) => '<div class="row" style="border:0;padding:3px 0"><span>' + esc(c) + '</span><span>' + $money(v) + '</span></div><div class="bar" style="margin:0 0 6px"><i style="width:' + (v / max * 100) + '%"></i></div>').join('') : '');
+    '<div class="lbl">🏆 Top spending</div><div id="lb"></div>' +
+    '<a class="lbmore" href="https://sescobar1.github.io/booth-tracker/money/#leaders" target="_blank">See it all in Money ↗</a>';
+  drawLB();
 });
+function drawLB() {
+  const { B, P, on } = window.LB, b = B[on], max = b.rows[0] ? b.rows[0][1] : 1;
+  document.getElementById('lb').innerHTML = '<div class="lbt">' + Object.entries(P).map(([k, [l]]) => '<button data-lb="' + k + '" class="' + (k === on ? 'on' : '') + '">' + l + '<b>' + $money(B[k].total) + '</b></button>').join('') + '</div>' +
+    (b.rows.length ? b.rows.slice(0, 5).map(([c, v], i) => '<div class="lbr"><span class="lbm">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span><span class="lbn">' + esc(c) + '</span><span>' + $money(v) + '</span></div><div class="bar" style="margin:0 0 6px 28px"><i style="width:' + (v / max * 100) + '%"></i></div>').join('')
+      : '<p class="muted small">No spending yet. 🎉</p>');
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-lb]'); if (b) { window.LB.on = b.dataset.lb; drawLB(); } });
+
 </script></body></html>

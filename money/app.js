@@ -146,13 +146,49 @@ function balances(acc) {
   return { balance: r2(bal), cleared: r2(cleared), pending: r2(pending), cushion: r2(bal - cleared - pending), running, list };
 }
 
+
+// ---------- Top spending: what you spent the most on today, this week, this month and this year ----------
+let leadPeriod = 'month';
+function leaderRanges() {
+  const t = new Date(), d = today(), wk = new Date(t); wk.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  return { day: ['Today', d, d], week: ['This week', isoDay(wk), d], month: ['This month', d.slice(0, 8) + '01', d], year: ['This year', d.slice(0, 5) + '01-01', d] };
+}
+function leaderData(from, to) {
+  const list = data.tx.filter(t => t.type === 'expense' && t.category !== 'Transfer' && t.date >= from && t.date <= to);
+  const cats = {};
+  list.forEach(t => { const k = t.category || 'Uncategorized', c = cats[k] = cats[k] || { v: 0, n: 0, payees: {} }; c.v += Number(t.amount); c.n++; const p = t.payee || '(no payee)'; c.payees[p] = (c.payees[p] || 0) + Number(t.amount); });
+  const rows = Object.entries(cats).map(([k, c]) => ({ k, v: Math.round(c.v * 100) / 100, n: c.n, top: Object.entries(c.payees).sort((a, b) => b[1] - a[1])[0] })).sort((a, b) => b.v - a.v);
+  const biggest = list.slice().sort((a, b) => Number(b.amount) - Number(a.amount))[0];
+  return { rows, total: rows.reduce((s, r) => s + r.v, 0), count: list.length, biggest };
+}
+function viewLeaders() {
+  const R = leaderRanges(), [label, from, to] = R[leadPeriod], L = leaderData(from, to);
+  const medal = i => ['🥇', '🥈', '🥉'][i] || '<span class="lrank">' + (i + 1) + '</span>';
+  const max = L.rows.length ? L.rows[0].v : 1;
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#leaders" class="on">🏆 Top spending</a></div>' +
+    '<div class="segs leadsegs">' + Object.entries(R).map(([k, r]) => '<button type="button" class="seg' + (k === leadPeriod ? ' on' : '') + '" data-lp="' + k + '">' + r[0] + '</button>').join('') + '</div>' +
+    '<div class="stat-row">' + Object.entries(R).map(([k, r]) => { const x = leaderData(r[1], r[2]); return '<div class="stat' + (k === leadPeriod ? ' on' : '') + '" data-lp="' + k + '"><span>' + r[0] + '</span><b class="expense">' + money(x.total) + '</b></div>'; }).join('') + '</div>' +
+    '<div class="card pad"><h2>🏆 ' + esc(label) + ' · ' + money(L.total) + ' spent</h2><p class="helper">' + esc(fmtDate(from)) + (from !== to ? ' – ' + esc(fmtDate(to)) : '') + ' · ' + L.count + ' purchase' + (L.count === 1 ? '' : 's') + ' · transfers left out · tap a category to see its entries</p>' +
+    (L.rows.length ? L.rows.map((r, i) => '<div class="lrow" data-lcat="' + esc(r.k) + '"><span class="lmed">' + medal(i) + '</span><div class="lmain"><div class="ltop"><b>' + esc(r.k) + '</b><b>' + money(r.v) + '</b></div>' +
+      '<span class="track"><span style="width:' + Math.max(2, Math.round(r.v / max * 100)) + '%"></span></span><span class="sub">' + Math.round(r.v / (L.total || 1) * 100) + '% · ' + r.n + ' purchase' + (r.n === 1 ? '' : 's') + (r.top ? ' · most at ' + esc(r.top[0]) + ' (' + money(r.top[1]) + ')' : '') + '</span></div></div>').join('')
+      : '<p class="helper">No spending ' + esc(label.toLowerCase()) + ' yet. 🎉</p>') +
+    (L.biggest ? '<p class="helper lbig">💸 Biggest single purchase: <b>' + money(Number(L.biggest.amount)) + '</b> at ' + esc(L.biggest.payee || '(no payee)') + ' on ' + esc(fmtDate(L.biggest.date)) + '</p>' : '') + '</div>';
+  $('view').querySelectorAll('[data-lp]').forEach(b => b.onclick = () => { leadPeriod = b.dataset.lp; viewLeaders(); });
+  $('view').querySelectorAll('[data-lcat]').forEach(b => b.onclick = () => {
+    const k = b.dataset.lcat, list = data.tx.filter(t => t.type === 'expense' && t.category !== 'Transfer' && t.date >= from && t.date <= to && (t.category || 'Uncategorized') === k).sort((a, c) => c.date.localeCompare(a.date));
+    openModal('<h2>' + esc(k) + ' · ' + esc(label) + '</h2>' + list.map(t => '<div class="lent"><span>' + esc(fmtDate(t.date)) + ' · ' + esc(t.payee || '(no payee)') + '</span><b>' + money(Number(t.amount)) + '</b></div>').join('') +
+      '<div class="row-actions"><button type="button" id="lClose">Close</button></div>');
+    $('lClose').onclick = closeModal;
+  });
+}
+
 // ---------- routing ----------
 function route() {
   if (location.hash.startsWith('#add')) { quickAdd(); return; }
   const [tab, arg] = (location.hash.slice(1) || 'register').split('/');
-  const tabOf = { reports: 'register', import: 'more', accounts: 'more', siri: 'more', inbox: 'register', calendar: 'register', rules: 'more', budgets: 'more' };
+  const tabOf = { leaders: 'register', reports: 'register', import: 'more', accounts: 'more', siri: 'more', inbox: 'register', calendar: 'register', rules: 'more', budgets: 'more' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar };
+  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar, leaders: viewLeaders };
   (views[tab] || viewRegister)(arg);
 }
 window.render = () => { const y = window.scrollY; firstSort(); runRecurring(); if (pendingAdd) { finishQuickAdd(); return; } if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
@@ -215,7 +251,7 @@ function viewRegister() {
     (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out ' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + ' · in ' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</span>' +
       (shown.length ? '<button type="button" class="ghost small" id="selToggle">' + (selMode ? 'Done selecting' : '☑ Select to delete') + '</button>' : '') + '<button type="button" class="linkish" id="regClear">Clear search</button></div>' : '') + '</div>' +
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
+    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#leaders">🏆 Top spending</a></div>' +
     (searching ? '' : '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
     '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
     (balView === 'bank'
@@ -892,7 +928,7 @@ function viewCalendar() {
       (inc ? '<span class="calamt income">+' + Math.round(inc).toLocaleString() + '</span>' : '') + (out ? '<span class="calamt expense">−' + Math.round(out).toLocaleString() + '</span>' : '') + '</button>';
   }
   const list = Object.keys(items).sort().map(d => '<div class="day" id="d' + d + '">' + esc(fmtDate(d, true)) + '</div>' + items[d].map(x => '<div class="mini-row" ' + (x.rec ? 'data-crec="' + x.rec + '"' : 'data-ctx="' + x.tx + '"') + ' style="cursor:pointer"><span>' + (x.rec ? '🔁 ' : '') + esc(x.name) + (x.done ? ' <span class="chip">✓ cleared</span>' : '') + '</span><b class="' + x.type + '">' + signedAmt(x.type, x.amt) + '</b></div>').join('')).join('');
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar" class="on">📅 Calendar</a></div>' +
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar" class="on">📅 Calendar</a><a href="#leaders">🏆 Top spending</a></div>' +
     '<div class="cal-head"><button type="button" class="ghost small" id="calPrev">‹</button><h2>' + esc(monthName(calMonth)) + '</h2><button type="button" class="ghost small" id="calNext">›</button></div>' +
     '<p class="helper">Bills <b class="expense">' + money(totOut) + '</b> · Deposits <b class="income">' + money(totIn) + '</b></p>' +
     '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-w">' + x + '</div>').join('') + cells + '</div>' +
@@ -1092,7 +1128,7 @@ function viewReports() {
   const chartItems = rep.group === 'month' ? [] : top.concat(rest ? [['Everything else', rest, 0]] : []);
   const glabel = rep.group === 'payee' ? 'payee' : rep.group === 'month' ? 'month' : rep.group === 'tag' ? 'tag' : 'category';
   const usedTags = [...new Set(data.tx.flatMap(tagsOf))].sort();
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Reports</a><a href="#calendar">📅 Calendar</a></div>' +
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#leaders">🏆 Top spending</a></div>' +
     '<div class="rep-opts"><label>Time<select id="rpPeriod">' + [['month', 'This month'], ['last', 'Last month'], ['3m', 'Last 3 months'], ['ytd', 'This year'], ['lastyear', 'Last year'], ['custom', 'Pick dates…']].map(([k, l]) => '<option value="' + k + '"' + (rep.period === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
     '<label>Show<select id="rpKind"><option value="expense"' + (rep.kind === 'expense' ? ' selected' : '') + '>Spending</option><option value="income"' + (rep.kind === 'income' ? ' selected' : '') + '>Income</option></select></label>' +
     '<label>Group by<select id="rpGroup">' + [['category', 'Category'], ['payee', 'Payee'], ['month', 'Month'], ['tag', 'Tag']].map(([k, l]) => '<option value="' + k + '"' + (rep.group === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label></div>' +
