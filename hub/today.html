@@ -58,7 +58,7 @@ function draw() {
   const el = document.getElementById('body'); el.className = '';
   const [vt, vr] = E.verse ? [E.verse, E.verse_ref || ''] : VERSES[doy() % VERSES.length], d = E.drinks || {}, g = (E.grateful || []).filter(x => x && x.trim());
   el.innerHTML = '<div class="hd" style="margin-top:0"><span>✨ A little lift · ' + new Date().toLocaleDateString('en-US', { weekday: 'long' }) + '</span><a href="journal.html" target="_blank">journal ↗</a></div>' +
-    '<p class="v">“' + esc(vt.replace(/^[“"]|[”"]$/g, '')) + '”</p><p class="vr">' + esc(vr.replace(/^—\s*/, '— ')) + (vr && !/^—/.test(vr) ? '' : '') + '</p>' +
+    '<p class="v">“' + esc(vt.replace(/^[“"]|[”"]$/g, '')) + '”</p><p class="vr">' + (vr ? '— ' + esc(vr.replace(/^—\s*/, '')) : '') + '</p>' +
     '<div class="hd"><span>Today I feel</span></div><div class="moods">' + MOODS.map(([i, n]) => '<button class="mood' + (E.mood === n ? ' on' : '') + '" data-mood="' + n + '" title="' + n + '">' + i + '</button>').join('') + '</div>' +
     '<div class="hd"><span>Drinks today</span></div>' + DRINKS.map(([k, i, n, oz, goal]) => { const c = d[k] || 0;
       return '<div class="dr"><button class="pm m" data-k="' + k + '" data-d="-1" title="One less">–</button><span><span class="cups">' + (c ? i.repeat(Math.min(c, 8)) : '<small>none yet</small>') + '</span> <small>' + c + ' ' + n[c === 1 ? 0 : 1] + (k === 'stanley' ? ' · ' + c * oz + ' oz' : '') + '</small></span><button class="pm" data-k="' + k + '" data-d="1" title="Add one">+</button></div>' +
