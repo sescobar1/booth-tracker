@@ -17,5 +17,5 @@ const L = {
 const lay = L[new URLSearchParams(location.search).get('l')] || L.top, b = document.getElementById('b');
 b.style.gridTemplateColumns = lay.map(c => c[0] + 'fr').join(' ');
 b.innerHTML = lay.map(c => '<div class="c" style="grid-template-rows:' + c[1].map(x => x[1] + 'fr').join(' ') + '">' +
-  c[1].map(x => '<iframe src="' + x[0] + '" style="--h:' + x[2] + 'px" loading="lazy" title="' + x[0].split('.')[0] + '"></iframe>').join('') + '</div>').join('');
+  c[1].map(x => '<iframe src="' + x[0] + (x[0].includes('?') ? '&' : '?') + 'fresh=' + Date.now() + '" style="--h:' + x[2] + 'px" loading="lazy" title="' + x[0].split('.')[0] + '"></iframe>').join('') + '</div>').join('');
 </script></body></html>
