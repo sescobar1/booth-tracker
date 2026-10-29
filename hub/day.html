@@ -1,0 +1,142 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My day</title><link rel="stylesheet" href="style.css">
+<style>.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.top h1{margin:0}.back{font-size:13px;color:var(--muted);text-decoration:none}.back:hover{color:var(--ink)}
+.strip{display:flex;gap:4px;flex-wrap:wrap}.strip button{font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:18px;line-height:1.1;text-align:center}
+.strip button b{display:block;font-size:15px;font-weight:500}.strip button.on{background:var(--sage);border-color:var(--sage);color:#fff}.strip button.now:not(.on){border-color:var(--sage)}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.box{border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px 14px;margin-bottom:14px}
+.box h2{font-size:15px;font-weight:500;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}.box h2 a,.box h2 small{font-size:12px;color:var(--muted);font-weight:400}
+.hr{display:grid;grid-template-columns:52px 1fr;min-height:40px;border-top:1px solid var(--line)}.hr:first-child{border-top:0}
+.hl{font-size:11px;color:var(--muted);padding-top:4px;letter-spacing:.04em}.hc{padding:3px 0;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-height:38px}
+.hc.over{background:var(--sage-l);border-radius:6px}.hr.nowh .hl{color:var(--sage);font-weight:600}
+.blk{background:color-mix(in srgb,var(--c) 18%,#fff);border-left:3px solid var(--c);border-radius:6px;padding:4px 8px;font-size:13px;display:flex;gap:6px;align-items:center;cursor:pointer}
+.blk small{color:var(--muted);font-size:11px;white-space:nowrap}.blk.done span{text-decoration:line-through;color:var(--muted)}
+.hin{border:0;border-bottom:1px dashed var(--sage);font:inherit;font-size:13px;padding:4px 2px;outline:none;background:transparent;width:100%}
+.t{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:start;padding:5px 0 5px 6px;font-size:14px;border-left:3px solid transparent;cursor:grab}
+.ck{width:16px;height:16px;margin-top:2px;border:1.5px solid var(--sage);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px}
+.on .ck,.blk.done .ck{background:var(--sage)}.t.on .tx{color:var(--muted);text-decoration:line-through}.tm{font-size:11px;color:var(--muted);margin-right:4px}.x{opacity:.0;font-size:11px;color:var(--muted)}.t:hover .x,.s:hover .x{opacity:1}
+.add input,.ml input{width:100%;font:inherit;font-size:13.5px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:6px 0;color:var(--ink);outline:none}
+.add input::placeholder,.ml input::placeholder{color:#b5b9b0}
+.ml{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.s{display:grid;grid-template-columns:18px 1fr auto auto;gap:8px;align-items:center;padding:4px 0;font-size:14px}.s.on .tx{color:var(--muted);text-decoration:line-through}.s .aisle{font-size:11px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.sheet{position:fixed;inset:0;background:#26342855;display:flex;align-items:flex-start;justify-content:center;padding:20px;z-index:5}
+.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:360px;box-shadow:0 10px 30px #0002}
+.pane label{display:block;font-size:12px;color:var(--muted);margin-top:10px}.pane input{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<div class="top"><div><a class="back" href="weektodo.html">‹ Back to the week</a><h1 id="ttl">My day</h1></div><div class="strip" id="strip"></div></div>
+<div id="body" class="muted small">Loading…</div>
+</div><script>
+const P = new URLSearchParams(location.search);
+let SB, D = P.get('d') || isoDay(new Date()), items = [], shop = [];
+const AREAS = { Work: '#6b8fb3', Home: '#7d9178', Kids: '#d39b6a', Booth: '#b07aa1', Band: '#d2b04c', Errands: '#8a8f86', ATU: '#6b8fb3' };
+const colorOf = i => i.kind === 'event' ? (i.color || '#8c7a6b') : (AREAS[i.list] || '#9aa596');
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), now = () => new Date().toISOString();
+const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
+const pad = n => String(n).padStart(2, '0');
+const ampm = s => { if (!s) return ''; const [h, m] = s.split(':').map(Number); return ((h % 12) || 12) + (m ? ':' + pad(m) : '') + (h < 12 ? 'am' : 'pm'); };
+const MEALS = ['Breakfast', 'Lunch', 'Dinner'];
+function strip() {
+  const ws = isoDay(weekStart(dt(D))), t = isoDay(new Date());
+  document.getElementById('strip').innerHTML = '<button data-go="' + add(D, -1) + '" title="Day before">‹</button>' + [...Array(7)].map((_, k) => { const d = add(ws, k);
+    return '<button data-go="' + d + '" class="' + (d === D ? 'on' : '') + (d === t ? ' now' : '') + '">' + dt(d).toLocaleDateString('en-US', { weekday: 'short' }) + '<b>' + dt(d).getDate() + '</b></button>'; }).join('') + '<button data-go="' + add(D, 1) + '" title="Next day">›</button>';
+  document.getElementById('ttl').textContent = dt(D).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function draw() {
+  if (document.querySelector('.sheet') || document.querySelector('.hin')) return;
+  strip();
+  const timed = items.filter(i => (i.kind === 'event' || i.kind === 'task') && !i.all_day && i.start_time && i.date === D);
+  const allDay = items.filter(i => i.kind === 'event' && (i.all_day || !i.start_time));
+  const todos = items.filter(i => i.kind === 'task' && i.date === D && (i.all_day || !i.start_time)).sort((a, b) => a.done - b.done || (b.priority || 0) - (a.priority || 0) || (a.sort || 0) - (b.sort || 0));
+  const first = Math.min(6, ...timed.map(i => +i.start_time.slice(0, 2))), last = Math.max(21, ...timed.map(i => +i.start_time.slice(0, 2)));
+  const nowH = D === isoDay(new Date()) ? new Date().getHours() : -1;
+  let hours = '';
+  for (let h = first; h <= last; h++) {
+    const here = timed.filter(i => +i.start_time.slice(0, 2) === h).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    hours += '<div class="hr' + (h === nowH ? ' nowh' : '') + '"><span class="hl">' + ((h % 12) || 12) + ' ' + (h < 12 ? 'AM' : 'PM') + '</span><div class="hc" data-h="' + pad(h) + '">' +
+      here.map(i => '<div class="blk' + (i.kind === 'task' && i.done ? ' done' : '') + '" data-id="' + i.id + '" style="--c:' + colorOf(i) + '">' + (i.kind === 'task' ? '<span class="ck">' + (i.done ? '✓' : '') + '</span>' : '') +
+        '<span>' + esc(i.title) + '</span><small>' + ampm(i.start_time) + (i.end_time ? '–' + ampm(i.end_time) : '') + '</small></div>').join('') + '</div></div>';
+  }
+  const meal = l => items.find(i => i.kind === 'meal' && i.list === l);
+  const el = document.getElementById('body'); el.className = '';
+  el.innerHTML = '<div class="grid"><div><div class="box"><h2>⏰ Time blocks <small>tap an hour to add · drag a to-do onto an hour</small></h2>' +
+    (allDay.length ? '<div style="margin-bottom:6px">' + allDay.map(i => '<div class="blk" data-id="' + i.id + '" style="--c:' + colorOf(i) + ';margin-bottom:3px"><span>' + esc(i.title) + '</span><small>All day</small></div>').join('') + '</div>' : '') +
+    hours + '</div></div><div>' +
+    '<div class="box"><h2>☑️ To-dos <small>' + todos.filter(t => !t.done).length + ' left</small></h2>' +
+    todos.map(t => '<div class="t' + (t.done ? ' on' : '') + '" draggable="true" data-id="' + t.id + '" style="border-left-color:' + colorOf(t) + '"><span class="ck">' + (t.done ? '✓' : '') + '</span><span class="tx">' + (t.priority ? '⭐ ' : '') + esc(t.title) + '</span><button class="x" title="Delete">✕</button></div>').join('') +
+    '<form class="add" data-f="todo"><input placeholder="+ Add a to-do"></form><p class="hint">Same list as This week and Today. Drag one onto an hour to block time for it.</p></div>' +
+    '<div class="box"><h2>🍽 Meals <a href="https://sescobar1.github.io/booth-tracker/planner/#meals" target="_blank">Meal planner ↗</a></h2>' +
+    MEALS.map(l => { const m = meal(l); return '<div class="ml"><span>' + l + '</span><input data-meal="' + l + '" value="' + esc(m ? m.title : '') + '" placeholder="What\'s for ' + l.toLowerCase() + '?"></div>'; }).join('') + '</div>' +
+    '<div class="box"><h2>🛒 Shopping list <small>' + shop.filter(s => !s.done).length + ' to get</small></h2>' +
+    shop.map(s => '<div class="s' + (s.done ? ' on' : '') + '" data-sid="' + s.id + '"><span class="ck">' + (s.done ? '✓' : '') + '</span><span class="tx">' + esc(s.title) + '</span><span class="aisle">' + esc(s.list || '') + '</span><button class="x" title="Remove">✕</button></div>').join('') +
+    '<form class="add" data-f="shop"><input placeholder="+ Add to the list"></form><p class="hint">Same grocery list as your Planner and the Meals box.</p></div>' +
+    '</div></div>';
+}
+async function load() {
+  const [a, b] = await Promise.all([
+    SB.from('planner_items').select('id,kind,title,date,done,sort,priority,start_time,end_time,all_day,repeat,list,color').in('kind', ['event', 'task', 'meal']).lte('date', D).or('end_date.gte.' + D + ',date.eq.' + D),
+    SB.from('planner_items').select('id,title,done,list').eq('kind', 'shop').order('done').order('list')
+  ]);
+  if (a.error) throw a.error;
+  items = (a.data || []).filter(i => i.date === D || i.kind === 'event'); shop = (b.data || []).filter(s => !s.done).concat((b.data || []).filter(s => s.done).slice(0, 5));
+  draw();
+}
+const upd = async (id, f) => { const { error } = await SB.from('planner_items').update({ ...f, updated_at: now() }).eq('id', id); if (error) alert('Couldn\'t save: ' + error.message); };
+const ins = async row => { const { error } = await SB.from('planner_items').insert({ id: uid(), updated_at: now(), ...row }); if (error) alert('Couldn\'t save: ' + error.message); };
+const endOf = s => pad(Math.min(23, +s.slice(0, 2) + 1)) + s.slice(2);
+function editBlock(i) {
+  const s = document.createElement('div'); s.className = 'sheet';
+  s.innerHTML = '<div class="pane"><label>' + (i.kind === 'task' ? 'To-do' : 'Time block') + '<input id="bT" value="' + esc(i.title) + '"></label><div class="g2"><label>Start<input id="bS" type="time" value="' + (i.start_time || '') + '"></label><label>End<input id="bE" type="time" value="' + (i.end_time || '') + '"></label></div>' +
+    '<div class="acts"><button class="ghost del" id="bX">' + (i.kind === 'task' ? 'Unschedule' : 'Delete') + '</button><span><button class="ghost" id="bC">Cancel</button> <button class="btn" id="bOK">Save</button></span></div></div>';
+  document.body.appendChild(s);
+  const close = async () => { s.remove(); await load(); };
+  s.onclick = e => { if (e.target === s) close(); };
+  s.querySelector('#bC').onclick = close;
+  s.querySelector('#bX').onclick = async () => { if (i.kind === 'task') await upd(i.id, { start_time: '', end_time: '', all_day: true }); else { if (!confirm('Delete “' + i.title + '”?')) return; await SB.from('planner_items').delete().eq('id', i.id); } close(); };
+  s.querySelector('#bOK').onclick = async () => { const st = s.querySelector('#bS').value; await upd(i.id, { title: s.querySelector('#bT').value.trim() || i.title, start_time: st, end_time: s.querySelector('#bE').value || (st ? endOf(st) : ''), all_day: !st }); close(); };
+}
+document.addEventListener('click', async e => {
+  const go = e.target.closest('[data-go]'); if (go) { D = go.dataset.go; history.replaceState(null, '', '?d=' + D); document.getElementById('body').innerHTML = '<p class="muted small">Loading…</p>'; return load(); }
+  const blk = e.target.closest('.blk');
+  if (blk) { const i = items.find(x => x.id === blk.dataset.id); if (!i) return;
+    if (e.target.closest('.ck')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); }
+    return editBlock(i); }
+  const hc = e.target.closest('.hc');
+  if (hc && !e.target.closest('.hin')) {
+    hc.insertAdjacentHTML('beforeend', '<input class="hin" placeholder="What are you doing at ' + ampm(hc.dataset.h + ':00') + '? (Enter)">');
+    const inp = hc.querySelector('.hin'); inp.focus();
+    inp.onkeydown = async ev => { if (ev.key === 'Escape') { inp.remove(); draw(); } if (ev.key !== 'Enter') return; const v = inp.value.trim(); inp.remove(); if (!v) return draw();
+      const st = hc.dataset.h + ':00'; await ins({ kind: 'event', title: v, date: D, start_time: st, end_time: endOf(st), all_day: false }); load(); };
+    inp.onblur = () => setTimeout(() => { if (document.body.contains(inp) && !inp.value.trim()) { inp.remove(); draw(); } }, 150);
+    return;
+  }
+  const t = e.target.closest('.t');
+  if (t) { const i = items.find(x => x.id === t.dataset.id); if (!i) return;
+    if (e.target.closest('.x')) { if (!confirm('Delete “' + i.title + '”?')) return; items = items.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
+    if (e.target.closest('.ck') || e.target.closest('.tx')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); } }
+  const s = e.target.closest('.s');
+  if (s) { const i = shop.find(x => x.id === s.dataset.sid); if (!i) return;
+    if (e.target.closest('.x')) { shop = shop.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
+    i.done = !i.done; draw(); return upd(i.id, { done: i.done }); }
+});
+document.addEventListener('submit', async e => {
+  e.preventDefault(); const inp = e.target.querySelector('input'), v = inp.value.trim(); if (!v) return; inp.value = '';
+  if (e.target.dataset.f === 'todo') await ins({ kind: 'task', title: v, date: D, done: false, all_day: true, list: 'Home', sort: Date.now() % 1e9 });
+  else await ins({ kind: 'shop', title: v, done: false, list: 'Other', all_day: true });
+  await load(); const again = document.querySelector('form[data-f="' + e.target.dataset.f + '"] input'); if (again) again.focus();
+});
+document.addEventListener('change', async e => {
+  const l = e.target.dataset.meal; if (!l) return; const v = e.target.value.trim(), m = items.find(i => i.kind === 'meal' && i.list === l);
+  if (m && v) await upd(m.id, { title: v }); else if (m && !v) await SB.from('planner_items').delete().eq('id', m.id); else if (v) await ins({ kind: 'meal', title: v, date: D, list: l, all_day: true });
+  load();
+});
+// Drag a to-do onto an hour to block time for it.
+let dragId = null;
+document.addEventListener('dragstart', e => { const t = e.target.closest('.t'); if (t) { dragId = t.dataset.id; e.dataTransfer.effectAllowed = 'move'; } });
+document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
+document.addEventListener('dragover', e => { const h = e.target.closest('.hc'); if (!h || !dragId) return; e.preventDefault(); document.querySelectorAll('.over').forEach(x => x !== h && x.classList.remove('over')); h.classList.add('over'); });
+document.addEventListener('drop', async e => { const h = e.target.closest('.hc'); if (!h || !dragId) return; e.preventDefault(); const id = dragId; dragId = null; const st = h.dataset.h + ':00'; await upd(id, { start_time: st, end_time: endOf(st), all_day: false }); load(); });
+strip();
+hubData(async sb => { SB = sb; await load(); }, 5);
+</script></body></html>
