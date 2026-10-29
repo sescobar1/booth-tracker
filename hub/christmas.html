@@ -65,7 +65,7 @@ function people() {
     if (e.target === s || e.target.id === 'pDone') { s.remove(); draw(); return; }
     const up = e.target.closest('[data-up]'); if (up) { const i = +up.dataset.up; if (i > 0) { [WHO[i - 1], WHO[i]] = [WHO[i], WHO[i - 1]]; st.people = WHO; redraw(); await save(); } return; }
     const rm = e.target.closest('[data-rm]'); if (rm) { const w = WHO[+rm.dataset.rm], n = st.items.filter(x => x.who === w).length;
-      if (n && !confirm(w + ' has ' + n + ' gift' + (n > 1 ? 's' : '') + '. Remove them from the list too?')) return;
+      if (n && !(await ask(w + ' has ' + n + ' gift' + (n > 1 ? 's' : '') + '. Remove them from the list too?'))) return;
       WHO.splice(+rm.dataset.rm, 1); st.people = WHO; st.items = st.items.filter(x => x.who !== w); redraw(); await save(); }
   };
 }
@@ -81,7 +81,7 @@ function edit(x, forWho) {
   document.body.appendChild(s); s.querySelector('#fG').focus();
   s.onclick = e => { if (e.target === s) s.remove(); };
   s.querySelector('#fC').onclick = () => s.remove();
-  if (!isNew) s.querySelector('#fX').onclick = async () => { if (!confirm('Delete “' + x.gift + '”?')) return; st.items = st.items.filter(y => y.id !== x.id); s.remove(); draw(); await save(); };
+  if (!isNew) s.querySelector('#fX').onclick = async () => { if (!(await ask('Delete “' + x.gift + '”?'))) return; st.items = st.items.filter(y => y.id !== x.id); s.remove(); draw(); await save(); };
   s.querySelector('#fOK').onclick = async () => {
     const g = s.querySelector('#fG').value.trim(); if (!g) return s.querySelector('#fG').focus();
     Object.assign(x, { gift: g, who: s.querySelector('#fW').value, price: s.querySelector('#fP').value.replace(/[^\d.]/g, ''), status: s.querySelector('#fS').value, where: s.querySelector('#fWh').value.trim(), link: s.querySelector('#fL').value.trim(), hidden: s.querySelector('#fH').value.trim() });

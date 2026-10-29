@@ -227,7 +227,7 @@ function editBlock(i) {
   const close = async () => { s.remove(); await load(); };
   s.onclick = e => { if (e.target === s) close(); };
   s.querySelector('#bC').onclick = close;
-  s.querySelector('#bX').onclick = async () => { if (i.kind === 'task') await upd(i.id, { start_time: '', end_time: '', all_day: true }); else { if (!confirm('Delete “' + i.title + '”?')) return; await SB.from('planner_items').delete().eq('id', i.id); } close(); };
+  s.querySelector('#bX').onclick = async () => { if (i.kind === 'task') await upd(i.id, { start_time: '', end_time: '', all_day: true }); else { if (!(await ask('Delete “' + i.title + '”?'))) return; await SB.from('planner_items').delete().eq('id', i.id); } close(); };
   s.querySelector('#bOK').onclick = async () => { const st = s.querySelector('#bS').value; await upd(i.id, { title: s.querySelector('#bT').value.trim() || i.title, start_time: st, end_time: s.querySelector('#bE').value || (st ? endOf(st) : ''), all_day: !st }); close(); };
 }
 document.addEventListener('click', async e => {
@@ -248,7 +248,7 @@ document.addEventListener('click', async e => {
   }
   const t = e.target.closest('.t');
   if (t) { const i = items.find(x => x.id === t.dataset.id); if (!i) return;
-    if (e.target.closest('.x')) { if (!confirm('Delete “' + i.title + '”?')) return; items = items.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
+    if (e.target.closest('.x')) { if (!(await ask('Delete “' + i.title + '”?'))) return; items = items.filter(x => x !== i); draw(); return SB.from('planner_items').delete().eq('id', i.id); }
     if (e.target.closest('.ck') || e.target.closest('.tx')) { i.done = !i.done; draw(); return upd(i.id, { done: i.done }); } }
   const qm = e.target.closest('[data-qmeal]');
   if (qm) { const slot = ['Dinner', 'Lunch', 'Breakfast'].find(l => !items.some(i => i.kind === 'meal' && i.list === l)) || 'Dinner'; const m = items.find(i => i.kind === 'meal' && i.list === slot); return setMeal(slot, qm.dataset.qmeal, m); }
@@ -258,7 +258,7 @@ document.addEventListener('click', async e => {
     if (qEdit) { qs.hidden = (qs.hidden || []).concat(u); if (qs.counts) delete qs.counts[u.toLowerCase()]; draw(); return hubSet(SB, 'shopQuick', qs); }
     if (onList(u)) return; q.classList.add('have'); await addShop(u); return load(); }
   if (e.target.id === 'clrGot') { const ids = shop.filter(x => x.done).map(x => x.id); shop = shop.filter(x => !x.done); draw(); return SB.from('planner_items').delete().in('id', ids); }
-  if (e.target.id === 'clrAll') { if (!confirm('Clear the whole shopping list (' + shop.length + ' items)?')) return; const ids = shop.map(x => x.id); shop = []; draw(); return SB.from('planner_items').delete().in('id', ids); }
+  if (e.target.id === 'clrAll') { if (!(await ask('Clear the whole shopping list (' + shop.length + ' items)?'))) return; const ids = shop.map(x => x.id); shop = []; draw(); return SB.from('planner_items').delete().in('id', ids); }
   if (e.target.closest('.wm')) return;
   const s = e.target.closest('.s');
   if (s) { const i = shop.find(x => x.id === s.dataset.sid); if (!i) return;

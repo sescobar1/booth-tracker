@@ -100,7 +100,7 @@ function edit(t) {
   const close = () => { s.remove(); draw(); };
   s.onclick = e => { if (e.target === s) close(); };
   s.querySelector('#eC').onclick = close;
-  s.querySelector('#eX').onclick = async () => { if (!confirm('Delete “' + t.title + '”' + (t.repeat ? ' (every time it repeats)' : '') + '?')) return; tasks = tasks.filter(x => x !== t); close(); await SB.from('planner_items').delete().eq('id', t.id); };
+  s.querySelector('#eX').onclick = async () => { if (!(await ask('Delete “' + t.title + '”' + (t.repeat ? ' (every time it repeats)' : '') + '?'))) return; tasks = tasks.filter(x => x !== t); close(); await SB.from('planner_items').delete().eq('id', t.id); };
   s.querySelector('#eOK').onclick = async () => {
     const st = s.querySelector('#eS').value, f = { title: s.querySelector('#eT').value.trim() || t.title, date: s.querySelector('#eD').value || t.date, start_time: st, all_day: !st,
       end_time: st ? String(Math.min(23, +st.slice(0, 2) + 1)).padStart(2, '0') + st.slice(2) : '', repeat: s.querySelector('#eR').value, list: s.querySelector('#eL').value, priority: s.querySelector('#eP').checked ? 1 : 0 };
