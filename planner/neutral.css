@@ -595,3 +595,7 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 /* 🛒 quick shopping-list button on Today */
 .assignbtn.shopbtn { background: #c98a6b; }
 .qsadded { color: var(--sage); font-weight: 600; min-height: 1.2em; margin: 4px 0 8px; }
+
+/* To-dos checked off right on the calendar */
+.hev.done, .pill.done { text-decoration: line-through; opacity: .6; }
+.pev[data-item], .hev[data-item], .pill[data-item] { cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

@@ -341,7 +341,20 @@ function wireRows(root) {
     if (it && !it.done) { b.classList.add('on', 'pop'); b.textContent = '✓'; const row = b.closest('.ev'); if (row) row.classList.add('done', 'fading'); celebrate(b); setTimeout(() => toggleDone(b.dataset.done), 420); }
     else toggleDone(b.dataset.done);
   });
-  root.querySelectorAll('[data-item]').forEach(r => r.onclick = () => editItem(r.dataset.item));
+  // On the calendar, tapping a to-do checks it off (line through); press and hold to edit it. List rows still open the editor.
+  root.querySelectorAll('[data-item]').forEach(r => {
+    const it = data.items.find(i => i.id === r.dataset.item);
+    if (!it || it.kind !== 'task' || r.classList.contains('ev')) { r.onclick = ev => { ev.stopPropagation(); editItem(r.dataset.item); }; return; }
+    r.title = 'Tap to check off · hold to edit';
+    let held = false, tm;
+    r.onpointerdown = () => { held = false; clearTimeout(tm); tm = setTimeout(() => { held = true; editItem(it.id); }, 550); };
+    r.onpointerup = r.onpointerleave = () => clearTimeout(tm);
+    r.oncontextmenu = ev => { ev.preventDefault(); };
+    r.onclick = ev => {
+      ev.stopPropagation(); if (held) return;
+      if (!it.done) { r.classList.add('done'); celebrate(r); setTimeout(() => toggleDone(it.id), 350); } else toggleDone(it.id);
+    };
+  });
   root.querySelectorAll('[data-link]').forEach(r => r.onclick = () => { location.href = r.dataset.link; });
   root.querySelectorAll('[data-ext]').forEach(r => r.onclick = () => {
     const x = JSON.parse(r.dataset.ext);
@@ -572,7 +585,7 @@ function drawMonth() {
   for (let d = 1; d <= n; d++) {
     const iso = calMonth + '-' + pad(d), es = onDay(list, iso);
     cells += '<button type="button" class="cd' + (iso === today() ? ' today' : '') + (iso === calDay ? ' sel' : '') + '" data-day="' + iso + '"><span class="n">' + d + trackIcons(iso) + '</span>' +
-      es.slice(0, 3).map(e => '<span class="pill" style="--pc:' + esc(e.color || '#888') + '">' + esc(e.title) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
+      es.slice(0, 3).map(e => '<span class="pill' + (e.kind === 'task' && e.done ? ' done' : '') + '"' + (e.kind === 'task' && e.src === 'planner' ? ' data-item="' + e.id + '"' : '') + ' style="--pc:' + esc(e.color || '#888') + '">' + esc(e.title) + '</span>').join('') + (es.length > 3 ? '<span class="more">+' + (es.length - 3) + '</span>' : '') + '</button>';
   }
   const dayList = onDay(list, calDay);
   $('calBody').innerHTML = '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
@@ -737,7 +750,7 @@ function drawDay() {
       '<div class="wkrow"><span class="todaylbl">' + (d === today() ? 'TODAY' : esc(dt.toLocaleDateString([], { weekday: 'long' }).toUpperCase())) + '</span>' +
       days.map(x => '<button type="button" class="wd' + (x === d ? ' on' : '') + '" data-dday="' + x + '">' + new Date(x + 'T12:00').toLocaleDateString([], { weekday: 'short' }).toUpperCase() + '</button>').join('') + '</div>' +
       trackButtons(d) +
-      (allDay.length ? '<div class="alld">' + allDay.map(e => '<span class="hev" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#8c7a6b') + '">' + (e.kind === 'task' ? (e.done ? '✓ ' : '○ ') : '') + esc(e.title) + '</span>').join('') + '</div>' : '') +
+      (allDay.length ? '<div class="alld">' + allDay.map(e => '<span class="hev' + (e.kind === 'task' && e.done ? ' done' : '') + '" ' + rowOpen(e) + ' style="--pc:' + esc(e.color || '#8c7a6b') + '">' + (e.kind === 'task' ? (e.done ? '✓ ' : '○ ') : '') + esc(e.title) + '</span>').join('') + '</div>' : '') +
       '<div class="hours">' + hours + '</div>' +
       '<div class="pbox2"><span>Evening</span><textarea data-dp="evening" rows="2">' + esc(v.evening || '') + '</textarea></div>' + dayStickies(d, 'left') +
     '</div>' +
