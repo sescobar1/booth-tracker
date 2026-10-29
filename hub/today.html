@@ -1,0 +1,92 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A little lift</title><link rel="stylesheet" href="style.css">
+<style>
+@font-face{font-family:'Patrick Hand';src:url(../fonts/patrick-hand.woff2) format('woff2');font-display:swap}
+.card{min-height:0;height:auto;background:linear-gradient(160deg,#fff8ec,#fbf2f6 60%,#eef4f8)}
+.v{font-family:'Patrick Hand',cursive;font-size:21px;line-height:27px;color:#3d4a5c;margin:2px 0 2px}.vr{font-size:12.5px;color:#9a7b3b;text-align:right;margin-bottom:10px}
+.hd{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b07aa1;margin:10px 0 4px;display:flex;justify-content:space-between}.hd a{color:#b07aa1;letter-spacing:0;text-transform:none;font-size:12px}
+.moods{display:flex;gap:5px;flex-wrap:wrap}.mood{font-size:20px;width:36px;height:36px;border-radius:50%;border:1.5px dashed #e0d3c0;background:#fffdf8;padding:0;transition:.15s}.mood:hover{transform:rotate(-8deg) scale(1.08)}.mood.on{border:2px solid #b07aa1;background:#f6e4ec;transform:rotate(-6deg) scale(1.1)}
+.dr{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:3px 0;font-size:14px}.dr .cups{font-size:18px;letter-spacing:1px;white-space:nowrap;overflow:hidden}.dr small{color:var(--muted);font-size:11.5px}
+.pm{width:28px;height:28px;border-radius:50%;border:1px solid #b9c7d6;background:#e3eef7;color:#4f6f8f;font-size:18px;line-height:1;padding:0}.pm.m{background:#fff;border-style:dashed}
+.goal{height:7px;border-radius:5px;background:#e3eef7;overflow:hidden;margin:2px 0 4px}.goal i{display:block;height:100%;background:linear-gradient(90deg,#8fb8d8,#5b8fb8);border-radius:5px;transition:width .3s}
+.joy{display:flex;gap:6px}.joy input{flex:1;font:inherit;font-size:14px;padding:7px 9px;border:1px solid #eadfcf;border-radius:8px;background:#fffdf8;color:var(--ink);min-width:0}.joy button{font-size:13px;border-radius:8px;background:#b07aa1;color:#fff;padding:0 12px}
+.ok{font-size:12px;color:#7d9178;min-height:16px;margin-top:3px}
+</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="card">
+<div id="body" class="muted small">Loading…</div>
+</div><script>
+// A little lift for the hub: a verse for today, how you feel, your Stanleys and Diet Dr Thunders, and one good thing.
+// It all saves straight into today's journal entry, so it's there when you sit down to write.
+const VERSES = [
+  ['This is the day which the LORD hath made; we will rejoice and be glad in it.', 'Psalm 118:24'],
+  ['I can do all things through Christ which strengtheneth me.', 'Philippians 4:13'],
+  ['Trust in the LORD with all thine heart; and lean not unto thine own understanding.', 'Proverbs 3:5'],
+  ['Be still, and know that I am God.', 'Psalm 46:10'],
+  ['The LORD is my shepherd; I shall not want.', 'Psalm 23:1'],
+  ['Cast thy burden upon the LORD, and he shall sustain thee.', 'Psalm 55:22'],
+  ['Be strong and of a good courage; be not afraid… for the LORD thy God is with thee whithersoever thou goest.', 'Joshua 1:9'],
+  ['Come unto me, all ye that labour and are heavy laden, and I will give you rest.', 'Matthew 11:28'],
+  ['And we know that all things work together for good to them that love God.', 'Romans 8:28'],
+  ['The joy of the LORD is your strength.', 'Nehemiah 8:10'],
+  ['Weeping may endure for a night, but joy cometh in the morning.', 'Psalm 30:5'],
+  ['Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God.', 'Philippians 4:6'],
+  ['They that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles.', 'Isaiah 40:31'],
+  ['Fear thou not; for I am with thee: be not dismayed; for I am thy God.', 'Isaiah 41:10'],
+  ['His compassions fail not. They are new every morning: great is thy faithfulness.', 'Lamentations 3:22–23'],
+  ['Let all your things be done with charity.', '1 Corinthians 16:14'],
+  ['A merry heart doeth good like a medicine.', 'Proverbs 17:22'],
+  ['Thy word is a lamp unto my feet, and a light unto my path.', 'Psalm 119:105'],
+  ['The LORD bless thee, and keep thee: the LORD make his face shine upon thee, and be gracious unto thee.', 'Numbers 6:24–25'],
+  ['Commit thy works unto the LORD, and thy thoughts shall be established.', 'Proverbs 16:3'],
+  ['In every thing give thanks: for this is the will of God in Christ Jesus concerning you.', '1 Thessalonians 5:18'],
+  ['Let us not be weary in well doing: for in due season we shall reap, if we faint not.', 'Galatians 6:9'],
+  ['She is clothed with strength and honour; and she shall rejoice in time to come.', 'Proverbs 31:25'],
+  ['Train up a child in the way he should go: and when he is old, he will not depart from it.', 'Proverbs 22:6'],
+  ['Peace I leave with you, my peace I give unto you… Let not your heart be troubled.', 'John 14:27'],
+  ['The LORD thy God in the midst of thee is mighty; he will rejoice over thee with joy.', 'Zephaniah 3:17'],
+  ['Delight thyself also in the LORD; and he shall give thee the desires of thine heart.', 'Psalm 37:4'],
+  ['God is our refuge and strength, a very present help in trouble.', 'Psalm 46:1'],
+  ['Whatsoever ye do, do it heartily, as to the Lord.', 'Colossians 3:23'],
+  ['O give thanks unto the LORD; for he is good: for his mercy endureth for ever.', 'Psalm 107:1'],
+  ['But they that trust in the LORD shall be as mount Zion, which cannot be removed.', 'Psalm 125:1']
+];
+const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧', 'Hard'], ['⛈', 'Rough'], ['🥰', 'Loved'], ['😴', 'Tired'], ['🙏', 'Thankful']];
+const DRINKS = [['stanley', '💧', ['Stanley of water', 'Stanleys of water'], 40, 3], ['thunder', '🥤', ['Diet Dr Thunder', 'Diet Dr Thunders'], 12, 0]];
+let SB, E = null, D = '';
+const doy = () => { const n = new Date(); return Math.floor((n - new Date(n.getFullYear(), 0, 0)) / 864e5); };
+function draw() {
+  if (document.activeElement && document.activeElement.id === 'joyIn' && document.activeElement.value) return;
+  const el = document.getElementById('body'); el.className = '';
+  const [vt, vr] = E.verse ? [E.verse, E.verse_ref || ''] : VERSES[doy() % VERSES.length], d = E.drinks || {}, g = (E.grateful || []).filter(x => x && x.trim());
+  el.innerHTML = '<div class="hd" style="margin-top:0"><span>✨ A little lift · ' + new Date().toLocaleDateString('en-US', { weekday: 'long' }) + '</span><a href="journal.html" target="_blank">journal ↗</a></div>' +
+    '<p class="v">“' + esc(vt.replace(/^[“"]|[”"]$/g, '')) + '”</p><p class="vr">' + esc(vr.replace(/^—\s*/, '— ')) + (vr && !/^—/.test(vr) ? '' : '') + '</p>' +
+    '<div class="hd"><span>Today I feel</span></div><div class="moods">' + MOODS.map(([i, n]) => '<button class="mood' + (E.mood === n ? ' on' : '') + '" data-mood="' + n + '" title="' + n + '">' + i + '</button>').join('') + '</div>' +
+    '<div class="hd"><span>Drinks today</span></div>' + DRINKS.map(([k, i, n, oz, goal]) => { const c = d[k] || 0;
+      return '<div class="dr"><button class="pm m" data-k="' + k + '" data-d="-1" title="One less">–</button><span><span class="cups">' + (c ? i.repeat(Math.min(c, 8)) : '<small>none yet</small>') + '</span> <small>' + c + ' ' + n[c === 1 ? 0 : 1] + (k === 'stanley' ? ' · ' + c * oz + ' oz' : '') + '</small></span><button class="pm" data-k="' + k + '" data-d="1" title="Add one">+</button></div>' +
+        (goal ? '<div class="goal" title="Goal: ' + goal + '"><i style="width:' + Math.min(100, c / goal * 100) + '%"></i></div>' : ''); }).join('') +
+    (d.stanley >= 3 ? '<p class="ok">💧 Water goal met — proud of you!</p>' : '') +
+    '<div class="hd"><span>One good thing</span>' + (g.length ? '<span style="text-transform:none;letter-spacing:0">' + g.length + ' today</span>' : '') + '</div>' +
+    '<form class="joy" id="joyF"><input id="joyIn" placeholder="' + (g.length ? '…and another' : 'something I’m grateful for') + '" autocomplete="off"><button>Add</button></form>' +
+    '<p class="ok" id="ok">' + (g.length ? '🙏 ' + esc(g[g.length - 1]) : '') + '</p>';
+}
+async function save(fields) {
+  Object.assign(E, fields);
+  const { error } = await SB.from('journal_entries').upsert({ day: D, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
+  if (error) { const o = document.getElementById('ok'); if (o) o.textContent = 'Couldn’t save — check your signal.'; }
+}
+document.addEventListener('click', async e => {
+  const m = e.target.closest('[data-mood]'); if (m) { await save({ mood: E.mood === m.dataset.mood ? '' : m.dataset.mood }); draw(); return; }
+  const p = e.target.closest('[data-k]'); if (p) { const d = { ...(E.drinks || {}) }, k = p.dataset.k; d[k] = Math.max(0, (d[k] || 0) + Number(p.dataset.d)); if (!d[k]) delete d[k]; await save({ drinks: d }); draw(); }
+});
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'joyF') return; e.preventDefault();
+  const i = document.getElementById('joyIn'), v = i.value.trim(); if (!v) return; i.value = '';
+  const g = (E.grateful || []).filter(x => x && x.trim()).concat(v); while (g.length < 3) g.push('');
+  await save({ grateful: g }); draw(); const n = document.getElementById('joyIn'); if (n) n.focus();
+});
+hubData(async sb => {
+  SB = sb; D = isoDay(new Date());
+  const { data } = await sb.from('journal_entries').select('day,mood,drinks,grateful,verse,verse_ref').eq('day', D).maybeSingle();
+  E = data || { day: D, drinks: {}, grateful: [] };
+  draw();
+}, 5);
+</script></body></html>
