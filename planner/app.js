@@ -737,7 +737,7 @@ function saveDayPage(d, v) {
 function drawDay() {
   if (S().dayJournal) return drawJournalDay();
   $('calBody').innerHTML = '<div class="row-actions center" style="margin:0 0 6px"><button type="button" class="ghost small" id="dJournal">📓 Journal page</button></div>' +
-    '<iframe class="dayframe" src="../hub/day.html?bare=1&d=' + calDay + '" title="Time blocks for ' + esc(fmtDate(calDay, 'long')) + '"></iframe>';
+    '<iframe class="dayframe" src="../hub/day.html?bare=1&v=4&d=' + calDay + '" title="Time blocks for ' + esc(fmtDate(calDay, 'long')) + '"></iframe>';
   $('dJournal').onclick = () => { S().dayJournal = true; window.save(); viewCalendar(); };
 }
 function drawJournalDay() {
