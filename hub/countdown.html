@@ -31,9 +31,9 @@ function occasionOf(t) {
   if (n.length > 30) return null;
   if (!n && !anniv) return null;
   n = n.replace(/\b\w/g, c => c.toUpperCase());
-  return { k: anniv ? 'anniv' : 'bday', name: n };
+  return { k: anniv ? 'anniv' : 'bday', name: n, label: anniv && n && !/&| and /i.test(n) ? n + ' anniversary' : '' };
 }
-const same = (a, b) => { a = a.toLowerCase(); b = b.toLowerCase(); return a === b || a.split(' ')[0] === b.split(' ')[0]; };
+const first = x => x.toLowerCase().split(' ')[0].replace(/s$/, ''), same = (a, b) => a.toLowerCase() === b.toLowerCase() || first(a) === first(b);
 async function loadCalendar() {
   try {
     const t = isoDay(new Date()), end = isoDay(new Date(Date.now() + 366 * 864e5));
@@ -55,7 +55,7 @@ function rows() {
   const days = x => Math.round((x - t) / 864e5);
   S.list.forEach((x, i) => { const d = new Date(x[1] + 'T00:00'); if (d >= t) out.push({ k: 'once', name: x[0], d, days: days(d), rm: 'o' + i }); });
   BD.forEach(b => { const d = nextOf(b.md), y = b.year; out.push({ k: 'bday', name: '🎂 ' + b.name + '’s birthday' + (y ? ' · turns ' + (d.getFullYear() - y) : ''), d, days: days(d), rm: 'b' + b.id }); });
-  CAL.forEach(c => { const d = nextOf(c.md); out.push({ k: c.k, name: (c.k === 'bday' ? '🎂 ' + c.name + '\u2019s birthday' : '💍 ' + (c.name ? c.name + '\u2019s anniversary' : 'Our anniversary')), d, days: days(d), rm: 'c' + c.key, cal: 1 }); });
+  CAL.forEach(c => { const d = nextOf(c.md); out.push({ k: c.k, name: (c.k === 'bday' ? '🎂 ' + c.name + '\u2019s birthday' : '💍 ' + (c.label || (c.name ? c.name + '\u2019s anniversary' : 'Our anniversary'))), d, days: days(d), rm: 'c' + c.key, cal: 1 }); });
   (S.anniv || []).forEach((a, i) => { const d = nextOf(a.md); out.push({ k: 'anniv', name: '💍 ' + a.name + (a.year ? ' · ' + ord(d.getFullYear() - a.year) : ''), d, days: days(d), rm: 'a' + i }); });
   return out.sort((a, b) => a.days - b.days);
 }
