@@ -39,16 +39,21 @@ textarea{display:block;width:100%;border:0;background:transparent;font:inherit;c
 .signin,.muted.small{font-family:Lora,serif}
 .note{position:relative;background:#fff8c9;margin:14px 0 6px -8px;padding:10px 14px 8px;border-radius:2px;box-shadow:0 3px 8px #0000001f;transform:rotate(-.6deg);line-height:24px;font-size:17px}
 .tape{position:absolute;top:-10px;left:50%;width:84px;height:20px;margin-left:-42px;background:#e9dcc0cc;transform:rotate(-3deg);box-shadow:0 1px 2px #0001}
-.nh{margin:0 0 2px;font-size:16px;color:#9a7b3b}.nl{margin:2px 0}.nl b{font-weight:400}.nl .sub,.nl .tm{color:#8a8f86;font-size:15px}</style>
+.nh{margin:0 0 2px;font-size:16px;color:#9a7b3b}.nl{margin:2px 0}.nl b{font-weight:400}.nl .sub,.nl .tm{color:#8a8f86;font-size:15px}.cece{margin:0 0 18px;padding-bottom:4px}.cm.on{border-color:var(--cc);background:color-mix(in srgb,var(--cc) 22%,#fff)}.cl{align-self:center;font-size:17px;color:#8a8f86;margin-left:4px}
+.ctags{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 2px}.ctag{font-family:var(--hand);font-size:15px;line-height:1.2;border:1px dashed #d6cdbb;background:#fffaf0;border-radius:14px;padding:3px 10px;color:var(--ink2);cursor:pointer}.ctag.on{border:1px solid #a98bc4;background:#efe6f6}
+.dots{display:flex;flex-wrap:wrap;gap:4px;max-width:420px}.dots i{width:14px;height:14px;border-radius:50%;display:block}.ck{font-size:15px;color:#8a8f86;margin:4px 0 0}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js"></script></head><body><div class="wrap">
 <div class="top"><h1>My Journal</h1><div class="nav"><button id="prev" title="Day before">‹</button><button id="tdy">Today</button><button id="next" title="Next day">›</button></div></div>
 <div id="body" class="muted small">Opening your journal…</div>
 </div><script>
 const MOODS = [['🌞', 'Great'], ['🌤', 'Good'], ['☁️', 'Okay'], ['🌧', 'Hard'], ['⛈', 'Rough'], ['🥰', 'Loved'], ['😴', 'Tired'], ['🙏', 'Thankful']];
 const PROMPTS = ['What made you smile today?', 'What\'s been on your mind lately?', 'A moment you want to remember…', 'What did you learn today?', 'How did you take care of yourself?', 'What are you looking forward to?', 'Something you\'re proud of…', 'What would make tomorrow great?', 'Who made a difference for you today?', 'What\'s weighing on you, and one small next step?', 'Write a little letter to yourself…', 'Where did you see God / grace today?'];
-let SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], timer, calMonth = day.slice(0, 7), pIdx = 0;
+let recentAll = [], SB, day = isoDay(new Date()), cur = null, days = new Set(), recent = [], timer, calMonth = day.slice(0, 7), pIdx = 0;
 const dt = d => new Date(d + 'T12:00'), add = (d, n) => { const x = dt(d); x.setDate(x.getDate() + n); return isoDay(x); };
-const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '' });
+const blank = () => ({ day, body: '', mood: '', grateful: ['', '', ''], highlight: '', tomorrow: '', cece_mood: '', cece_tags: [], cece_note: '' });
+// How Cece was today: a 5-step scale (with colors for the month view), plus quick words and a note.
+const CECE = [['😄', 'Great', '#7fb069'], ['🙂', 'Good', '#b5cf7a'], ['😐', 'So-so', '#e8c95a'], ['😤', 'Rough', '#e8995a'], ['😭', 'Really hard', '#d9675f']];
+const CECE_TAGS = ['Kind', 'Helpful', 'Listened', 'Funny', 'Did chores', 'Good at school', 'Tired', 'Moody', 'Sassy', 'Argued', 'Talked back', 'Cried', 'Anxious', 'Sick', 'Stayed in room'];
 function draw() {
   if (document.getElementById('body2')) collect(); // keep what's being typed when the day's info arrives
   const ae = document.activeElement, focusKey = ae && (ae.dataset.f || (ae.dataset.g != null ? 'g' + ae.dataset.g : '')), caret = ae && ae.selectionStart;
@@ -64,7 +69,7 @@ function draw() {
       '<p class="lbl">Highlight of the day</p><input class="line" data-f="highlight" value="' + esc(e.highlight) + '" placeholder="the best part was…">' +
       '<p class="lbl">Tomorrow I want to…</p><input class="line" data-f="tomorrow" value="' + esc(e.tomorrow) + '" placeholder="one thing that matters">' +
     '</div>' +
-    '<div class="pg right"><p class="prompt"><b>✎</b> ' + esc(PROMPTS[pIdx]) + '<button id="newP" title="Another prompt">another</button></p>' +
+    '<div class="pg right">' + ceceHtml(e) + '<p class="prompt"><b>✎</b> ' + esc(PROMPTS[pIdx]) + '<button id="newP" title="Another prompt">another</button></p>' +
       '<textarea id="body2" data-f="body" placeholder="Dear diary…">' + esc(e.body) + '</textarea><span class="saved" id="saved"></span></div></div>' +
     pastHtml();
   grow();
@@ -122,12 +127,33 @@ function glanceHtml() {
   ].filter(Boolean);
   return '<div class="note"><span class="tape"></span><p class="nh">📌 From my day</p>' + (parts.length ? parts.join('') : '<p class="nl muted">Nothing on the books — a quiet day.</p>') + '</div>';
 }
+
+function ceceHtml(e) {
+  const tags = e.cece_tags || [];
+  return '<div class="cece"><p class="lbl" style="margin-top:0">💜 How was Cece today?</p><div class="moods">' +
+    CECE.map(([i, n, c]) => '<button class="mood cm' + (e.cece_mood === n ? ' on' : '') + '" data-cece="' + n + '" title="' + n + '" style="--cc:' + c + '">' + i + '</button>').join('') +
+    (e.cece_mood ? '<span class="cl">' + esc(e.cece_mood) + '</span>' : '') + '</div>' +
+    '<div class="ctags">' + CECE_TAGS.map(t => '<button class="ctag' + (tags.includes(t) ? ' on' : '') + '" data-ctag="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' +
+    '<input class="line" data-f="cece_note" value="' + esc(e.cece_note || '') + '" placeholder="what happened, what helped…"></div>';
+}
+
+// Cece this month: one dot per day, colored by how her day went.
+function ceceMonth() {
+  const [y, m] = calMonth.split('-').map(Number), n = new Date(y, m, 0).getDate(), have = {}; recentAll.forEach(r => { if (r.cece_mood) have[r.day] = r.cece_mood; });
+  if (cur && cur.cece_mood) have[cur.day] = cur.cece_mood;
+  const ds = [...Array(n)].map((_, k) => calMonth + '-' + String(k + 1).padStart(2, '0')), logged = ds.filter(d => have[d]);
+  if (!logged.length) return '';
+  const counts = {}; logged.forEach(d => counts[have[d]] = (counts[have[d]] || 0) + 1);
+  return '<div class="cmonth"><p class="nh" style="margin:10px 0 4px">💜 Cece this month</p><div class="dots">' + ds.map(d => { const c = CECE.find(x => x[1] === have[d]); return '<i title="' + d + (c ? ' · ' + c[1] : '') + '" style="background:' + (c ? c[2] : '#ece6d8') + '"></i>'; }).join('') + '</div>' +
+    '<p class="ck">' + CECE.filter(c => counts[c[1]]).map(c => c[0] + ' ' + c[1] + ' ' + counts[c[1]]).join(' · ') + '</p></div>';
+}
 function pastHtml() {
   const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), t = isoDay(new Date());
   let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => '<span>' + x + '</span>').join('') + '<span></span>'.repeat((first.getDay() + 6) % 7);
   for (let k = 1; k <= n; k++) { const d = calMonth + '-' + String(k).padStart(2, '0'); cells += '<button data-day="' + d + '" class="' + (days.has(d) ? 'has ' : '') + (d === day ? 'sel ' : '') + (d === t ? 'today' : '') + '"' + (d > t ? ' disabled' : '') + '>' + k + '</button>'; }
   return '<div class="past"><h3><span>📚 Past entries</span><span><button class="nav-m" data-m="-1" style="font:inherit;border:0;background:none;cursor:pointer">‹</button> ' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ' <button class="nav-m" data-m="1" style="font:inherit;border:0;background:none;cursor:pointer">›</button></span></h3>' +
     '<div class="cal">' + cells + '</div>' +
+    ceceMonth() +
     (recent.length ? '<div class="recent">' + recent.map(r => '<button data-day="' + r.day + '"><small>' + dt(r.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (r.mood ? ' · ' + (MOODS.find(m => m[1] === r.mood) || [''])[0] : '') + '</small>' + esc((r.highlight || r.body || 'Entry').slice(0, 60)) + '</button>').join('') + '</div>' : '') + '</div>';
 }
 function grow() { const t = document.getElementById('body2'); if (!t) return; t.style.height = 'auto'; t.style.height = Math.max(448, Math.ceil(t.scrollHeight / 32) * 32) + 'px'; }
@@ -139,11 +165,11 @@ function collect() {
 }
 function later() { clearTimeout(timer); const s = document.getElementById('saved'); if (s) s.textContent = 'writing…'; timer = setTimeout(save, 900); }
 async function save() {
-  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim());
+  clearTimeout(timer); const e = collect(), empty = !e.body.trim() && !e.mood && !e.highlight.trim() && !e.tomorrow.trim() && !e.grateful.some(x => x.trim()) && !e.cece_mood && !(e.cece_tags || []).length && !(e.cece_note || '').trim();
   if (empty && !days.has(e.day)) return;
-  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
+  const { error } = await SB.from('journal_entries').upsert({ day: e.day, body: e.body, mood: e.mood, grateful: e.grateful, highlight: e.highlight, tomorrow: e.tomorrow, cece_mood: e.cece_mood || '', cece_tags: e.cece_tags || [], cece_note: e.cece_note || '', updated_at: new Date().toISOString() }, { onConflict: 'owner,day' });
   const s = document.getElementById('saved'); if (s) s.textContent = error ? 'couldn\'t save — check your signal' : 'saved ✓';
-  if (!error) { days.add(e.day); const r = recent.find(x => x.day === e.day); if (r) Object.assign(r, e); else { recent.unshift({ ...e }); recent.sort((a, b) => b.day.localeCompare(a.day)); recent = recent.slice(0, 10); } }
+  if (!error) { const ra = recentAll.find(x => x.day === e.day); if (ra) Object.assign(ra, e); else recentAll.unshift({ ...e }); days.add(e.day); const r = recent.find(x => x.day === e.day); if (r) Object.assign(r, e); else { recent.unshift({ ...e }); recent.sort((a, b) => b.day.localeCompare(a.day)); recent = recent.slice(0, 10); } }
 }
 async function open(d) {
   if (cur) await save();
@@ -154,6 +180,8 @@ async function open(d) {
 }
 document.addEventListener('input', e => { if (e.target.matches('[data-f],[data-g]')) { if (e.target.id === 'body2') grow(); later(); } });
 document.addEventListener('click', async e => {
+  const cm = e.target.closest('[data-cece]'); if (cm) { collect(); cur.cece_mood = cur.cece_mood === cm.dataset.cece ? '' : cm.dataset.cece; await save(); draw(); return; }
+  const ct = e.target.closest('[data-ctag]'); if (ct) { collect(); const t = ct.dataset.ctag, l = cur.cece_tags || []; cur.cece_tags = l.includes(t) ? l.filter(x => x !== t) : l.concat(t); await save(); draw(); return; }
   const m = e.target.closest('[data-mood]'); if (m) { collect(); cur.mood = cur.mood === m.dataset.mood ? '' : m.dataset.mood; await save(); draw(); return; }
   const d = e.target.closest('[data-day]'); if (d && !d.disabled) return open(d.dataset.day);
   const nm = e.target.closest('.nav-m'); if (nm) { const [y, mo] = calMonth.split('-').map(Number), x = new Date(y, mo - 1 + Number(nm.dataset.m), 1); calMonth = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); collect(); return draw(); }
@@ -166,8 +194,8 @@ window.addEventListener('beforeunload', () => { if (timer) save(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && timer) save(); });
 hubData(async sb => {
   if (SB) return; SB = sb;
-  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body').order('day', { ascending: false }).limit(400)]);
-  (list.data || []).forEach(r => days.add(r.day)); recent = (list.data || []).slice(0, 10);
+  const [list] = await Promise.all([sb.from('journal_entries').select('day,mood,highlight,body,cece_mood').order('day', { ascending: false }).limit(400)]);
+  recentAll = list.data || []; recentAll.forEach(r => days.add(r.day)); recent = recentAll.slice(0, 10);
   await open(day);
 }, 600);
 </script></body></html>
