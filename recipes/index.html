@@ -152,6 +152,10 @@
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .hint { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
     #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 14px; z-index: 60; max-width: 90%; text-align: center; }
+    .secadd { float: right; font-size: .8rem; font-weight: 500; text-decoration: none; border: 1px solid currentColor; border-radius: 14px; padding: 2px 10px; opacity: .75; margin-top: 4px; }
+    .secadd:hover { opacity: 1; }
+    .secbtn { display: inline-block; margin: 4px 0 12px; }
+    .topadd { white-space: nowrap; }
     .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); padding: 14px 22px; box-shadow: 0 6px 20px rgba(0,0,0,.2); z-index: 10; }
     footer { text-align: center; color: var(--muted); font-size: 14px; margin-top: 30px; }
     .signin { max-width: 380px; margin: 30px auto; }
@@ -344,9 +348,9 @@
     const folders = book.folders.filter(f => owner() || book.recipes.some(r => inFolder(r, f)));
     const folderRow = folders.length ? '<h2 class="secth">📁 Folders</h2><div class="folders">' + folders.map(f => { const n = book.recipes.filter(r => inFolder(r, f)).length; return '<a class="folder" href="#folder/' + f.id + '"><span class="fi">' + f.icon + '</span><b>' + esc(f.name) + '</b><small>' + n + ' recipe' + (n === 1 ? '' : 's') + '</small></a>'; }).join('') + (owner() ? '<button type="button" class="folder add noprint" id="fNew"><span class="fi">＋</span><b>New folder</b><small>Grandma’s, Christmas…</small></button>' : '') + '</div>' : '';
     // Like a cookbook: one section after another, unless searching or one section is picked.
-    const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small></h2><div class="rlist">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : '<div class="rlist">' + rs.map(card).join('') + '</div>';
+    const body = !rs.length ? '<p class="empty">No recipes match.</p>' : cat === 'All' && !q ? cats.map(c => '<section class="sect" id="s-' + CATS.indexOf(c) + '"><h2 class="secth">' + ICON[c] + ' ' + esc(c) + ' <small>' + rs.filter(r => sectionOf(r) === c).length + '</small>' + (canEdit() ? '<a class="secadd noprint" href="#new/cat:' + encodeURIComponent(c) + '">＋ Add</a>' : '') + '</h2><div class="rlist">' + rs.filter(r => sectionOf(r) === c).map(card).join('') + '</div></section>').join('') : (canEdit() && cat !== 'All' ? '<a class="btn secbtn noprint" href="#new/cat:' + encodeURIComponent(cat) + '">＋ Add a recipe to ' + esc(cat) + '</a>' : '') + '<div class="rlist">' + rs.map(card).join('') + '</div>';
     app.innerHTML = '<header class="top"><h1>' + esc(book.title) + '</h1><p>' + book.recipes.length + ' recipe' + (book.recipes.length === 1 ? '' : 's') + ' to cook, share and keep</p></header>' +
-      (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '"></div>' : '') +
+      (book.recipes.length ? '<div class="tools"><input id="q" type="search" placeholder="Search recipes, ingredients, or who it’s from…" value="' + esc(q) + '">' + (canEdit() ? '<a class="btn topadd noprint" href="#new' + (cat !== 'All' ? '/cat:' + encodeURIComponent(cat) : '') + '">＋ Add a recipe</a>' : '') + '</div>' : '') +
       (owner() ? '<div class="card share noprint"><div style="flex:1 1 100%"><b>👨‍👩‍👧‍👦 Share with family</b><p class="hint">Anyone with this link can see, add, change and delete recipes. Deleted ones go to <a href="#trash">🗑 Recently deleted</a> so you can bring them back.</p></div><code>' + esc(shareLink()) + '</code><button type="button" class="small" id="shShare">Send link</button><button type="button" class="small ghost" id="shCopy">Copy link</button><button type="button" class="small ghost" id="shName">Rename book</button><button type="button" class="small ghost" id="shBackup">⬇ Back up everything</button><a class="btn small ghost" href="' + esc(shareLink()) + '" target="_blank" rel="noopener">See it like family does</a></div>' : '') +
       (book.recipes.length ?
         (!q && cat === 'All' ? '<a class="boardbtn noprint" href="#board">💬 Message board <small>Ask for a recipe or ask a question</small></a>' + folderRow : '') +
@@ -542,6 +546,7 @@
   }
 
   function edit(id, inFolderId) {
+    let preCat = ''; if (inFolderId && inFolderId.startsWith('cat:')) { preCat = decodeURIComponent(inFolderId.slice(4)); inFolderId = ''; }
     const r = id ? book.recipes.find(x => x.id === id) : null;
     if (id && !r) return list();
     // Each photo is either saved ({path}) or new ({file, preview}).
@@ -551,7 +556,7 @@
       '<div class="card"><div class="drop"><b>📸 Photos</b><p class="hint">The recipe card, cookbook page, or the finished dish. Add as many as you like. The first one is the cover.</p><div class="row"><button type="button" id="cam">📷 Take a photo</button><button type="button" class="ghost" id="lib">🖼 Choose photos</button></div>' +
       '<input type="file" id="fCam" accept="image/*" capture="environment" hidden><input type="file" id="fLib" accept="image/*" multiple hidden></div><div class="thumbs" id="thumbs"></div><div class="readbox" id="readBox" hidden><button type="button" id="readGo">✨ Type it out for me</button><p class="hint" id="readMsg">Reads the writing in your photos and fills in the recipe below.</p></div>' +
       '<label for="eT">Recipe name</label><input id="eT" value="' + esc(r ? r.title : '') + '" placeholder="Grandma’s chicken and dumplings" required>' +
-      '<div class="two"><div><label for="eC">Section</label><select id="eC">' + CATS.map(c => '<option' + (r && sectionOf(r) === c || !r && c === 'Main dishes' ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div><div><label for="eF">From</label><input id="eF" value="' + esc(r ? r.from : '') + '" placeholder="Grandma, Aunt Rosa…"></div></div>' +
+      '<div class="two"><div><label for="eC">Section</label><select id="eC">' + CATS.map(c => '<option' + (r && sectionOf(r) === c || !r && c === (CATS.includes(preCat) ? preCat : 'Main dishes') ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div><div><label for="eF">From</label><input id="eF" value="' + esc(r ? r.from : '') + '" placeholder="Grandma, Aunt Rosa…"></div></div>' +
       '<div class="four"><div><label for="eSv">Serves</label><input id="eSv" value="' + esc(r ? r.servings : '') + '" placeholder="6"></div><div><label for="eP">Prep time</label><input id="eP" value="' + esc(r ? r.prep : '') + '" placeholder="15 min"></div><div><label for="eK">Cook time</label><input id="eK" value="' + esc(r ? r.cook : '') + '" placeholder="1 hr"></div><div><label for="eO">Oven</label><input id="eO" value="' + esc(r ? r.temp : '') + '" placeholder="350°F"></div></div>' +
       '<p class="hint" style="margin-top:14px">Tap <b>✨ Type it out for me</b> above and the recipe fills itself in from the photos. Check it over and fix anything it misread.</p>' +
       '<label for="eI">Ingredients (one per line)</label><textarea id="eI" rows="6" placeholder="2 cups flour&#10;1 tsp salt">' + esc(r ? r.ingredients : '') + '</textarea>' +
