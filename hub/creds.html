@@ -1,81 +1,131 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Licenses & certifications</title><link rel="stylesheet" href="style.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nurse</title><link rel="stylesheet" href="style.css">
 <style>
-:root{--teal:#3f7f7a;--teal-l:#e2efed;--amber:#c08a2c;--rose:#b5483d}
+:root{--teal:#3b6a4c;--teal-l:#e2ece3;--gold:#a7801f;--gold-l:#f5edd5}
 .card{min-height:100vh;height:auto}
 h1 small{font-size:13px;color:var(--muted);font-family:Lora,serif}
-.cr{display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px dashed var(--line);cursor:pointer}
-.cr:last-child{border-bottom:0}
-.dot{width:42px;height:42px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;line-height:1;background:var(--sl);color:var(--sc);border:2px solid var(--sc)}
+h2{font-family:Fraunces,Lora,serif;font-weight:400;font-size:20px;margin:24px 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;color:var(--teal)}h2 small{font-family:Lora,serif;font-size:12.5px;color:var(--muted)}
+.cr{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px dashed #d9d2c2}
+.dot{width:44px;height:44px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;line-height:1;background:var(--sl);color:var(--sc);border:2px solid var(--sc);cursor:pointer}
 .dot small{font-size:8.5px;letter-spacing:.04em;margin-top:2px}
-.nm{font-size:15px}.nm small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.nm{font-size:15px;cursor:pointer}.nm small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.steps button{font:inherit;font-size:12px;border:1px dashed #cfc6b2;border-radius:12px;padding:2px 9px;background:#fffdf8;color:var(--ink);cursor:pointer}.steps button.on{border:1px solid var(--teal);background:var(--teal-l);color:var(--teal)}
+.rt{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .st{font-size:12px;border-radius:10px;padding:3px 9px;background:var(--sl);color:var(--sc);white-space:nowrap}
-.add{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}.add input{font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;flex:1;min-width:120px;color:var(--ink)}.add button{background:var(--teal);color:#fff;border-radius:8px;font-size:13.5px;padding:0 14px}
-h2{font-family:Fraunces,Lora,serif;font-weight:400;font-size:19px;margin:22px 0 6px;display:flex;justify-content:space-between;align-items:baseline}h2 small{font-family:Lora,serif;font-size:12.5px;color:var(--muted)}
+.did{font:inherit;font-size:12px;border-radius:9px;padding:4px 10px;background:var(--teal);color:#fff;border:0;cursor:pointer;white-space:nowrap}
+.add{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}.add input,.add select{font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;flex:1;min-width:110px;color:var(--ink)}.add button{background:var(--teal);color:#fff;border-radius:8px;font-size:13.5px;padding:0 14px}
+.sh{display:grid;grid-template-columns:56px 1fr auto 22px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.cal{text-align:center;border-radius:10px;background:var(--gold-l);color:var(--gold);padding:5px 0;line-height:1}.cal small{display:block;font-size:10px;letter-spacing:.06em}.cal b{font-family:Fraunces,serif;font-weight:400;font-size:22px}
+.sh .t{font-size:14.5px}.sh .t small{display:block;font-size:12px;color:var(--muted)}.sh .w{font-size:12px;color:var(--muted);white-space:nowrap}.x{font-size:12px;color:var(--muted);padding:0}
 .bar{height:9px;background:var(--teal-l)}.bar i{background:var(--teal)}
-.ce{display:grid;grid-template-columns:70px 1fr auto 20px;gap:8px;font-size:13.5px;padding:5px 0;border-bottom:1px solid var(--line);align-items:baseline}.ce small{color:var(--muted)}.ce .x{font-size:12px;color:var(--muted);padding:0}
+.ce{display:grid;grid-template-columns:70px 1fr auto 20px;gap:8px;font-size:13.5px;padding:5px 0;border-bottom:1px solid var(--line);align-items:baseline}.ce small{color:var(--muted)}
 .goal{font-size:13px;color:var(--muted)}.goal input{width:56px;font:inherit;font-size:13px;padding:2px 5px;border:1px solid var(--line);border-radius:6px;background:#fff}
-.sheet{position:fixed;inset:0;background:#26342866;display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:5}.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:380px;box-shadow:0 10px 30px #0003}
-.pane label{display:block;font-size:12px;color:var(--muted);margin-top:9px}.pane input{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
+.sheet{position:fixed;inset:0;background:#26342866;display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:5;overflow:auto}.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:400px;box-shadow:0 10px 30px #0003}
+.pane label{display:block;font-size:12px;color:var(--muted);margin-top:9px}.pane input,.pane select,.pane textarea{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
 .acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}.pane .btn{background:var(--teal)}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
 </style>
-<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body data-q style="--q:#3b6a4c"><div class="card">
-<h1>Licenses &amp; certifications <small id="sum"></small></h1>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body data-q style="--q:#5d8a6a"><div class="card">
+<h1>🩺 Nurse <small id="sum"></small></h1>
 <div id="body" class="muted small">Loading…</div>
 </div><script>
-// Nursing license, life-support cards and continuing-education hours, with how long until each one is due.
-const START = ['RN license (Arkansas)', 'BLS', 'ACLS', 'NRP'];
-let SB, S = null, editId = null;
+// Conway shifts (saved as Planner events, so they're on every calendar), licenses and requirements with
+// due dates — repeating ones like RQI roll forward when you tap Done — and continuing-education hours.
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6), T = () => isoDay(new Date());
 const dt = d => new Date(d + 'T12:00'), daysTo = d => Math.round((dt(d) - dt(T())) / 864e5);
+const addMonths = (d, n) => { const x = dt(d), day = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); x.setDate(Math.min(day, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate())); return isoDay(x); };
+const ampm = s => { if (!s) return ''; const [h, m] = s.split(':').map(Number); return ((h % 12) || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + (h < 12 ? 'a' : 'p'); };
+const START = () => [
+  { id: uid(), name: 'RN license (Arkansas)', expires: '' },
+  { id: uid(), name: 'RQI (CPR)', every: 3, last: '2026-10-29', expires: '2027-01-29' },
+  { id: uid(), name: 'NRP', expires: '', steps: [{ t: 'Online exam (Part 1)' }, { t: 'Hands-on class (Part 2)' }, { t: 'Card sent to Conway' }] },
+  { id: uid(), name: 'CRP', expires: '2026-12-30' },
+  { id: uid(), name: 'QC controls', expires: '2026-12-01', notes: 'due by December' },
+  { id: uid(), name: 'ACLS', expires: '' }
+];
+let SB, S = null, SH = [], editId = null, shType = 'night';
 function status(c) {
   if (!c.expires) return { t: 'add the date', c: '#8a8f86', l: '#f1efe9', n: '?', u: '' };
   const n = daysTo(c.expires);
-  if (n < 0) return { t: 'expired', c: '#b5483d', l: '#f8e1dd', n: '!', u: '' };
-  const big = n > 99 ? Math.round(n / 30.4) : n, u = n > 99 ? 'MOS' : 'DAYS';
-  return n <= 30 ? { t: 'renew now', c: '#b5483d', l: '#f8e1dd', n: big, u } : n <= 90 ? { t: 'renew soon', c: '#c08a2c', l: '#f7ecd8', n: big, u } : { t: 'good', c: '#3f7f7a', l: '#e2efed', n: big, u };
+  if (n < 0) return { t: 'overdue', c: '#a5543b', l: '#f6e2dc', n: '!', u: '' };
+  const big = n > 99 ? Math.round(n / 30.4) : n, u = n > 99 ? 'MOS' : n === 1 ? 'DAY' : 'DAYS';
+  return n <= 30 ? { t: 'due soon', c: '#a5543b', l: '#f6e2dc', n: big, u } : n <= 60 ? { t: 'coming up', c: '#a7801f', l: '#f5edd5', n: big, u } : { t: 'good', c: '#3b6a4c', l: '#e2ece3', n: big, u };
 }
 const save = () => hubSet(SB, 'credentials', S);
 function draw() {
   if (document.querySelector('.sheet')) return;
   const el = document.getElementById('body'); el.className = '';
   const L = S.list.slice().sort((a, b) => (a.expires || '9999').localeCompare(b.expires || '9999'));
-  const soon = L.filter(c => c.expires && daysTo(c.expires) <= 90).length;
-  document.getElementById('sum').textContent = soon ? soon + ' due within 90 days' : 'all current';
+  const soon = L.filter(c => c.expires && daysTo(c.expires) <= 60).length, t = T(), mo = t.slice(0, 7);
+  const up = SH.filter(s => s.date >= t), thisMo = SH.filter(s => s.date.slice(0, 7) === mo).length;
+  document.getElementById('sum').textContent = (up[0] ? 'next shift ' + dt(up[0].date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' : '') + (soon ? soon + ' due within 60 days' : 'everything current');
   const ceIn = (S.ce || []).filter(x => !S.ceFrom || x.date >= S.ceFrom), hrs = ceIn.reduce((a, x) => a + Number(x.hours || 0), 0), goal = Number(S.ceGoal) || 0;
-  el.innerHTML = L.map(c => { const s = status(c);
-    return '<div class="cr" data-ed="' + c.id + '" style="--sc:' + s.c + ';--sl:' + s.l + '"><div class="dot">' + s.n + (s.u ? '<small>' + s.u + '</small>' : '') + '</div><div class="nm">' + esc(c.name) +
-      '<small>' + (c.expires ? 'Expires ' + dt(c.expires).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Tap to add when it expires') + (c.notes ? ' — ' + esc(c.notes) : '') + '</small></div><span class="st">' + s.t + '</span></div>'; }).join('') +
-    '<form class="add" id="addF"><input id="addN" placeholder="Add a license or card (PALS, CPN, Inpatient OB…)"><input id="addD" type="date" style="flex:0 0 150px"><button>Add</button></form>' +
-    '<h2>Continuing education <small>' + hrs + (goal ? ' of ' + goal : '') + ' contact hours</small></h2>' +
+  el.innerHTML =
+    '<h2 style="margin-top:4px">🏥 My Conway shifts <small>' + thisMo + ' this month</small></h2>' +
+    (up.length ? up.slice(0, 8).map(s => { const d = dt(s.date), n = daysTo(s.date);
+      return '<div class="sh"><div class="cal"><small>' + d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() + '</small><b>' + d.getDate() + '</b></div><div class="t">' + d.toLocaleDateString('en-US', { weekday: 'long' }) + '<small>' + ampm(s.start_time) + '–' + ampm(s.end_time) + (s.end_date && s.end_date !== s.date ? ' (overnight)' : '') + ' · ' + esc(s.title.replace(/^🏥\s*/, '')) + '</small></div><span class="w">' + (n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days') + '</span><button class="x" data-shx="' + s.id + '" title="Remove shift">✕</button></div>'; }).join('')
+      : '<p class="muted small">No shifts on the calendar yet — add your next one below.</p>') +
+    '<form class="add" id="shF"><input id="shD" type="date" value="' + t + '" style="flex:0 0 150px"><select id="shT" style="flex:0 0 150px"><option value="night"' + (shType === 'night' ? ' selected' : '') + '>Night 7p–7a</option><option value="day"' + (shType === 'day' ? ' selected' : '') + '>Day 7a–7p</option><option value="custom">Other hours…</option></select>' +
+      '<input id="shS" type="time" value="19:00" style="flex:0 0 110px;display:none"><input id="shE" type="time" value="07:00" style="flex:0 0 110px;display:none"><button>Add shift</button></form>' +
+    '<p class="hint">Shifts go on your Planner calendar (and Google Calendar), and Plan my day keeps that time free.</p>' +
+    '<h2>📋 Licenses &amp; requirements <small>tap one to edit</small></h2>' +
+    L.map(c => { const s = status(c), steps = c.steps || [];
+      return '<div class="cr" style="--sc:' + s.c + ';--sl:' + s.l + '"><div class="dot" data-ed="' + c.id + '">' + s.n + (s.u ? '<small>' + s.u + '</small>' : '') + '</div><div class="nm" data-ed="' + c.id + '">' + esc(c.name) +
+        '<small>' + (c.expires ? 'Due ' + dt(c.expires).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Tap to add the due date') + (c.every ? ' · every ' + c.every + ' months' + (c.last ? ', last done ' + dt(c.last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '') : '') + (c.notes ? ' — ' + esc(c.notes) : '') + '</small>' +
+        (steps.length ? '<div class="steps">' + steps.map((x, i) => '<button data-step="' + c.id + '" data-i="' + i + '" class="' + (x.done ? 'on' : '') + '">' + (x.done ? '✓ ' : '') + esc(x.t) + '</button>').join('') + '</div>' : '') + '</div>' +
+        '<div class="rt"><span class="st">' + s.t + '</span>' + (c.every ? '<button class="did" data-did="' + c.id + '">✓ Done</button>' : '') + '</div></div>'; }).join('') +
+    '<form class="add" id="addF"><input id="addN" placeholder="Add a requirement (PALS, fetal monitoring, TB test…)"><input id="addD" type="date" style="flex:0 0 150px"><button>Add</button></form>' +
+    '<h2>📚 Continuing education <small>' + hrs + (goal ? ' of ' + goal : '') + ' contact hours</small></h2>' +
     (goal ? '<div class="bar"><i style="width:' + Math.min(100, hrs / goal * 100) + '%"></i></div>' : '') +
     '<p class="goal">Goal <input id="ceGoal" type="number" min="0" value="' + (S.ceGoal || '') + '" placeholder="15"> hours, counting from <input id="ceFrom" type="date" value="' + (S.ceFrom || '') + '" style="width:140px"></p>' +
     (S.ce || []).slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => '<div class="ce"><small>' + dt(x.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) + '</small><span>' + esc(x.title) + '</span><span>' + x.hours + ' hr</span><button class="x" data-cx="' + x.id + '" title="Remove">✕</button></div>').join('') +
-    '<form class="add" id="ceF"><input id="ceT" placeholder="Course or conference"><input id="ceH" type="number" step="0.25" min="0" placeholder="hours" style="flex:0 0 80px"><input id="ceD" type="date" value="' + T() + '" style="flex:0 0 150px"><button>Log hours</button></form>';
+    '<form class="add" id="ceF"><input id="ceT" placeholder="Course or conference"><input id="ceH" type="number" step="0.25" min="0" placeholder="hours" style="flex:0 0 80px"><input id="ceD" type="date" value="' + t + '" style="flex:0 0 150px"><button>Log hours</button></form>';
 }
 function sheet(c) {
   editId = c.id;
   document.body.insertAdjacentHTML('beforeend', '<div class="sheet"><form class="pane" id="edF"><h2 style="margin-top:0">' + esc(c.name) + '</h2><label>Name<input id="eN" value="' + esc(c.name) + '"></label>' +
-    '<label>Expires<input id="eD" type="date" value="' + (c.expires || '') + '"></label><label>Notes (number, where to renew…)<input id="eO" value="' + esc(c.notes || '') + '"></label>' +
+    '<label>Due / expires<input id="eD" type="date" value="' + (c.expires || '') + '"></label>' +
+    '<label>Repeats<select id="eR"><option value="0">Doesn’t repeat — I’ll update the date</option>' + [1, 2, 3, 6, 12, 24].map(n => '<option value="' + n + '"' + (c.every === n ? ' selected' : '') + '>Every ' + (n === 1 ? 'month' : n + ' months') + '</option>').join('') + '</select></label>' +
+    '<label>Steps to finish it (one per line, optional)<textarea id="eS" rows="3">' + esc((c.steps || []).map(x => x.t).join('\n')) + '</textarea></label>' +
+    '<label>Notes (number, where to renew…)<input id="eO" value="' + esc(c.notes || '') + '"></label>' +
     '<div class="acts"><button type="button" class="ghost del" id="eDel">Delete</button><span><button type="button" class="ghost" id="eX">Cancel</button> <button class="btn">Save</button></span></div></form></div>');
 }
 const closeSheet = () => { const s = document.querySelector('.sheet'); if (s) s.remove(); editId = null; draw(); };
+async function loadShifts() {
+  const { data } = await SB.from('planner_items').select('id,title,date,end_date,start_time,end_time').eq('kind', 'event').ilike('title', '%conway%').gte('date', isoDay(new Date(Date.now() - 62 * 864e5))).order('date');
+  SH = data || [];
+}
 document.addEventListener('submit', async e => {
   e.preventDefault(); const id = e.target.id;
+  if (id === 'shF') {
+    const d = document.getElementById('shD').value, ty = document.getElementById('shT').value; if (!d) return;
+    const [s, en] = ty === 'night' ? ['19:00', '07:00'] : ty === 'day' ? ['07:00', '19:00'] : [document.getElementById('shS').value, document.getElementById('shE').value];
+    const over = en <= s, row = { id: uid(), kind: 'event', title: '🏥 Conway — L&D shift', date: d, end_date: over ? isoDay(new Date(dt(d).getTime() + 864e5)) : d, start_time: s, end_time: en, all_day: false, color: '#5d8a6a', location: 'Conway', updated_at: new Date().toISOString() };
+    const { error } = await SB.from('planner_items').insert(row); if (error) return alert('Couldn’t add the shift: ' + error.message);
+    SH.push(row); SH.sort((a, b) => a.date.localeCompare(b.date)); shType = ty; draw(); return;
+  }
   if (id === 'addF') { const n = document.getElementById('addN').value.trim(); if (!n) return; S.list.push({ id: uid(), name: n, expires: document.getElementById('addD').value }); draw(); await save(); }
   if (id === 'ceF') { const t = document.getElementById('ceT').value.trim(), h = Number(document.getElementById('ceH').value); if (!t || !h) return; (S.ce = S.ce || []).push({ id: uid(), title: t, hours: h, date: document.getElementById('ceD').value || T() }); draw(); await save(); }
-  if (id === 'edF') { const c = S.list.find(x => x.id === editId); c.name = document.getElementById('eN').value.trim() || c.name; c.expires = document.getElementById('eD').value; c.notes = document.getElementById('eO').value.trim(); closeSheet(); await save(); }
+  if (id === 'edF') { const c = S.list.find(x => x.id === editId); c.name = document.getElementById('eN').value.trim() || c.name; c.expires = document.getElementById('eD').value; c.every = Number(document.getElementById('eR').value) || 0; if (!c.every) delete c.every;
+    const old = c.steps || []; const st = document.getElementById('eS').value.split('\n').map(x => x.trim()).filter(Boolean).map(t => ({ t, done: (old.find(o => o.t === t) || {}).done || false })); if (st.length) c.steps = st; else delete c.steps;
+    c.notes = document.getElementById('eO').value.trim(); closeSheet(); await save(); }
 });
-document.addEventListener('change', async e => { if (e.target.id === 'ceGoal' || e.target.id === 'ceFrom') { S.ceGoal = Number(document.getElementById('ceGoal').value) || 0; S.ceFrom = document.getElementById('ceFrom').value; draw(); await save(); } });
+document.addEventListener('change', async e => {
+  if (e.target.id === 'shT') { const c = e.target.value === 'custom'; document.getElementById('shS').style.display = document.getElementById('shE').style.display = c ? '' : 'none'; return; }
+  if (e.target.id === 'ceGoal' || e.target.id === 'ceFrom') { S.ceGoal = Number(document.getElementById('ceGoal').value) || 0; S.ceFrom = document.getElementById('ceFrom').value; draw(); await save(); }
+});
 document.addEventListener('click', async e => {
   if (e.target.id === 'eX' || e.target.classList.contains('sheet')) return closeSheet();
   if (e.target.id === 'eDel') { const c = S.list.find(x => x.id === editId); if (!(await ask('Delete ' + c.name + '?'))) return; S.list = S.list.filter(x => x !== c); closeSheet(); await save(); return; }
+  const sx = e.target.closest('[data-shx]'); if (sx) { if (!(await ask('Remove this shift from your calendar?'))) return; const { error } = await SB.from('planner_items').delete().eq('id', sx.dataset.shx); if (error) return alert(error.message); SH = SH.filter(s => s.id !== sx.dataset.shx); draw(); return; }
+  const dn = e.target.closest('[data-did]'); if (dn) { const c = S.list.find(x => x.id === dn.dataset.did); c.last = T(); c.expires = addMonths(c.last, c.every); (c.steps || []).forEach(x => x.done = false); draw(); await save(); return; }
+  const sp = e.target.closest('[data-step]'); if (sp) { const c = S.list.find(x => x.id === sp.dataset.step), x = c.steps[+sp.dataset.i]; x.done = !x.done; draw(); await save(); return; }
   const cx = e.target.closest('[data-cx]'); if (cx) { S.ce = S.ce.filter(x => x.id !== cx.dataset.cx); draw(); await save(); return; }
   const r = e.target.closest('[data-ed]'); if (r) sheet(S.list.find(x => x.id === r.dataset.ed));
 });
 hubData(async sb => {
   SB = sb; if (document.querySelector('.sheet')) return;
-  const d = await hubGet(sb, 'credentials');
-  S = d && d.list ? d : { list: START.map(name => ({ id: uid(), name, expires: '' })), ce: [], ceGoal: 0, ceFrom: '' };
+  const [d] = await Promise.all([hubGet(sb, 'credentials'), loadShifts()]);
+  S = d && d.list ? d : { list: START(), ce: [], ceGoal: 0, ceFrom: '' };
   if (!(d && d.list)) save();
   draw();
 }, 30);

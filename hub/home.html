@@ -62,13 +62,14 @@ const L = (main, sub) => '<p class="ln">' + main + (sub ? '<small>' + sub + '</s
 hubData(async sb => {
   const safe = p => p.then(r => r, () => ({}));
   const in60 = isoDay(new Date(Date.now() + 60 * 864e5));
-  const [meals, bd, clean, cd, creds, social, booth, ev, st] = await Promise.all([
+  const [meals, bd, clean, cd, creds, social, booth, ev, st, shift] = await Promise.all([
     safe(sb.from('planner_items').select('title,list').eq('kind', 'meal').eq('date', T)),
     safe(sb.from('family_birthdays').select('name,md')),
     hubGet(sb, 'cleaning').catch(() => ({})), hubGet(sb, 'countdown').catch(() => ({})), hubGet(sb, 'credentials').catch(() => ({})), hubGet(sb, 'social').catch(() => ({})),
     safe(sb.from('booth_data').select('data->hubSummary').limit(1)),
     safe(sb.from('vol_events').select('id,name,date,start_time').gte('date', T).lte('date', in60).order('date').limit(3)),
-    safe(sb.from('planner_settings').select('data').maybeSingle())
+    safe(sb.from('planner_settings').select('data').maybeSingle()),
+    safe(sb.from('planner_items').select('date,start_time,end_time').eq('kind', 'event').ilike('title', '%conway%').gte('date', T).order('date').limit(1))
   ]);
   // Mom
   const dinner = (meals.data || []).find(m => m.list === 'Dinner');
@@ -82,8 +83,9 @@ hubData(async sb => {
   // Nurse
   const cl = (creds.list || []).filter(c => c.expires).sort((a, b) => a.expires.localeCompare(b.expires)), missing = (creds.list || []).filter(c => !c.expires).length;
   const ceHrs = (creds.ce || []).filter(x => !creds.ceFrom || x.date >= creds.ceFrom).reduce((a, x) => a + Number(x.hours || 0), 0);
-  const nurse = (cl[0] ? L((daysTo(cl[0].expires) <= 90 ? '⚠️ ' : '✅ ') + esc(cl[0].name) + ' renews ' + (daysTo(cl[0].expires) < 0 ? 'now — expired' : dt(cl[0].expires).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))) : '') +
-    (missing ? L('📝 Add ' + missing + ' expiration date' + (missing === 1 ? '' : 's'), 'license, BLS, ACLS, NRP') : '') + L('📚 ' + ceHrs + (creds.ceGoal ? ' of ' + creds.ceGoal : '') + ' CE hours logged');
+  const sh = (shift.data || [])[0];
+  const nurse = (sh ? L('🏥 Conway shift ' + when(daysTo(sh.date)), dt(sh.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ', ' + ampm(sh.start_time) + '–' + ampm(sh.end_time)) : L('🏥 No Conway shifts scheduled', 'add them on the nurse page')) + (cl[0] ? L((daysTo(cl[0].expires) <= 90 ? '⚠️ ' : '✅ ') + esc(cl[0].name) + ' renews ' + (daysTo(cl[0].expires) < 0 ? 'now — expired' : dt(cl[0].expires).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))) : '') +
+    (missing ? L('📝 Add ' + missing + ' expiration date' + (missing === 1 ? '' : 's'), 'on the nurse page') : '') + L('📚 ' + ceHrs + (creds.ceGoal ? ' of ' + creds.ceGoal : '') + ' CE hours logged');
   // Small business
   const s = booth.data && booth.data[0] && booth.data[0].hubSummary, vids = (social.videos || []);
   const toRec = vids.filter(v => v.stage === 'idea').length, nextVid = vids.filter(v => v.stage !== 'posted' && v.date && v.date >= T).sort((a, b) => a.date.localeCompare(b.date))[0];
