@@ -11,7 +11,8 @@
 .sheet{position:fixed;inset:0;background:#26342855;display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:5;overflow:auto}
 .pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:360px;box-shadow:0 10px 30px #0002}
 .pane label{display:block;font-size:12px;color:var(--muted);margin-top:9px}.pane input,.pane select{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.del{color:#a5543b}</style>
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.del{color:#a5543b}.plus{font-size:13px;color:var(--sage);padding:0 4px}.todo{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0}.chip{font-size:12px;border:1px dashed var(--line);border-radius:14px;padding:3px 10px;color:var(--muted)}.chip:hover{border-color:var(--sage);color:var(--ink)}
+.prow{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.mv{font-size:13px;color:var(--muted);padding:0 6px}</style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
 <h1>🎄 Christmas buying <span id="lk"></span></h1>
 <div id="body" class="muted small">Loading…</div>
@@ -19,7 +20,8 @@
 // The list hides behind a passcode so little eyes can't peek. (It's a privacy screen, not a bank vault:
 // the list itself is only readable when signed in to your account.)
 const HASH = '7a425212a80bc753e4e3b8b83572c9d948b009bf32accf65aa777292996f277d';
-const WHO = ['Cece', 'Eli', 'Salvador', 'Stocking stuffers', 'Teachers', 'Extended family', 'Friends', 'Other'];
+const PEOPLE = ['Salvador', 'CeCe', 'Eli', 'Eaddie', 'Kendal', 'Sydney', 'Andrew', 'Emerson', 'Tyler', 'Perry', 'Brenda', 'AJ', 'Jennifer', 'David', 'Josh', 'Ethan', 'Carla', 'Herbert', 'Emily', 'Abby', 'Andrea', 'Natasha’s house', 'Shelly Daily', 'Faculty gift', 'Salvador’s co-workers gift'];
+let WHO = PEOPLE.slice();
 const STAT = ['Idea', 'Ordered', 'Bought', 'Wrapped'], LABEL = { Idea: 'Idea', Ordered: 'Ordered', Bought: 'Purchased ✓', Wrapped: 'Wrapped 🎀' };
 let SB, st = { items: [] }, open = false, idle;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -45,17 +47,33 @@ function draw() {
   const days = Math.max(0, Math.ceil((new Date(new Date().getFullYear(), 11, 25) - new Date()) / 864e5));
   const spent = bought.reduce((t, x) => t + (+x.price || 0), 0);
   el.innerHTML = '<div class="sum"><span><b>' + money(spent) + '</b> spent</span><span><b>' + money(total - spent) + '</b> still to buy</span><span><b>' + bought.length + '/' + items.length + '</b> purchased</span><span><b>' + items.filter(x => x.status === 'Wrapped').length + '</b> wrapped</span><span><b>' + days + '</b> days to Christmas</span></div>' +
-    WHO.filter(w => items.some(x => x.who === w)).map(w => { const mine = items.filter(x => x.who === w);
-      return '<div class="who"><h3><span>' + esc(w) + '</span><span>' + money(mine.reduce((t, x) => t + (+x.price || 0), 0)) + '</span></h3>' +
+    WHO.concat([...new Set(items.map(x => x.who))].filter(w => !WHO.includes(w))).filter(w => items.some(x => x.who === w)).map(w => { const mine = items.filter(x => x.who === w);
+      return '<div class="who"><h3><span>' + esc(w) + ' <button class="plus" data-addfor="' + esc(w) + '" title="Add a gift for ' + esc(w) + '">＋</button></span><span>' + money(mine.reduce((t, x) => t + (+x.price || 0), 0)) + '</span></h3>' +
         mine.sort((a, b) => STAT.indexOf(a.status) - STAT.indexOf(b.status)).map(x => '<div class="g" data-id="' + x.id + '"><span>' + esc(x.gift) + (x.where || x.hidden ? '<small>' + esc([x.where, x.hidden ? '🙈 ' + x.hidden : ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</span>' +
           '<span class="pr">' + (x.price ? money(+x.price) : '') + '</span><button class="st ' + x.status + '" data-st="' + x.id + '" title="Tap to move it along">' + LABEL[x.status] + '</button></div>').join('') + '</div>'; }).join('') +
-    (items.length ? '' : '<p class="muted small">No gifts yet. Tap ＋ Add a gift.</p>') + '<div class="bar2"><button class="btn" id="addG">＋ Add a gift</button></div>';
+    (WHO.some(w => !items.some(x => x.who === w)) ? '<div class="who"><h3><span>Nothing yet</span><span></span></h3><div class="todo">' + WHO.filter(w => !items.some(x => x.who === w)).map(w => '<button class="chip" data-addfor="' + esc(w) + '">' + esc(w) + ' ＋</button>').join('') + '</div></div>' : '') +
+    '<div class="bar2"><button class="btn" id="addG">＋ Add a gift</button><button class="ghost" id="ppl">👥 People</button></div>';
+}
+function people() {
+  const s = document.createElement('div'); s.className = 'sheet';
+  const list = () => WHO.map((w, i) => '<div class="prow"><span>' + esc(w) + '</span><span><button class="mv" data-up="' + i + '" title="Move up">↑</button><button class="mv del" data-rm="' + i + '" title="Remove">✕</button></span></div>').join('');
+  s.innerHTML = '<div class="pane"><h2 style="font-size:18px;font-weight:500;margin:0 0 8px">👥 People</h2><form id="pAdd" style="display:flex;gap:8px"><input id="pName" placeholder="Add a person or group" style="margin:0"><button class="btn">Add</button></form><div id="pList" style="margin-top:10px;max-height:50vh;overflow:auto">' + list() + '</div><div class="acts"><span></span><button class="btn" id="pDone">Done</button></div></div>';
+  document.body.appendChild(s);
+  const redraw = () => { s.querySelector('#pList').innerHTML = list(); };
+  s.querySelector('#pAdd').onsubmit = async e => { e.preventDefault(); const n = s.querySelector('#pName').value.trim(); if (!n || WHO.includes(n)) return; WHO.push(n); st.people = WHO; s.querySelector('#pName').value = ''; redraw(); await save(); };
+  s.onclick = async e => {
+    if (e.target === s || e.target.id === 'pDone') { s.remove(); draw(); return; }
+    const up = e.target.closest('[data-up]'); if (up) { const i = +up.dataset.up; if (i > 0) { [WHO[i - 1], WHO[i]] = [WHO[i], WHO[i - 1]]; st.people = WHO; redraw(); await save(); } return; }
+    const rm = e.target.closest('[data-rm]'); if (rm) { const w = WHO[+rm.dataset.rm], n = st.items.filter(x => x.who === w).length;
+      if (n && !confirm(w + ' has ' + n + ' gift' + (n > 1 ? 's' : '') + '. Remove them from the list too?')) return;
+      WHO.splice(+rm.dataset.rm, 1); st.people = WHO; st.items = st.items.filter(x => x.who !== w); redraw(); await save(); }
+  };
 }
 async function save() { await hubSet(SB, 'christmas', st); }
-function edit(x) {
-  const isNew = !x; x = x || { id: uid(), gift: '', who: 'Cece', price: '', status: 'Idea', where: '', link: '', hidden: '' };
+function edit(x, forWho) {
+  const isNew = !x; x = x || { id: uid(), gift: '', who: forWho || WHO[0], price: '', status: 'Idea', where: '', link: '', hidden: '' };
   const s = document.createElement('div'); s.className = 'sheet';
-  s.innerHTML = '<div class="pane"><label>Gift<input id="fG" value="' + esc(x.gift) + '"></label><div class="g2"><label>For<select id="fW">' + WHO.map(w => '<option' + (w === x.who ? ' selected' : '') + '>' + w + '</option>').join('') + '</select></label>' +
+  s.innerHTML = '<div class="pane"><label>Gift<input id="fG" value="' + esc(x.gift) + '"></label><div class="g2"><label>For<select id="fW">' + WHO.concat(WHO.includes(x.who) ? [] : [x.who]).map(w => '<option' + (w === x.who ? ' selected' : '') + '>' + esc(w) + '</option>').join('') + '</select></label>' +
     '<label>Price (what you paid)<input id="fP" inputmode="decimal" value="' + esc(x.price) + '" placeholder="0.00"></label></div><div class="g2"><label>Status<select id="fS">' + STAT.map(w => '<option value="' + w + '"' + (w === x.status ? ' selected' : '') + '>' + LABEL[w] + '</option>').join('') + '</select></label>' +
     '<label>Where<input id="fWh" value="' + esc(x.where) + '" placeholder="Amazon, Target…"></label></div><label>Link<input id="fL" value="' + esc(x.link) + '" placeholder="https://"></label><label>Hidden at<input id="fH" value="' + esc(x.hidden) + '" placeholder="Top of the closet"></label>' +
     (x.link && !isNew ? '<p style="margin-top:8px"><a href="' + esc(x.link) + '" target="_blank" class="small">Open link ↗</a></p>' : '') +
@@ -74,8 +92,10 @@ document.addEventListener('click', async e => {
   if (open) poke();
   if (e.target.id === 'lockBtn') return lock();
   if (e.target.id === 'addG') return edit();
+  const af = e.target.closest('[data-addfor]'); if (af) return edit(null, af.dataset.addfor);
+  if (e.target.id === 'ppl') return people();
   const b = e.target.closest('[data-st]'); if (b) { const x = st.items.find(y => y.id === b.dataset.st); x.status = STAT[(STAT.indexOf(x.status) + 1) % STAT.length]; draw(); return save(); }
   const g = e.target.closest('.g'); if (g) edit(st.items.find(y => y.id === g.dataset.id));
 });
-hubData(async sb => { SB = sb; if (document.querySelector('.sheet')) return; const d = await hubGet(sb, 'christmas'); st = { items: d.items || [] }; draw(); });
+hubData(async sb => { SB = sb; if (document.querySelector('.sheet')) return; const d = await hubGet(sb, 'christmas'); st = { items: (d.items || []).map(x => x.who === 'Cece' ? { ...x, who: 'CeCe' } : x), people: d.people || PEOPLE.slice() }; WHO = st.people; draw(); });
 </script></body></html>
