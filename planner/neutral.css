@@ -599,3 +599,9 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 /* To-dos checked off right on the calendar */
 .hev.done, .pill.done { text-decoration: line-through; opacity: .6; }
 .pev[data-item], .hev[data-item], .pill[data-item] { cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Embedded on the Notion hub (?embed=1): just the page, full width, no app bars */
+.embed header.top, .embed nav.tabs, .embed .fab { display: none !important; }
+.embed body { padding: 0 !important; background: #f6f4ee; }
+.embed main { max-width: none !important; padding: 10px 14px 16px !important; }
+.embed .toast { bottom: 16px; }
