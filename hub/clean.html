@@ -1,0 +1,140 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cleaning & organizing</title><link rel="stylesheet" href="style.css">
+<style>
+:root{--pink:#c97f9b;--pink-l:#f6e4ec;--due:#e8995a;--late:#d9675f;--ok:#7fb069}
+.card{min-height:100vh;height:auto}html.mini .card{min-height:0}html.mini .add{grid-template-columns:1fr 1fr auto}html.mini .add input{grid-column:1/-1}
+h1 a{font-size:13px;color:var(--muted)}
+.add{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;margin:4px 0 10px}.add input,.add select{font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-width:0}
+.add button{background:var(--pink);color:#fff;border-radius:8px;font-size:14px;padding:0 14px}
+.sum{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 6px}.sum span{font-size:12px;border-radius:12px;padding:3px 10px;background:var(--sage-l)}.sum .l{background:#f8dcd8}.sum .d{background:#f7e3cf}
+.room{margin-top:12px}.rh{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--pink);margin-bottom:2px;display:flex;justify-content:space-between}
+.c{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.c:last-child{border-bottom:0}
+.ck{width:26px;height:26px;border-radius:50%;border:2px solid var(--st,var(--line));background:#fff;font-size:13px;color:#fff;padding:0;display:flex;align-items:center;justify-content:center}.ck:hover{background:var(--pink-l)}
+.c.done .ck{background:var(--ok);border-color:var(--ok)}.c.done .nm{color:var(--muted)}
+.nm small{display:block;font-size:11.5px;color:var(--muted)}.nm small b{font-weight:500;color:var(--st)}
+.st{font-size:11px;border-radius:10px;padding:2px 8px;white-space:nowrap;background:color-mix(in srgb,var(--st) 18%,#fff);color:color-mix(in srgb,var(--st) 70%,#000)}
+.ed{font-size:12px;color:var(--muted);border:0;background:none;padding:0 2px}
+.tabs{display:flex;gap:6px;margin:4px 0 6px;flex-wrap:wrap}.tabs button{font-size:13px;border:1px solid var(--line);border-radius:14px;padding:4px 12px}.tabs button.on{background:var(--pink-l);border-color:var(--pink)}
+.hist .row small{color:var(--muted)}.more{display:inline-block;margin-top:8px;font-size:13px;color:var(--pink)}
+.sheet{position:fixed;inset:0;background:#26342855;display:flex;align-items:flex-start;justify-content:center;padding:20px;z-index:5}.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:360px;box-shadow:0 10px 30px #0002}
+.pane label{display:block;font-size:12px;color:var(--muted);margin-top:10px}.pane input,.pane select{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
+.acts{display:flex;justify-content:space-between;margin-top:14px;gap:8px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}
+.empty{font-size:13px;color:var(--muted);padding:6px 0}
+</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="card">
+<h1><span>🧽 Cleaning &amp; organizing</span><a id="full" href="clean.html" target="_blank">open page ↗</a></h1>
+<div id="body" class="muted small">Loading…</div>
+</div><script>
+// One synced list of chores. Each chore remembers every day it was done, so you can see when it was last done and what's due.
+const MINI = new URLSearchParams(location.search).has('mini');
+if (MINI) document.documentElement.classList.add('mini'); else document.getElementById('full').style.display = 'none';
+const ROOMS = ['Kitchen', 'Bathrooms', 'Living room', 'Bedrooms', 'Laundry', 'Whole house', 'Outside', 'Organizing'];
+const OFTEN = [[1, 'Every day'], [2, 'Every other day'], [3, 'Twice a week'], [7, 'Weekly'], [14, 'Every 2 weeks'], [30, 'Monthly'], [90, 'Every 3 months'], [182, 'Twice a year'], [0, 'One time']];
+const START = [
+  ['Wipe counters & stove', 'Kitchen', 1], ['Run / unload dishwasher', 'Kitchen', 1], ['Clean out the fridge', 'Kitchen', 14], ['Mop kitchen floor', 'Kitchen', 7], ['Clean microwave', 'Kitchen', 14],
+  ['Clean toilets', 'Bathrooms', 7], ['Scrub shower & tub', 'Bathrooms', 14], ['Mirrors & sinks', 'Bathrooms', 7], ['Wash towels & bath mats', 'Bathrooms', 7],
+  ['Vacuum', 'Living room', 7], ['Dust', 'Living room', 14], ['Quick pick-up', 'Living room', 1],
+  ['Change sheets', 'Bedrooms', 14], ['Laundry', 'Laundry', 3],
+  ['Take out the trash', 'Whole house', 3], ['Light switches & door handles', 'Whole house', 30], ['Baseboards', 'Whole house', 90], ['Ceiling fans', 'Whole house', 30], ['Wash windows', 'Whole house', 182],
+  ['Pantry', 'Organizing', 0], ['Under the sinks', 'Organizing', 0], ['Junk drawer', 'Organizing', 0], ['Closet clean-out', 'Organizing', 0], ['Kids’ rooms', 'Organizing', 0]
+];
+let SB, S = null, tab = 'due', editId = null;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const T = () => isoDay(new Date()), dt = d => new Date(d + 'T12:00');
+const daysSince = d => Math.round((dt(T()) - dt(d)) / 864e5);
+const ago = d => { const n = daysSince(d); return n === 0 ? 'today' : n === 1 ? 'yesterday' : n < 14 ? n + ' days ago' : dt(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
+const last = c => (c.done || []).slice().sort().pop();
+const oftenName = n => (OFTEN.find(o => o[0] === n) || [0, 'Every ' + n + ' days'])[1];
+// Where a chore stands: done today, overdue, due, coming up, or (one-time) done for good.
+function status(c) {
+  const l = last(c);
+  if (l === T()) return { k: 'today', txt: 'done today', col: 'var(--ok)', o: 5 };
+  if (!c.every) return l ? { k: 'finished', txt: 'done ' + ago(l), col: 'var(--ok)', o: 6 } : { k: 'proj', txt: 'project', col: '#a98bc4', o: 4 };
+  if (!l) return { k: 'new', txt: 'not tracked yet', col: '#b7bcc4', o: 4.5 };
+  const left = c.every - daysSince(l);
+  if (left < 0) return { k: 'late', txt: -left + ' day' + (left === -1 ? '' : 's') + ' late', col: 'var(--late)', o: 1 };
+  if (left === 0) return { k: 'due', txt: 'due today', col: 'var(--due)', o: 2 };
+  return { k: 'ok', txt: left === 1 ? 'due tomorrow' : 'due in ' + left + ' days', col: 'var(--sage)', o: 3 + left / 1000 };
+}
+const save = () => hubSet(SB, 'cleaning', S).catch(() => { const b = document.getElementById('body'); b.insertAdjacentHTML('afterbegin', '<p class="small" style="color:#a5543b">Couldn’t save — check your signal.</p>'); });
+function row(c) {
+  const s = status(c), l = last(c);
+  return '<div class="c' + (s.k === 'today' || s.k === 'finished' ? ' done' : '') + '" style="--st:' + s.col + '"><button class="ck" data-done="' + c.id + '" title="' + (s.k === 'today' ? 'Undo today' : 'Mark done today') + '">' + (s.k === 'today' || s.k === 'finished' ? '✓' : '') + '</button>' +
+    '<span class="nm">' + esc(c.name) + '<small>' + (MINI ? esc(c.room) + ' · ' : '') + oftenName(c.every) + (l && s.k !== 'today' ? ' · last done <b>' + ago(l) + '</b>' : '') + ((c.done || []).length > 1 ? ' · done ' + c.done.length + '×' : '') + '</small></span>' +
+    '<span><span class="st">' + s.txt + '</span>' + (MINI ? '' : '<button class="ed" data-ed="' + c.id + '" title="Edit">✎</button>') + '</span></div>';
+}
+function addForm() {
+  return '<form class="add" id="addF"><input id="addN" placeholder="Add a chore or project…" autocomplete="off"><select id="addR">' + ROOMS.map(r => '<option>' + r + '</option>').join('') + '</select>' +
+    '<select id="addE">' + OFTEN.map(([n, l]) => '<option value="' + n + '"' + (n === 7 ? ' selected' : '') + '>' + l + '</option>').join('') + '</select><button>Add</button></form>';
+}
+function draw() {
+  if (document.querySelector('.sheet') || document.activeElement && document.activeElement.id === 'addN' && document.activeElement.value) return;
+  const el = document.getElementById('body'); el.className = '';
+  const L = S.list.map(c => ({ c, s: status(c) }));
+  const late = L.filter(x => x.s.k === 'late'), due = L.filter(x => x.s.k === 'due'), today = L.filter(x => x.s.k === 'today');
+  const sum = '<div class="sum">' + (late.length ? '<span class="l">⚠️ ' + late.length + ' overdue</span>' : '') + (due.length ? '<span class="d">🧽 ' + due.length + ' due</span>' : '') + '<span>✅ ' + today.length + ' done today</span></div>';
+  const dueList = L.filter(x => ['late', 'due', 'today'].includes(x.s.k)).sort((a, b) => a.s.o - b.s.o);
+  if (MINI) {
+    const fresh = L.filter(x => x.s.k === 'new'), show = dueList.concat(dueList.length < 4 ? fresh.slice(0, 4 - dueList.length) : []).slice(0, 7);
+    el.innerHTML = addForm() + sum + (show.length ? show.map(x => row(x.c)).join('') : '<p class="empty">All caught up — nothing due. 🌿</p>') + (fresh.length && !S.list.some(c => (c.done || []).length) ? '<p class="empty">Tap ◯ when you do a chore — it starts tracking from there.</p>' : '') +
+      (dueList.length > 7 ? '<a class="more" href="clean.html" target="_blank">+ ' + (dueList.length - 7) + ' more on the full page ↗</a>' : '');
+    return;
+  }
+  const tabs = '<div class="tabs">' + [['due', 'Due now'], ['rooms', 'By room'], ['hist', 'Done log']].map(([k, l]) => '<button data-tab="' + k + '" class="' + (tab === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
+  let main = '';
+  if (tab === 'due') {
+    const soon = L.filter(x => x.s.k === 'ok' && x.s.o < 3.008).sort((a, b) => a.s.o - b.s.o);
+    main = (dueList.length ? dueList.map(x => row(x.c)).join('') : '<p class="empty">All caught up — nothing due. 🌿</p>') +
+      (soon.length ? '<div class="room"><div class="rh">Coming up this week</div>' + soon.map(x => row(x.c)).join('') + '</div>' : '') +
+      (L.some(x => x.s.k === 'proj') ? '<div class="room"><div class="rh">Organizing projects</div>' + L.filter(x => x.s.k === 'proj').map(x => row(x.c)).join('') + '</div>' : '') +
+      (L.some(x => x.s.k === 'new') ? '<div class="room"><div class="rh"><span>Not tracked yet</span><span style="text-transform:none;letter-spacing:0">tap ◯ the next time you do it</span></div>' + L.filter(x => x.s.k === 'new').map(x => row(x.c)).join('') + '</div>' : '');
+  } else if (tab === 'rooms') {
+    main = ROOMS.concat([...new Set(S.list.map(c => c.room))].filter(r => !ROOMS.includes(r))).map(r => { const l = L.filter(x => x.c.room === r).sort((a, b) => a.s.o - b.s.o); if (!l.length) return '';
+      return '<div class="room"><div class="rh"><span>' + esc(r) + '</span><span>' + l.filter(x => ['late', 'due'].includes(x.s.k)).length + ' due</span></div>' + l.map(x => row(x.c)).join('') + '</div>'; }).join('');
+  } else {
+    const H = []; S.list.forEach(c => (c.done || []).forEach(d => H.push({ d, c })));
+    H.sort((a, b) => b.d.localeCompare(a.d));
+    const wk = H.filter(h => daysSince(h.d) < 7).length, mo = H.filter(h => h.d.slice(0, 7) === T().slice(0, 7)).length;
+    let lastDay = '';
+    main = '<div class="sum"><span>This week: ' + wk + '</span><span>This month: ' + mo + '</span></div><div class="hist">' + (H.length ? H.slice(0, 80).map(h => { const hd = h.d !== lastDay ? '<div class="rh" style="margin-top:10px">' + dt(h.d).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + '</div>' : ''; lastDay = h.d;
+      return hd + '<div class="row"><span>' + esc(h.c.name) + '</span><small>' + esc(h.c.room) + '</small></div>'; }).join('') : '<p class="empty">Nothing checked off yet.</p>') + '</div>';
+  }
+  el.innerHTML = addForm() + sum + tabs + main;
+}
+function editSheet(c) {
+  const isNew = !c; c = c || { name: '', room: 'Kitchen', every: 7, done: [] };
+  document.body.insertAdjacentHTML('beforeend', '<div class="sheet"><form class="pane" id="edF"><h2 style="font-weight:500;font-size:18px">' + (isNew ? 'New chore' : 'Edit chore') + '</h2>' +
+    '<label>Chore<input id="eN" value="' + esc(c.name) + '"></label><label>Room<select id="eR">' + ROOMS.concat(ROOMS.includes(c.room) ? [] : [c.room]).map(r => '<option' + (r === c.room ? ' selected' : '') + '>' + esc(r) + '</option>').join('') + '</select></label>' +
+    '<label>How often<select id="eE">' + OFTEN.concat(OFTEN.some(o => o[0] === c.every) ? [] : [[c.every, 'Every ' + c.every + ' days']]).map(([n, l]) => '<option value="' + n + '"' + (n === c.every ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+    '<label>Last done (fix it if you did it earlier)<input id="eL" type="date" value="' + (last(c) || '') + '" max="' + T() + '"></label>' +
+    '<div class="acts">' + (isNew ? '<span></span>' : '<button type="button" class="ghost del" id="eDel">Delete</button>') + '<span><button type="button" class="ghost" id="eX">Cancel</button> <button class="btn">Save</button></span></div></form></div>');
+  document.getElementById('eN').focus();
+}
+async function addChore(name, room, every) {
+  S.list.push({ id: uid(), name, room, every, done: [], added: T() }); draw(); await save();
+}
+document.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (e.target.id === 'addF') { const n = document.getElementById('addN'), v = n.value.trim(); if (!v) return; const r = document.getElementById('addR').value, ev = +document.getElementById('addE').value; n.value = ''; await addChore(v, r, ev); const n2 = document.getElementById('addN'); if (n2) n2.focus(); return; }
+  if (e.target.id === 'edF') {
+    const c = S.list.find(x => x.id === editId), name = document.getElementById('eN').value.trim(); if (!c || !name) return;
+    c.name = name; c.room = document.getElementById('eR').value; c.every = +document.getElementById('eE').value;
+    const ld = document.getElementById('eL').value, l = last(c); if (ld && ld !== l) { c.done = (c.done || []).filter(d => d !== l); if (!c.done.includes(ld)) c.done.push(ld); }
+    document.querySelector('.sheet').remove(); editId = null; draw(); await save();
+  }
+});
+document.addEventListener('click', async e => {
+  const d = e.target.closest('[data-done]'); if (d) { const c = S.list.find(x => x.id === d.dataset.done), t = T(); c.done = c.done || [];
+    if (c.done.includes(t)) c.done = c.done.filter(x => x !== t); else c.done.push(t); draw(); await save(); return; }
+  const ed = e.target.closest('[data-ed]'); if (ed) { editId = ed.dataset.ed; editSheet(S.list.find(x => x.id === editId)); return; }
+  const tb = e.target.closest('[data-tab]'); if (tb) { tab = tb.dataset.tab; draw(); return; }
+  if (e.target.id === 'eX' || e.target.classList.contains('sheet')) { document.querySelector('.sheet').remove(); editId = null; draw(); return; }
+  if (e.target.id === 'eDel') { const c = S.list.find(x => x.id === editId); if (!(await ask('Delete “' + c.name + '” and its history?'))) return; S.list = S.list.filter(x => x !== c); document.querySelector('.sheet').remove(); editId = null; draw(); await save(); }
+});
+hubData(async sb => {
+  SB = sb; if (document.querySelector('.sheet')) return;
+  const d = await hubGet(sb, 'cleaning');
+  S = d && d.list ? d : { list: START.map(([name, room, every]) => ({ id: uid(), name, room, every, done: [], added: T() })) };
+  if (!(d && d.list)) save();
+  draw();
+}, 5);
+</script></body></html>
