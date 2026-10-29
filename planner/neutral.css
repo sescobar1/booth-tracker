@@ -605,3 +605,13 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .embed body { padding: 0 !important; background: #f6f4ee; }
 .embed main { max-width: none !important; padding: 10px 14px 16px !important; }
 .embed .toast { bottom: 16px; }
+/* On the hub, the month view fills the whole box: no scrolling to see the last week */
+.embed main:has(.cal) { height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
+.embed #calBody:has(> .cal) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.embed #calBody > .cal { flex: 1; min-height: 0; grid-template-rows: auto; grid-auto-rows: minmax(0, 1fr); }
+.embed #calBody > .cal .cd { min-height: 0; overflow: hidden; }
+.embed #calBody:has(> .cal) > .card, .embed main:has(.cal) .legend { display: none; }
+.embed main:has(.cal) .viewseg { margin-top: 0; margin-bottom: 4px; transform: scale(.88); }
+.embed main:has(.cal) .cal-head { margin: 0; }
+.embed main:has(.cal) .cal-head h2 { font-size: 1.35rem; margin: 0; }
+.embed main:has(.cal) .row-actions.center { margin: 2px 0 6px; }

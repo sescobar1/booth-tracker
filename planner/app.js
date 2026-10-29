@@ -590,7 +590,8 @@ function drawMonth() {
   const dayList = onDay(list, calDay);
   $('calBody').innerHTML = '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cw">' + x + '</div>').join('') + cells + '</div>' +
     '<div class="card pad"><div class="mini-head"><h2>' + esc(fmtDate(calDay, 'long')) + '</h2><button type="button" class="ghost small" data-goday="' + calDay + '">Open day</button></div>' + (dayList.length ? dayList.map(entryRow).join('') : '<p class="helper">Nothing on this day.</p>') + mealsLine(calDay) + trackButtons(calDay) + '</div>';
-  $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; viewCalendar(); });
+  // On the hub the month fills the box, so tapping a day opens that day instead of the list underneath.
+  $('calBody').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; if (document.documentElement.classList.contains('embed') && b.classList.contains('sel')) calMode = 'day'; viewCalendar(); });
   wireCal();
 }
 // A little vine of leaves, like the top of a paper planner page.
