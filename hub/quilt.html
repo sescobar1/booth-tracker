@@ -1,50 +1,42 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My year quilt</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My year in moments</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Lora:wght@400;500&display=swap">
 <style>
-/* A sampler quilt of the year: every month is a block, every day a fabric square. The fabric is chosen by
-   the day itself — its color from how you felt (journal mood), its weave from what you did. Days still
-   ahead are unsewn. Tap any square to open that day's journal. */
-:root{--ink:#263428;--muted:#6f776c;--linen:#f3f1ea;--sash:#e6e0d1;--thread:#b9ad94}
+:root{--ink:#443b32;--muted:#817669;--linen:#f2ecdf;--paper:#fffaf2;--line:#ded3c2;--sage:#78846f;--sage-soft:#e5e9df;--rose:#a96f68;--gold:#a77c48}
 *{box-sizing:border-box;margin:0}
 html,body{background:var(--linen);color:var(--ink);font-family:Lora,Georgia,serif}
-.wrap{padding:8px 6px 12px;max-width:1180px;margin:0 auto}
-header{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:12px}
-h1{font-family:Fraunces,Georgia,serif;font-weight:350;font-size:clamp(26px,3.4vw,36px);line-height:1.05}
-h1 em{font-style:italic;font-weight:300}
-.sub{font-size:14px;color:var(--muted);margin-top:5px;max-width:60ch;line-height:1.45}
-.tally{display:flex;gap:18px}.tally div{text-align:right}.tally b{display:block;font-family:Fraunces,serif;font-weight:400;font-size:26px;line-height:1}.tally span{font-size:12px;color:var(--muted)}
-.yr{display:flex;gap:4px;align-items:center;font-size:14px}.yr button{font:inherit;border:1px solid #d8d0bd;background:#fbfaf6;border-radius:14px;padding:2px 10px;cursor:pointer;color:var(--ink)}
-.quilt{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:10px;background:var(--sash);border-radius:16px;
-  background-image:repeating-linear-gradient(45deg,#0000 0 6px,#00000008 6px 7px);box-shadow:inset 0 0 0 1.5px #fff8,0 12px 26px -18px #26342866;position:relative}
-.quilt:before{content:'';position:absolute;inset:4px;border:1.5px dashed var(--thread);border-radius:13px;pointer-events:none}
-.blk{background:#fbfaf6;border-radius:8px;padding:8px 8px 9px;position:relative}
-.blk h3{font-family:Fraunces,serif;font-style:italic;font-weight:350;font-size:15px;margin:0 0 6px 2px;display:flex;justify-content:space-between}.blk h3 small{font-style:normal;font-family:Lora,serif;font-size:11px;color:var(--muted)}
-.g{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.d{aspect-ratio:1;border-radius:3px;position:relative;cursor:pointer;border:0;padding:0;background-color:var(--f,#ece7da);
-  box-shadow:inset 0 0 0 1px #0000000d}
-.d.unsewn{background:transparent;box-shadow:inset 0 0 0 1px #d9d2c2;cursor:default}
+.wrap{padding:12px 10px 16px;max-width:1220px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:8px 2px 13px;border-bottom:1px solid var(--line)}
+h1{font-family:Fraunces,Georgia,serif;font-weight:350;font-size:clamp(26px,3.4vw,36px);line-height:1.05;color:var(--ink)}
+h1 em{font-style:italic;font-weight:300;color:var(--sage)}
+.sub{font-size:14px;color:var(--muted);margin-top:6px;max-width:65ch;line-height:1.5}
+.tally{display:flex;gap:18px}.tally div{text-align:right}.tally b{display:block;font-family:Fraunces,serif;font-weight:400;font-size:26px;line-height:1;color:var(--sage)}.tally span{font-size:12px;color:var(--muted)}
+.yr{display:flex;gap:4px;align-items:center;font-size:14px}.yr button{font:inherit;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--ink)}
+.year-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:11px;background:#e9e1d3;border:1px solid #d8cebd;border-radius:14px;box-shadow:0 8px 24px #58483212}
+.month-card{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 9px 10px;box-shadow:0 3px 9px #5848320a}
+.month-card h3{font-family:Fraunces,serif;font-style:italic;font-weight:350;font-size:15px;color:var(--sage);margin:0 0 7px 2px;display:flex;justify-content:space-between}.month-card h3 small{font-style:normal;font-family:Lora,serif;font-size:11px;color:var(--muted)}
+.g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.d{aspect-ratio:1;border-radius:4px;position:relative;cursor:pointer;border:1px solid #e6dfd2;padding:0;background-color:var(--f,#ece6d9);box-shadow:inset 0 0 0 1px #ffffff48}
+.d.future{background:#f3eee4;border:1px solid #e4dac9;cursor:default}
 .d.blank{visibility:hidden}
-.d.sewn:after{content:'';position:absolute;inset:2px;border:1px dashed #ffffffa6;border-radius:2px}
-.d.plaid{background-image:repeating-linear-gradient(90deg,#ffffff40 0 2px,#0000 2px 5px),repeating-linear-gradient(0deg,#00000014 0 2px,#0000 2px 5px)}
-.d.ging{background-image:linear-gradient(90deg,#ffffff55 50%,#0000 50%),linear-gradient(#ffffff40 50%,#0000 50%);background-size:6px 6px}
-.d.strip{background-image:repeating-linear-gradient(135deg,#ffffff45 0 2px,#0000 2px 5px)}
-.d .knot{position:absolute;right:1px;bottom:0;font-size:8px;line-height:1}
-.d.today{outline:2px solid var(--ink);outline-offset:1px}
-.d:focus-visible{outline:2px solid #4f6f8f;outline-offset:1px}
-.key{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:12.5px;color:var(--muted);align-items:center}
-.key i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px;box-shadow:inset 0 0 0 1px #0000000d}
+.d.has-entry:after{content:'';position:absolute;inset:1px;border:1px solid #fff9;border-radius:3px;pointer-events:none}
+.d.plaid:before,.d.ging:before,.d.strip:before{position:absolute;z-index:1;left:1px;top:0;font:700 7px/1 Arial,sans-serif;color:#55483a;text-shadow:0 1px 1px #fff9}
+.d.plaid:before{content:'✦'}.d.ging:before{content:'♥'}.d.strip:before{content:'✎'}
+.d.today{outline:2px solid var(--rose);outline-offset:1px}
+.d:focus-visible{outline:2px solid var(--sage);outline-offset:1px}
+.key{display:flex;flex-wrap:wrap;gap:7px 14px;margin-top:12px;font-size:12px;color:var(--muted);align-items:center}
+.key i{display:inline-flex;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:5px;box-shadow:inset 0 0 0 1px #0000000d}
 .key .sep{width:1px;height:16px;background:#d9d2c2}
-.tip{position:fixed;z-index:9;max-width:260px;background:#263428;color:#f3f1ea;border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.4;pointer-events:none;opacity:0;transition:opacity .12s;box-shadow:0 8px 20px #0003}
-.tip b{font-family:Fraunces,serif;font-weight:400;font-size:15px;display:block;margin-bottom:2px}
-.tip.on{opacity:1}
-@media(max-width:900px){.quilt{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:620px){.quilt{grid-template-columns:repeat(2,1fr)}.tally{display:none}}
-@media(prefers-reduced-motion:no-preference){.d.sewn{animation:in .35s ease-out both;animation-delay:calc(var(--i) * 3ms)}@keyframes in{from{opacity:0;transform:scale(.6)}}}
+.key .activity-thrift{background:#c69b68}.key .activity-family{background:#c58c89}.key .activity-journal{background:#8b9a83}
+.tip{position:fixed;z-index:9;max-width:260px;background:#4b4137;color:#fffaf2;border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.4;pointer-events:none;opacity:0;transition:opacity .12s;box-shadow:0 8px 20px #0003}
+.tip b{font-family:Fraunces,serif;font-weight:400;font-size:15px;display:block;margin-bottom:2px}.tip.on{opacity:1}
+@media(max-width:900px){.year-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:620px){.year-grid{grid-template-columns:repeat(2,1fr);gap:7px;padding:7px}.tally{display:none}.g{gap:3px}}
+@media(prefers-reduced-motion:no-preference){.d.has-entry{animation:in .35s ease-out both;animation-delay:calc(var(--i) * 3ms)}@keyframes in{from{opacity:0;transform:scale(.72)}}}
 </style>
 <script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="wrap">
-<header><div><h1 id="t">My year, <em>one square at a time</em></h1><p class="sub">Every day you journal or get things done adds a square. Its color is how you felt; its pattern is what you did. Tap a square to open that day.</p></div>
+<header><div><h1 id="t">My year, <em>day by day</em></h1><p class="sub">Each day you journal or finish a task leaves a little mark. Color reflects your mood; tiny symbols capture the moments. Tap any day to open its journal.</p></div>
 <div class="tally" id="tally"></div></header>
-<div class="quilt" id="body"><p style="grid-column:1/-1;color:var(--muted);font-size:13px">Threading the needle…</p></div>
+<div class="year-grid" id="body"><p style="grid-column:1/-1;color:var(--muted);font-size:13px">Opening your year…</p></div>
 <div class="key" id="key"></div>
 </div><div class="tip" id="tip"></div>
 <script>
@@ -68,18 +60,18 @@ function draw() {
     for (let k = 1; k <= days; k++) {
       const d = year + '-' + String(m + 1).padStart(2, '0') + '-' + String(k).padStart(2, '0'), f = d <= T ? fabric(d) : null;
       if (f) { sewn++; mSewn++; run++; best = Math.max(best, run); if (f.j.mood) moods[f.j.mood] = (moods[f.j.mood] || 0) + 1; } else if (d < T) run = 0;
-      cells += d > T ? '<span class="d unsewn"></span>' : '<button class="d' + (f ? ' sewn ' + f.weave : '') + (d === T ? ' today' : '') + '" data-d="' + d + '" style="--i:' + (i++) + (f ? ';--f:' + f.color : '') + '" aria-label="' + dt(d).toDateString() + '">' + (f && f.knot ? '<span class="knot">' + f.knot + '</span>' : '') + '</button>';
+      cells += d > T ? '<span class="d future"></span>' : '<button class="d' + (f ? ' has-entry ' + f.weave : '') + (d === T ? ' today' : '') + '" data-d="' + d + '" style="--i:' + (i++) + (f ? ';--f:' + f.color : '') + '" aria-label="' + dt(d).toDateString() + '">' + (f && f.knot ? '<span class="knot">' + f.knot + '</span>' : '') + '</button>';
     }
     streak = run;
-    return '<div class="blk"><h3>' + first.toLocaleDateString('en-US', { month: 'long' }) + (mSewn ? '<small>' + mSewn + '</small>' : '') + '</h3><div class="g">' + cells + '</div></div>';
+    return '<div class="month-card"><h3>' + first.toLocaleDateString('en-US', { month: 'long' }) + (mSewn ? '<small>' + mSewn + '</small>' : '') + '</h3><div class="g">' + cells + '</div></div>';
   }).join('');
   const top = Object.entries(moods).sort((a, b) => b[1] - a[1])[0];
   document.getElementById('tally').innerHTML = '<div><b>' + sewn + '</b><span>squares sewn</span></div><div><b>' + streak + '</b><span>day streak</span></div>' + (top ? '<div><b>' + MOOD[top[0]][1] + '</b><span>most often ' + top[0].toLowerCase() + '</span></div>' : '<div><b>' + best + '</b><span>longest streak</span></div>');
-  document.getElementById('t').innerHTML = 'My ' + year + ', <em>one square at a time</em>';
+  document.getElementById('t').innerHTML = 'My ' + year + ', <em>day by day</em>';
   document.getElementById('key').innerHTML = Object.entries(MOOD).map(([k, [c]]) => '<span><i style="background:' + c + '"></i>' + k + '</span>').join('') + '<span><i style="background:' + PLAIN + '"></i>Got things done</span><span class="sep"></span>' +
-    '<span><i style="background:#cbbf9f;background-image:repeating-linear-gradient(90deg,#ffffff40 0 2px,#0000 2px 5px),repeating-linear-gradient(0deg,#00000014 0 2px,#0000 2px 5px)"></i>Plaid: went thrifting</span>' +
-    '<span><i style="background:#cbbf9f;background-image:linear-gradient(90deg,#ffffff55 50%,#0000 50%),linear-gradient(#ffffff40 50%,#0000 50%);background-size:6px 6px"></i>Gingham: talked to family</span>' +
-    '<span><i style="background:#cbbf9f;background-image:repeating-linear-gradient(135deg,#ffffff45 0 2px,#0000 2px 5px)"></i>Stripes: wrote in the journal</span><span>💧 water goal met</span><span>♥ great day for Cece or Eli</span>' +
+    '<span><i class="activity-thrift"></i>Thrifting</span>' +
+    '<span><i class="activity-family"></i>Family time</span>' +
+    '<span><i class="activity-journal"></i>Journal entry</span><span>💧 water goal met</span><span>♥ great day for Cece or Eli</span>' +
     '<span class="sep"></span><span class="yr"><button data-y="-1" aria-label="Previous year">‹</button>' + year + '<button data-y="1" aria-label="Next year">›</button></span>';
 }
 const tip = document.getElementById('tip');
@@ -87,7 +79,7 @@ document.addEventListener('mouseover', e => {
   const b = e.target.closest('.d[data-d]'); if (!b) { tip.classList.remove('on'); return; }
   const d = b.dataset.d, f = fabric(d), j = f ? f.j : {};
   const bits = [j.mood ? (MOOD[j.mood] || [, ''])[1] + ' Felt ' + j.mood.toLowerCase() : '', j.highlight ? '“' + esc(j.highlight) + '”' : '', f && f.n ? '✅ ' + f.n + ' thing' + (f.n === 1 ? '' : 's') + ' done' : '', f && f.thrift ? '🛍 ' + esc(j.thrift.stores.join(', ')) : '', f && f.fam ? '📞 talked to ' + esc(Object.keys(j.family).join(', ')) : '', f && f.drinks ? '💧 ' + f.drinks + ' Stanley' + (f.drinks === 1 ? '' : 's') : ''].filter(Boolean);
-  tip.innerHTML = '<b>' + dt(d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + '</b>' + (bits.length ? bits.join('<br>') : 'Not sewn yet — tap to write about this day.');
+  tip.innerHTML = '<b>' + dt(d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + '</b>' + (bits.length ? bits.join('<br>') : 'No entry yet — tap to write about this day.');
   const r = b.getBoundingClientRect(); tip.style.left = Math.min(innerWidth - 270, Math.max(6, r.left - 20)) + 'px'; tip.style.top = (r.bottom + 8 + 120 > innerHeight ? r.top - tip.offsetHeight - 8 : r.bottom + 8) + 'px'; tip.classList.add('on');
 });
 document.addEventListener('click', e => {
