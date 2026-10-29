@@ -1,0 +1,81 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Christmas buying</title><link rel="stylesheet" href="style.css">
+<style>.lock{display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 0;text-align:center}
+.lock .tree{font-size:42px}.pin{display:flex;gap:8px}.pin input{width:44px;height:50px;text-align:center;font:inherit;font-size:22px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.pin.bad{animation:shake .35s}@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.sum{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-4px 0 10px}.sum b{color:var(--ink);font-weight:500}
+.who{margin-top:12px}.who h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:400;display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:4px;margin:0 0 4px}
+.g{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}.g small{display:block;font-size:11px;color:var(--muted)}
+.st{font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap;border:0;cursor:pointer}.st.Idea{background:#eee9df}.st.Ordered{background:#dde6f0}.st.Bought{background:var(--sage-l)}.st.Wrapped{background:#ecdcec}
+.pr{font-size:13px;color:var(--muted);min-width:42px;text-align:right}
+.bar2{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.sheet{position:fixed;inset:0;background:#26342855;display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:5;overflow:auto}
+.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:360px;box-shadow:0 10px 30px #0002}
+.pane label{display:block;font-size:12px;color:var(--muted);margin-top:9px}.pane input,.pane select{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acts{display:flex;justify-content:space-between;margin-top:14px}.del{color:#a5543b}</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js"></script></head><body><div class="card">
+<h1>🎄 Christmas buying <span id="lk"></span></h1>
+<div id="body" class="muted small">Loading…</div>
+</div><script>
+// The list hides behind a passcode so little eyes can't peek. (It's a privacy screen, not a bank vault:
+// the list itself is only readable when signed in to your account.)
+const HASH = '7a425212a80bc753e4e3b8b83572c9d948b009bf32accf65aa777292996f277d';
+const WHO = ['Cece', 'Eli', 'Salvador', 'Stocking stuffers', 'Teachers', 'Extended family', 'Friends', 'Other'];
+const STAT = ['Idea', 'Ordered', 'Bought', 'Wrapped'], LABEL = { Idea: 'Idea', Ordered: 'Ordered', Bought: 'Purchased ✓', Wrapped: 'Wrapped 🎀' };
+let SB, st = { items: [] }, open = false, idle;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const money = n => '$' + (Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+async function sha(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function lock() { open = false; document.querySelector('.sheet')?.remove(); draw(); }
+function poke() { clearTimeout(idle); idle = setTimeout(lock, 5 * 60000); } // locks again after 5 quiet minutes
+function draw() {
+  const el = document.getElementById('body'); el.className = '';
+  document.getElementById('lk').innerHTML = open ? '<button class="ghost" id="lockBtn" title="Lock">🔒 Lock</button>' : '';
+  if (!open) {
+    el.innerHTML = '<div class="lock"><div class="tree">🎁</div><div class="muted small">Enter the passcode to see the list</div><div class="pin">' + [0, 1, 2, 3].map(i => '<input inputmode="numeric" maxlength="1" data-i="' + i + '" aria-label="Digit ' + (i + 1) + '">').join('') + '</div></div>';
+    const ins = [...el.querySelectorAll('.pin input')];
+    ins.forEach((inp, i) => {
+      inp.oninput = async () => { inp.value = inp.value.replace(/\D/g, ''); if (inp.value && ins[i + 1]) ins[i + 1].focus();
+        const code = ins.map(x => x.value).join('');
+        if (code.length === 4) { if (await sha('xmas:' + code) === HASH) { open = true; poke(); draw(); } else { const p = el.querySelector('.pin'); p.classList.add('bad'); ins.forEach(x => x.value = ''); ins[0].focus(); setTimeout(() => p.classList.remove('bad'), 400); } } };
+      inp.onkeydown = e => { if (e.key === 'Backspace' && !inp.value && ins[i - 1]) ins[i - 1].focus(); };
+    });
+    return;
+  }
+  const items = st.items, total = items.reduce((t, x) => t + (+x.price || 0), 0), bought = items.filter(x => x.status === 'Bought' || x.status === 'Wrapped');
+  const days = Math.max(0, Math.ceil((new Date(new Date().getFullYear(), 11, 25) - new Date()) / 864e5));
+  const spent = bought.reduce((t, x) => t + (+x.price || 0), 0);
+  el.innerHTML = '<div class="sum"><span><b>' + money(spent) + '</b> spent</span><span><b>' + money(total - spent) + '</b> still to buy</span><span><b>' + bought.length + '/' + items.length + '</b> purchased</span><span><b>' + items.filter(x => x.status === 'Wrapped').length + '</b> wrapped</span><span><b>' + days + '</b> days to Christmas</span></div>' +
+    WHO.filter(w => items.some(x => x.who === w)).map(w => { const mine = items.filter(x => x.who === w);
+      return '<div class="who"><h3><span>' + esc(w) + '</span><span>' + money(mine.reduce((t, x) => t + (+x.price || 0), 0)) + '</span></h3>' +
+        mine.sort((a, b) => STAT.indexOf(a.status) - STAT.indexOf(b.status)).map(x => '<div class="g" data-id="' + x.id + '"><span>' + esc(x.gift) + (x.where || x.hidden ? '<small>' + esc([x.where, x.hidden ? '🙈 ' + x.hidden : ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</span>' +
+          '<span class="pr">' + (x.price ? money(+x.price) : '') + '</span><button class="st ' + x.status + '" data-st="' + x.id + '" title="Tap to move it along">' + LABEL[x.status] + '</button></div>').join('') + '</div>'; }).join('') +
+    (items.length ? '' : '<p class="muted small">No gifts yet. Tap ＋ Add a gift.</p>') + '<div class="bar2"><button class="btn" id="addG">＋ Add a gift</button></div>';
+}
+async function save() { await hubSet(SB, 'christmas', st); }
+function edit(x) {
+  const isNew = !x; x = x || { id: uid(), gift: '', who: 'Cece', price: '', status: 'Idea', where: '', link: '', hidden: '' };
+  const s = document.createElement('div'); s.className = 'sheet';
+  s.innerHTML = '<div class="pane"><label>Gift<input id="fG" value="' + esc(x.gift) + '"></label><div class="g2"><label>For<select id="fW">' + WHO.map(w => '<option' + (w === x.who ? ' selected' : '') + '>' + w + '</option>').join('') + '</select></label>' +
+    '<label>Price (what you paid)<input id="fP" inputmode="decimal" value="' + esc(x.price) + '" placeholder="0.00"></label></div><div class="g2"><label>Status<select id="fS">' + STAT.map(w => '<option value="' + w + '"' + (w === x.status ? ' selected' : '') + '>' + LABEL[w] + '</option>').join('') + '</select></label>' +
+    '<label>Where<input id="fWh" value="' + esc(x.where) + '" placeholder="Amazon, Target…"></label></div><label>Link<input id="fL" value="' + esc(x.link) + '" placeholder="https://"></label><label>Hidden at<input id="fH" value="' + esc(x.hidden) + '" placeholder="Top of the closet"></label>' +
+    (x.link && !isNew ? '<p style="margin-top:8px"><a href="' + esc(x.link) + '" target="_blank" class="small">Open link ↗</a></p>' : '') +
+    '<div class="acts">' + (isNew ? '<span></span>' : '<button class="ghost del" id="fX">Delete</button>') + '<span><button class="ghost" id="fC">Cancel</button> <button class="btn" id="fOK">Save</button></span></div></div>';
+  document.body.appendChild(s); s.querySelector('#fG').focus();
+  s.onclick = e => { if (e.target === s) s.remove(); };
+  s.querySelector('#fC').onclick = () => s.remove();
+  if (!isNew) s.querySelector('#fX').onclick = async () => { if (!confirm('Delete “' + x.gift + '”?')) return; st.items = st.items.filter(y => y.id !== x.id); s.remove(); draw(); await save(); };
+  s.querySelector('#fOK').onclick = async () => {
+    const g = s.querySelector('#fG').value.trim(); if (!g) return s.querySelector('#fG').focus();
+    Object.assign(x, { gift: g, who: s.querySelector('#fW').value, price: s.querySelector('#fP').value.replace(/[^\d.]/g, ''), status: s.querySelector('#fS').value, where: s.querySelector('#fWh').value.trim(), link: s.querySelector('#fL').value.trim(), hidden: s.querySelector('#fH').value.trim() });
+    if (isNew) st.items.push(x); s.remove(); draw(); await save();
+  };
+}
+document.addEventListener('click', async e => {
+  if (open) poke();
+  if (e.target.id === 'lockBtn') return lock();
+  if (e.target.id === 'addG') return edit();
+  const b = e.target.closest('[data-st]'); if (b) { const x = st.items.find(y => y.id === b.dataset.st); x.status = STAT[(STAT.indexOf(x.status) + 1) % STAT.length]; draw(); return save(); }
+  const g = e.target.closest('.g'); if (g) edit(st.items.find(y => y.id === g.dataset.id));
+});
+hubData(async sb => { SB = sb; if (document.querySelector('.sheet')) return; const d = await hubGet(sb, 'christmas'); st = { items: d.items || [] }; draw(); });
+</script></body></html>
