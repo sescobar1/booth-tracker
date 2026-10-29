@@ -554,7 +554,8 @@ let calMode = (() => { try { return localStorage.getItem(KEY + 'CalMode') || 'mo
 const weekStart = iso => addDays(iso, -new Date(iso + 'T12:00').getDay());
 // On the hub, a day opens the hub's day page: time blocks, to-dos, meals and the shopping list.
 const EMBED = document.documentElement.classList.contains('embed');
-const openDayPage = d => { location.href = '../hub/day.html?v=4&from=cal&d=' + d; };
+// It opens as its own full page in a new tab; if the browser blocks that, it opens right here instead.
+const openDayPage = d => { const u = new URL('../hub/day.html?v=5&d=' + d, location.href).href; let w = null; try { w = window.open(u, '_blank'); } catch (e) {} if (!w) location.href = u + '&from=cal'; };
 function viewCalendar() {
   if (!calDay) calDay = today();
   if (EMBED && calMode === 'day') calMode = 'month';
