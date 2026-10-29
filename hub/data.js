@@ -29,6 +29,8 @@
 
   window.hubData = function (draw, every) {
     const box = document.getElementById('body');
+    // Already signed in to one of the apps on this site (like the Planner)? Use that sign-in here too.
+    try { if (!localStorage.getItem(KEY)) { const k = ['plannerAppAuth', 'moneyAppAuth', 'boothMonthlyTrackerAuth', 'bandVolunteersAuth'].find(x => localStorage.getItem(x)); if (k) localStorage.setItem(KEY, localStorage.getItem(k)); } } catch (e) {}
     sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { storageKey: KEY, persistSession: true, autoRefreshToken: true } });
     run(box, draw);
     // Another widget signed in: redraw this one too.

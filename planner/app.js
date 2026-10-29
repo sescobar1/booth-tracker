@@ -732,7 +732,15 @@ function saveDayPage(d, v) {
   if (!it) { it = { id: 'page-' + d, kind: 'daypage', title: 'Day page', date: d, notes: '' }; data.items.push(it); }
   it.notes = JSON.stringify(v); window.save();
 }
+// Day view: the time-block page (time blocks, to-dos, meals, shopping list), same as on the hub.
+// The old journal-style page is still one tap away.
 function drawDay() {
+  if (S().dayJournal) return drawJournalDay();
+  $('calBody').innerHTML = '<div class="row-actions center" style="margin:0 0 6px"><button type="button" class="ghost small" id="dJournal">📓 Journal page</button></div>' +
+    '<iframe class="dayframe" src="../hub/day.html?bare=1&d=' + calDay + '" title="Time blocks for ' + esc(fmtDate(calDay, 'long')) + '"></iframe>';
+  $('dJournal').onclick = () => { S().dayJournal = true; window.save(); viewCalendar(); };
+}
+function drawJournalDay() {
   const d = calDay, dt = new Date(d + 'T12:00'), es = onDay(agenda(addDays(d, -30), addDays(d, 1)), d);
   const v = dayPage(d), note = data.items.find(i => i.kind === 'note' && i.date === d);
   const allDay = es.filter(e => e.allDay || !e.start), timed = es.filter(e => !e.allDay && e.start);
@@ -790,6 +798,8 @@ function drawDay() {
   inkPad($('inkHere'), v.ink || [], s => { clearTimeout(inkT); inkT = setTimeout(() => { const nv = dayPage(d); nv.ink = s; saveDayPage(d, nv); }, 400); });
   $('inkOpen').onclick = () => openInkPage(d);
   const sel = body.querySelector('.ddot.on'), strip = body.querySelector('.ddots'); if (sel && strip) strip.scrollLeft = sel.offsetLeft - strip.clientWidth / 2;
+  body.insertAdjacentHTML('afterbegin', '<div class="row-actions center" style="margin:0 0 6px"><button type="button" class="ghost small" id="dBlocks">⏰ Time blocks</button></div>');
+  $('dBlocks').onclick = () => { S().dayJournal = false; window.save(); viewCalendar(); };
   wireCal();
 }
 const rowOpen = e => e.src === 'planner' ? 'data-item="' + e.id + '"' : e.link ? 'data-link="' + esc(e.link) + '"' : 'data-ext="' + esc(JSON.stringify({ t: e.title, d: e.date, s: e.start, e: e.end, l: e.location, n: e.notes, c: e.cal })) + '"';

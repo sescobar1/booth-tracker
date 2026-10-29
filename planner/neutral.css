@@ -615,3 +615,6 @@ table.countsheet td:first-child { white-space: normal; font-weight: 400; text-al
 .embed main:has(.cal) .cal-head { margin: 0; }
 .embed main:has(.cal) .cal-head h2 { font-size: 1.35rem; margin: 0; }
 .embed main:has(.cal) .row-actions.center { margin: 2px 0 6px; }
+
+/* Day view: the time-block page */
+.dayframe { display: block; width: 100%; height: max(760px, calc(100vh - 210px)); border: 0; border-radius: var(--radius, 14px); background: transparent; }
