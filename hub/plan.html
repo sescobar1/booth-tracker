@@ -1,0 +1,139 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plan my day</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Lora:wght@400;500&display=swap">
+<style>
+/* Plan my day: finds the open time between everything already on your calendars and fills it with the
+   to-dos that matter most — overdue first, then high priority — plus a quick chore or a video to film.
+   Tap Keep and it's blocked on your calendar (it shows in the Planner, the day page and Google Calendar). */
+:root{--ink:#263428;--muted:#6f776c;--linen:#f3f1ea;--line:#e3ddcf;--mom:#8b5a7a;--teach:#4f6f8f;--nurse:#3f7f7a;--biz:#a8473c;--vol:#a87c22;--home:#7d9178}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--linen);color:var(--ink);font-family:Lora,Georgia,serif}
+.wrap{padding:8px 6px 14px;max-width:980px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-family:Fraunces,Georgia,serif;font-weight:350;font-size:clamp(26px,3.4vw,36px);line-height:1.05}h1 em{font-style:italic;font-weight:300}
+.sub{font-size:14px;color:var(--muted);margin-top:5px;max-width:62ch;line-height:1.45}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-size:14px;border:0;border-radius:10px;padding:9px 16px;background:var(--ink);color:#f3f1ea;cursor:pointer}
+.ghost{font:inherit;font-size:14px;border:1px solid #d8d0bd;border-radius:10px;padding:8px 14px;background:#fbfaf6;color:var(--ink);cursor:pointer}
+.btn:focus-visible,.ghost:focus-visible,button:focus-visible{outline:2px solid var(--teach);outline-offset:2px}
+.sum{font-size:14px;margin:0 0 12px;color:var(--muted)}.sum b{color:var(--ink);font-weight:500}
+.tl{position:relative;padding-left:62px}
+.tl:before{content:'';position:absolute;left:52px;top:4px;bottom:4px;border-left:2px dashed #cfc6b2}
+.row{position:relative;margin:0 0 8px}
+.tm{position:absolute;left:-62px;top:10px;width:48px;text-align:right;font-size:12.5px;color:var(--muted)}
+.row:before{content:'';position:absolute;left:-14px;top:14px;width:10px;height:10px;border-radius:50%;background:var(--c,#cfc6b2);box-shadow:0 0 0 3px var(--linen)}
+.busy{background:#ebe7dc;border-radius:10px;padding:8px 12px;font-size:13.5px;color:#5e665b}.busy small{color:var(--muted)}
+.s{background:#fff;border:1px solid var(--line);border-left:5px solid var(--c);border-radius:12px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.s b{font-weight:500;font-size:15px}.s small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.s .why{font-size:12px;color:var(--c);margin-top:3px}
+.s .b2{display:flex;gap:6px}.s .b2 button{font:inherit;font-size:12.5px;border-radius:8px;padding:5px 10px;cursor:pointer;border:1px solid var(--line);background:#fbfaf6;color:var(--ink)}
+.s .b2 .keep{background:var(--c);border-color:var(--c);color:#fff}
+.s.kept{background:color-mix(in srgb,var(--c) 10%,#fff)}.s.kept .b2 .keep{background:#fff;color:var(--c)}
+.brk{font-size:13px;color:var(--muted);padding:4px 12px;font-style:italic}
+.now{position:relative;margin:2px 0 10px;font-size:12px;color:#b5483d}.now:before{content:'';position:absolute;left:-66px;right:0;top:8px;border-top:1.5px solid #b5483d55}.now span{position:relative;background:var(--linen);padding-right:8px;margin-left:0}
+.empty{background:#fbfaf6;border:1px dashed #d8d0bd;border-radius:12px;padding:16px;font-size:14px;color:var(--muted);line-height:1.5}
+.opts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:14px}.opts select{font:inherit;font-size:13px;border:1px solid #d8d0bd;border-radius:8px;padding:4px 6px;background:#fbfaf6;color:var(--ink)}
+@media(max-width:560px){.s{grid-template-columns:1fr}.tl{padding-left:54px}.tl:before{left:44px}.tm{left:-54px;width:42px}}
+</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js?v=2"></script></head><body><div class="wrap">
+<header><div><h1 id="t">Plan my <em>day</em></h1><p class="sub">I looked at everything already on your calendars and filled the open time with what matters most. Keep what works — it goes on your calendar — or skip it and I’ll find something else.</p></div>
+<div class="acts"><button class="ghost" id="redo">↻ Shuffle</button><button class="btn" id="all">Keep all</button></div></header>
+<div class="opts">Plan from <select id="from"></select> until <select id="until"></select> · breaks every <select id="brk"><option value="90">90 min</option><option value="60">60 min</option><option value="0">no breaks</option></select></div>
+<div id="body" class="empty">Looking at your day…</div>
+</div><script>
+const ROLE = { Work: 'teach', ATU: 'teach', Home: 'home', Kids: 'mom', Errands: 'home', Booth: 'biz', Band: 'vol', Gifts: 'mom' };
+const pad = n => String(n).padStart(2, '0'), toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; }, toT = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+const ampm = s => { const [h, m] = s.split(':').map(Number); return ((h % 12) || 12) + (m ? ':' + pad(m) : '') + (h < 12 ? 'am' : 'pm'); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), T = isoDay(new Date());
+let SB, BUSY = [], CANDS = [], PLAN = [], skipped = new Set(), kept = new Set(), seed = 0;
+// How long a to-do probably takes, from its words.
+function guess(t) {
+  if (/\b(grade|grading|write|draft|exam|lecture|prep|plan|study|taxes|inventory|tag|price)\b/i.test(t)) return 45;
+  if (/\b(call|text|email|reply|pay|order|schedule|book|sign|print|send)\b/i.test(t)) return 10;
+  if (/\b(clean|wash|laundry|fold|vacuum|mop|dishes)\b/i.test(t)) return 20;
+  return 30;
+}
+function nowStart() { const d = new Date(), m = d.getHours() * 60 + d.getMinutes(); return Math.ceil(m / 15) * 15; }
+function fillSelects() {
+  const f = document.getElementById('from'), u = document.getElementById('until'), ns = Math.max(6 * 60, nowStart());
+  f.innerHTML = ''; u.innerHTML = '';
+  for (let m = 5 * 60; m <= 23 * 60; m += 30) { f.insertAdjacentHTML('beforeend', '<option value="' + m + '"' + (m === Math.floor(ns / 30) * 30 ? ' selected' : '') + '>' + ampm(toT(m)) + '</option>'); u.insertAdjacentHTML('beforeend', '<option value="' + m + '"' + (m === 21 * 60 + 30 ? ' selected' : '') + '>' + ampm(toT(m)) + '</option>'); }
+}
+function build() {
+  const start = Math.max(Number(document.getElementById('from').value), nowStart()), end = Number(document.getElementById('until').value), brk = Number(document.getElementById('brk').value);
+  const busy = BUSY.map(b => [Math.max(start, b.s), Math.min(end, b.e), b]).filter(x => x[1] > x[0]).sort((a, b) => a[0] - b[0]);
+  const gaps = []; let cur = start;
+  busy.forEach(([s, e]) => { if (s - cur >= 15) gaps.push([cur, s]); cur = Math.max(cur, e); }); if (end - cur >= 15) gaps.push([cur, end]);
+  // Most important first; a little shuffle among equals when asked.
+  const pool = CANDS.filter(c => !skipped.has(c.key)).map((c, i) => ({ ...c, r: c.score + ((i * 7919 + seed * 104729) % 97) / 1000 * (seed ? 30 : 0) })).sort((a, b) => b.r - a.r);
+  const used = new Set(), out = [];
+  gaps.forEach(([gs, ge]) => {
+    let t = gs, run = 0;
+    while (ge - t >= 10) {
+      if (brk && run >= brk && ge - t >= 25) { out.push({ brk: true, s: t, e: t + 10 }); t += 10; run = 0; continue; }
+      const c = pool.find(x => !used.has(x.key) && x.min <= ge - t && (!x.after || t >= x.after));
+      if (!c) break;
+      used.add(c.key); out.push({ ...c, s: t, e: t + c.min }); t += c.min; run += c.min;
+    }
+  });
+  PLAN = out;
+  const timeline = [...busy.map(([s, e, b]) => ({ busy: true, s, e, b })), ...out].sort((a, b) => a.s - b.s);
+  const el = document.getElementById('body'); el.className = '';
+  const freeMin = gaps.reduce((a, g) => a + g[1] - g[0], 0), planned = out.filter(x => !x.brk).reduce((a, x) => a + x.e - x.s, 0);
+  if (!timeline.length) { el.className = 'empty'; el.textContent = 'Nothing to plan — your calendar is clear and your to-do list is empty. Enjoy it.'; return; }
+  let nowShown = false; const nm = new Date().getHours() * 60 + new Date().getMinutes();
+  el.innerHTML = '<p class="sum"><b>' + Math.round(freeMin / 6) / 10 + ' hours</b> open today · <b>' + out.filter(x => !x.brk).length + '</b> things planned (' + Math.round(planned / 6) / 10 + ' hrs) · ' + CANDS.length + ' waiting overall</p><div class="tl">' +
+    timeline.map(x => {
+      let pre = ''; if (!nowShown && x.s >= nm) { nowShown = true; pre = '<div class="now"><span>now · ' + ampm(toT(nm)) + '</span></div>'; }
+      if (x.busy) return pre + '<div class="row"><span class="tm">' + ampm(toT(x.s)) + '</span><div class="busy">' + esc(x.b.t) + ' <small>until ' + ampm(toT(x.e)) + (x.b.cal ? ' · ' + esc(x.b.cal) : '') + '</small></div></div>';
+      if (x.brk) return pre + '<div class="row" style="--c:#cfc6b2"><span class="tm">' + ampm(toT(x.s)) + '</span><div class="brk">☕ 10-minute break — refill the Stanley</div></div>';
+      return pre + '<div class="row" style="--c:var(--' + x.role + ')"><span class="tm">' + ampm(toT(x.s)) + '</span><div class="s' + (kept.has(x.key) ? ' kept' : '') + '"><div><b>' + esc(x.title) + '</b><small>' + ampm(toT(x.s)) + '–' + ampm(toT(x.e)) + ' · ' + x.min + ' min</small><div class="why">' + esc(x.why) + '</div></div>' +
+        '<div class="b2">' + (kept.has(x.key) ? '<button class="keep" disabled>✓ On your calendar</button>' : '<button data-skip="' + esc(x.key) + '">Skip</button><button class="keep" data-keep="' + esc(x.key) + '">Keep</button>') + '</div></div></div>';
+    }).join('') + '</div>';
+}
+async function keep(x) {
+  const st = toT(x.s), en = toT(x.e);
+  let error;
+  if (x.task) ({ error } = await SB.from('planner_items').update({ date: T, start_time: st, end_time: en, all_day: false, updated_at: new Date().toISOString() }).eq('id', x.task));
+  else ({ error } = await SB.from('planner_items').insert({ id: uid(), kind: 'task', title: x.title, date: T, start_time: st, end_time: en, all_day: false, done: false, list: x.list || 'Home', sort: Date.now() % 1e9, updated_at: new Date().toISOString() }));
+  if (error) { alert('Couldn’t add it: ' + error.message); return false; }
+  kept.add(x.key); BUSY.push({ s: x.s, e: x.e, t: '✓ ' + x.title, cal: 'kept' }); return true;
+}
+document.addEventListener('click', async e => {
+  const k = e.target.closest('[data-keep]'); if (k) { const x = PLAN.find(p => p.key === k.dataset.keep); k.disabled = true; if (await keep(x)) { CANDS = CANDS.filter(c => c.key !== x.key); build(); } else k.disabled = false; return; }
+  const s = e.target.closest('[data-skip]'); if (s) { skipped.add(s.dataset.skip); build(); return; }
+  if (e.target.id === 'redo') { seed++; skipped.clear(); build(); return; }
+  if (e.target.id === 'all') { e.target.disabled = true; for (const x of PLAN.filter(p => !p.brk && !kept.has(p.key))) { if (await keep(x)) CANDS = CANDS.filter(c => c.key !== x.key); } build(); e.target.disabled = false; }
+});
+document.addEventListener('change', e => { if (['from', 'until', 'brk'].includes(e.target.id)) build(); });
+hubData(async sb => {
+  SB = sb; if (kept.size) return;
+  fillSelects();
+  const wk = isoDay(new Date(Date.now() + 2 * 864e5));
+  const [items, st, vol, clean, social, journal] = await Promise.all([
+    sb.from('planner_items').select('id,kind,title,date,done,priority,start_time,end_time,all_day,list').in('kind', ['event', 'task']).lte('date', T).gte('date', isoDay(new Date(Date.now() - 45 * 864e5))),
+    sb.from('planner_settings').select('data').maybeSingle(),
+    sb.from('vol_events').select('name,start_time,end_time').eq('date', T),
+    hubGet(sb, 'cleaning').catch(() => ({})), hubGet(sb, 'social').catch(() => ({})),
+    sb.from('journal_entries').select('body,mood').eq('day', T).maybeSingle()
+  ]);
+  const I = items.data || [];
+  BUSY = I.filter(i => i.date === T && i.start_time && !i.all_day && (i.kind === 'event' || i.kind === 'task')).map(i => ({ s: toMin(i.start_time), e: i.end_time ? toMin(i.end_time) : toMin(i.start_time) + 60, t: i.title, cal: i.kind === 'task' ? 'to-do' : 'Planner' }))
+    .concat((vol.data || []).filter(v => v.start_time).map(v => ({ s: toMin(v.start_time), e: v.end_time ? toMin(v.end_time) : toMin(v.start_time) + 120, t: '🎺 ' + v.name, cal: 'Band' })));
+  // Candidates: open to-dos (overdue first), a chore or two that's due, a video to film, and tonight's journal.
+  CANDS = I.filter(i => i.kind === 'task' && !i.done && (i.all_day || !i.start_time) && !/^lunch-/.test(i.id)).map(i => { const late = Math.round((new Date(T) - new Date(i.date)) / 864e5);
+    return { key: 't' + i.id, task: i.id, title: i.title, list: i.list, role: ROLE[i.list] || 'home', min: guess(i.title), score: 50 + (i.priority || 0) * 20 + Math.min(late, 14) * 3, why: late > 0 ? 'Waiting ' + late + ' day' + (late === 1 ? '' : 's') + ' — let’s clear it' : (i.priority || 0) >= 2 ? 'Top priority today' : (i.priority || 0) === 1 ? 'Important' : 'On today’s list' }; });
+  const dsince = d => Math.round((new Date(T) - new Date(d)) / 864e5);
+  (clean.list || []).map(c => { const l = (c.done || []).slice().sort().pop(); return { c, over: c.every && l ? dsince(l) - c.every : null }; }).filter(x => x.over != null && x.over >= 0).sort((a, b) => b.over - a.over).slice(0, 2)
+    .forEach(({ c, over }) => CANDS.push({ key: 'c' + c.id, title: '🧽 ' + c.name, list: 'Home', role: 'mom', min: 15, score: 35 + Math.min(over, 10) * 2, why: over ? over + ' day' + (over === 1 ? '' : 's') + ' overdue · ' + c.room : 'Due today · ' + c.room }));
+  const v = (social.videos || []).filter(x => x.stage === 'idea').sort((a, b) => (a.date || '9').localeCompare(b.date || '9'))[0];
+  if (v) CANDS.push({ key: 'v' + v.id, title: '🎬 Film: ' + v.title, list: 'Booth', role: 'biz', min: 20, score: v.date && v.date <= wk ? 45 : 25, why: v.hook ? 'Hook: “' + v.hook + '”' : 'Next video on your list' });
+  if (!(journal.data && (journal.data.body || '').trim())) CANDS.push({ key: 'journal', title: '📓 Journal + tomorrow’s top 3', list: 'Home', role: 'nurse', min: 15, score: 20, after: 20 * 60, why: 'A calm end to the day' });
+  build();
+  // Google & Outlook events take a moment longer; add them and re-plan.
+  try {
+    const cal = await calendarDay(sb, (((st.data || {}).data || {}).settings || {}).calendars || [], T);
+    cal.filter(o => !o.allDay && o.start).forEach(o => BUSY.push({ s: toMin(o.start), e: o.end ? toMin(o.end) : toMin(o.start) + 60, t: o.title, cal: o.cal || '' }));
+    build();
+  } catch (e) {}
+}, 30);
+</script></body></html>

@@ -1,0 +1,110 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My day</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Lora:wght@400;500&display=swap">
+<style>
+/* The hub's front door: a quilt of the five hats Shaana wears. Each patch is pieced from its own plaid,
+   stitched to its neighbors, and shows what that part of life needs today. */
+:root{--ink:#263428;--muted:#6f776c;--linen:#f3f1ea;
+  --mom:#8b5a7a;--mom-b:#efe2ea;--teach:#4f6f8f;--teach-b:#e1e8f0;--nurse:#3f7f7a;--nurse-b:#dfeeeb;--biz:#a8473c;--biz-b:#f4e1dc;--vol:#a87c22;--vol-b:#f4ead2}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--linen);color:var(--ink);font-family:Lora,Georgia,serif}
+.wrap{padding:6px 4px 8px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:6px 6px 16px}
+h1{font-family:Fraunces,Georgia,serif;font-weight:350;font-size:clamp(30px,4.4vw,46px);line-height:1.05;letter-spacing:-.01em;font-variation-settings:'SOFT' 100}
+h1 em{font-style:italic;font-weight:300}
+.sub{font-size:15px;color:var(--muted);margin-top:6px}
+.wx{display:flex;align-items:center;gap:10px;text-align:right}
+.wx b{font-family:Fraunces,serif;font-weight:350;font-size:34px;line-height:1}.wx span{font-size:13px;color:var(--muted);line-height:1.35}.wx i{font-style:normal;font-size:30px}
+.cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.cta a{font-size:13.5px;color:var(--ink);text-decoration:none;border:1px solid #d8d0bd;background:#fbfaf6;border-radius:20px;padding:6px 13px}.cta a:first-child{background:var(--ink);color:#f3f1ea;border-color:var(--ink)}.cta a:hover{border-color:var(--ink)}.cta a:focus-visible{outline:2px solid var(--teach);outline-offset:2px}
+.quilt{display:grid;grid-template-columns:repeat(5,1fr);border-radius:18px;overflow:hidden;box-shadow:0 1px 0 #fff inset,0 10px 24px -14px #2634284d;border:1px solid #d9d3c4}
+.p{position:relative;padding:18px 18px 16px;min-height:208px;display:flex;flex-direction:column;gap:8px;color:var(--ink);text-decoration:none;
+  background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--c) 9%,transparent) 0 14px,transparent 14px 28px,color-mix(in srgb,var(--c) 5%,transparent) 28px 31px,transparent 31px 44px),
+             repeating-linear-gradient(0deg,color-mix(in srgb,var(--c) 9%,transparent) 0 14px,transparent 14px 28px,color-mix(in srgb,var(--c) 5%,transparent) 28px 31px,transparent 31px 44px),var(--b)}
+.p+.p{border-left:1px solid #d9d3c4}
+.p:after{content:'';position:absolute;inset:7px;border:1.5px dashed color-mix(in srgb,var(--c) 45%,transparent);border-radius:11px;pointer-events:none}
+.p:hover:after{border-color:var(--c)}.p:focus-visible{outline:3px solid var(--c);outline-offset:-3px}
+.p h2{font-family:Fraunces,serif;font-weight:450;font-size:21px;color:var(--c);display:flex;align-items:center;gap:8px}
+.p h2 span{font-size:19px}
+.ln{font-size:13.5px;line-height:1.4}.ln small{display:block;font-size:12px;color:var(--muted)}
+.big{font-family:Fraunces,serif;font-weight:400;font-size:26px;line-height:1;color:var(--c)}
+.go{margin-top:auto;font-size:12.5px;color:var(--c)}
+.load{color:var(--muted);font-size:13px}
+@media(max-width:900px){.quilt{grid-template-columns:1fr 1fr}.p+.p{border-left:0}.p{border-top:1px solid #d9d3c4}.p:nth-child(even){border-left:1px solid #d9d3c4}.p:last-child{grid-column:1/-1}}
+@media(max-width:520px){.quilt{grid-template-columns:1fr}.p:nth-child(even){border-left:0}.p{min-height:0}}
+@media(prefers-reduced-motion:no-preference){.quilt .p{animation:sew .5s ease-out both}.p:nth-child(2){animation-delay:.06s}.p:nth-child(3){animation-delay:.12s}.p:nth-child(4){animation-delay:.18s}.p:nth-child(5){animation-delay:.24s}@keyframes sew{from{opacity:0;transform:translateY(6px)}}}
+</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script><script src="cal.js?v=2"></script></head><body><div class="wrap">
+<header><div><h1 id="hi">Hello, Shaana</h1><p class="sub" id="sub"></p><p class="cta"><a href="plan.html" target="_blank">✨ Plan my day</a><a href="day.html?v=5" target="_blank">⏰ Today’s time blocks</a><a href="quilt.html" target="_blank">🧵 My year quilt</a></p></div><div class="wx" id="wx"></div></header>
+<div class="quilt" id="body">
+  <a class="p" style="--c:var(--mom);--b:var(--mom-b)"><h2><span>👩‍👧‍👦</span>Mom</h2><p class="load">gathering…</p></a>
+  <a class="p" style="--c:var(--teach);--b:var(--teach-b)"><h2><span>🍎</span>Teacher</h2><p class="load">gathering…</p></a>
+  <a class="p" style="--c:var(--nurse);--b:var(--nurse-b)"><h2><span>🩺</span>Nurse</h2><p class="load">gathering…</p></a>
+  <a class="p" style="--c:var(--biz);--b:var(--biz-b)"><h2><span>🧵</span>Small business</h2><p class="load">gathering…</p></a>
+  <a class="p" style="--c:var(--vol);--b:var(--vol-b)"><h2><span>🎺</span>Volunteer</h2><p class="load">gathering…</p></a>
+</div></div>
+<script>
+const PAGES = { mom: 'https://www.notion.so/408c8baaa839816988d0f4572a091a7f', teach: 'https://www.notion.so/408c8baaa83981539a8bfe0eb8cb995d', nurse: 'https://www.notion.so/408c8baaa8398186b7e0e6d7613b374f', biz: 'https://www.notion.so/408c8baaa839812cbda8fa151152bc89', vol: 'https://www.notion.so/408c8baaa83981339d6ec2a05e4dbe6a' };
+const LINES = ['Nothing blooms all year — rest counts too.', 'One next right thing at a time.', 'What you water grows.', 'Your students remember how you made them feel.', 'Grace for yourself counts too.', 'Small stitches make a whole quilt.', 'Done is better than perfect.', 'Let the little wins count.', 'You are doing better than you think.', 'Make room for joy today.'];
+const now = new Date(), T = isoDay(now), dt = d => new Date(d + 'T12:00'), daysTo = d => Math.round((dt(d) - dt(T)) / 864e5);
+const ampm = s => { if (!s) return ''; const [h, m] = s.split(':').map(Number); return ((h % 12) || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+const when = n => n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days';
+const h = now.getHours(), part = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+document.getElementById('hi').innerHTML = 'Good ' + part + ', <em>Shaana</em>';
+document.getElementById('sub').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + '. ' + LINES[(now.getDate() + now.getMonth()) % LINES.length];
+// Weather for Russellville.
+(async () => { try {
+  const r = await (await fetch('https://api.open-meteo.com/v1/forecast?latitude=35.2784&longitude=-93.1338&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&timezone=America%2FChicago&forecast_days=1')).json();
+  const c = r.current.weather_code, icon = c === 0 ? '☀️' : c < 3 ? '🌤' : c < 45 ? '☁️' : c < 60 ? '🌫' : c < 70 ? '🌧' : c < 80 ? '🌨' : c < 90 ? '🌦' : '⛈';
+  const rain = r.daily.precipitation_probability_max[0];
+  document.getElementById('wx').innerHTML = '<i>' + icon + '</i><b>' + Math.round(r.current.temperature_2m) + '°</b><span>high ' + Math.round(r.daily.temperature_2m_max[0]) + '°, low ' + Math.round(r.daily.temperature_2m_min[0]) + '°<br>' + (rain >= 40 ? '☂️ ' + rain + '% chance of rain' : 'Russellville') + '</span>';
+} catch (e) {} })();
+const P = (k, c, b, icon, title, inner) => '<a class="p" href="' + PAGES[k] + '" target="_blank" rel="noopener" style="--c:var(--' + c + ');--b:var(--' + b + ')"><h2><span>' + icon + '</span>' + title + '</h2>' + inner + '<span class="go">Open ' + title.toLowerCase() + ' page ›</span></a>';
+const L = (main, sub) => '<p class="ln">' + main + (sub ? '<small>' + sub + '</small>' : '') + '</p>';
+hubData(async sb => {
+  const safe = p => p.then(r => r, () => ({}));
+  const in60 = isoDay(new Date(Date.now() + 60 * 864e5));
+  const [meals, bd, clean, cd, creds, social, booth, ev, st] = await Promise.all([
+    safe(sb.from('planner_items').select('title,list').eq('kind', 'meal').eq('date', T)),
+    safe(sb.from('family_birthdays').select('name,md')),
+    hubGet(sb, 'cleaning').catch(() => ({})), hubGet(sb, 'countdown').catch(() => ({})), hubGet(sb, 'credentials').catch(() => ({})), hubGet(sb, 'social').catch(() => ({})),
+    safe(sb.from('booth_data').select('data->hubSummary').limit(1)),
+    safe(sb.from('vol_events').select('id,name,date,start_time').gte('date', T).lte('date', in60).order('date').limit(3)),
+    safe(sb.from('planner_settings').select('data').maybeSingle())
+  ]);
+  // Mom
+  const dinner = (meals.data || []).find(m => m.list === 'Dinner');
+  const next = (bd.data || []).map(b => { const [m, d] = b.md.split('-').map(Number); let x = new Date(now.getFullYear(), m - 1, d); if (isoDay(x) < T) x = new Date(now.getFullYear() + 1, m - 1, d); return { n: b.name, d: daysTo(isoDay(x)) }; }).sort((a, b) => a.d - b.d)[0];
+  const due = (clean.list || []).filter(c => { const l = (c.done || []).slice().sort().pop(); return c.every && l && l !== T && daysTo(l) * -1 >= c.every; }).length;
+  const mom = L(dinner ? '🍽 Dinner: ' + esc(dinner.title) : '🍽 Dinner isn’t planned yet', dinner ? '' : 'pick something in the meal planner') +
+    (next ? L('🎂 ' + esc(next.n) + '’s birthday ' + when(next.d)) : '') + L(due ? '🧽 ' + due + ' chore' + (due === 1 ? '' : 's') + ' due' : '🧽 Chores are caught up');
+  // Teacher (work events today come from the connected calendars; filled in below)
+  const sem = (cd.list || []).find(x => /semester|finals/i.test(x[0]) && x[1] >= T);
+  const teachBase = sem ? '<p class="big">' + daysTo(sem[1]) + '</p>' + L('days until ' + esc(sem[0].toLowerCase())) : '';
+  // Nurse
+  const cl = (creds.list || []).filter(c => c.expires).sort((a, b) => a.expires.localeCompare(b.expires)), missing = (creds.list || []).filter(c => !c.expires).length;
+  const ceHrs = (creds.ce || []).filter(x => !creds.ceFrom || x.date >= creds.ceFrom).reduce((a, x) => a + Number(x.hours || 0), 0);
+  const nurse = (cl[0] ? L((daysTo(cl[0].expires) <= 90 ? '⚠️ ' : '✅ ') + esc(cl[0].name) + ' renews ' + (daysTo(cl[0].expires) < 0 ? 'now — expired' : dt(cl[0].expires).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))) : '') +
+    (missing ? L('📝 Add ' + missing + ' expiration date' + (missing === 1 ? '' : 's'), 'license, BLS, ACLS, NRP') : '') + L('📚 ' + ceHrs + (creds.ceGoal ? ' of ' + creds.ceGoal : '') + ' CE hours logged');
+  // Small business
+  const s = booth.data && booth.data[0] && booth.data[0].hubSummary, vids = (social.videos || []);
+  const toRec = vids.filter(v => v.stage === 'idea').length, nextVid = vids.filter(v => v.stage !== 'posted' && v.date && v.date >= T).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const biz = (s ? '<p class="big">' + $money(s.sales) + '</p>' + L('booth sales this month' + (s.goal ? ', goal ' + $money(s.goal) + ' profit' : '')) + ((s.restock || []).length ? L('📦 ' + s.restock.length + ' item' + (s.restock.length === 1 ? '' : 's') + ' to restock') : '') : L('🏷️ Open Booth Tracker once to see this month’s sales')) +
+    L(nextVid ? '🎬 Post “' + esc(nextVid.title) + '” ' + when(daysTo(nextVid.date)) : '🎬 ' + toRec + ' video' + (toRec === 1 ? '' : 's') + ' to record');
+  // Volunteer
+  let vol = L('🎺 No band events in the next two months');
+  const evs = ev.data || [];
+  if (evs.length) {
+    const ids = evs.map(e => e.id), [jobs, sus] = await Promise.all([safe(sb.from('vol_jobs').select('event_id,need').in('event_id', ids)), safe(sb.from('vol_signups').select('event_id,no_show').in('event_id', ids))]);
+    vol = evs.slice(0, 2).map(e => { const need = (jobs.data || []).filter(j => j.event_id === e.id).reduce((a, j) => a + (j.need || 0), 0), have = (sus.data || []).filter(x => x.event_id === e.id && !x.no_show).length, open = Math.max(0, need - have);
+      return L('🎺 ' + esc(e.name) + ' ' + when(daysTo(e.date)), dt(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + (e.start_time ? ' at ' + ampm(e.start_time) : '') + (need ? ' — ' + (open ? open + ' volunteer spot' + (open === 1 ? '' : 's') + ' open' : 'all spots filled') : '')); }).join('');
+  }
+  const draw = teach => { document.getElementById('body').innerHTML = P('mom', 'mom', 'mom-b', '👩‍👧‍👦', 'Mom', mom) + P('teach', 'teach', 'teach-b', '🍎', 'Teacher', teachBase + teach) + P('nurse', 'nurse', 'nurse-b', '🩺', 'Nurse', nurse) + P('biz', 'biz', 'biz-b', '🧵', 'Small business', biz) + P('vol', 'vol', 'vol-b', '🎺', 'Volunteer', vol); };
+  draw(L('📅 Checking your work calendar…'));
+  try {
+    const cals = (((st.data || {}).data || {}).settings || {}).calendars || [];
+    const evts = await calendarDay(sb, cals, T), WORK = /outlook|atu|work/i, WW = /\b(class|lecture|sim|clinical|office hours|advising|faculty|meeting|nur ?\d{4}|exam|committee)\b/i;
+    const w = evts.filter(e => WORK.test(e.cal || '') || WW.test(e.title)).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    const nowT = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'), up = w.find(e => !e.start || e.start >= nowT);
+    draw(w.length ? L('📅 ' + w.length + ' work thing' + (w.length === 1 ? '' : 's') + ' today', up ? 'next: ' + esc(up.title) + (up.start ? ' at ' + ampm(up.start) : '') : 'all done for today') : L('📅 Nothing on your work calendar today'));
+  } catch (e) { draw(''); }
+}, 15);
+</script></body></html>

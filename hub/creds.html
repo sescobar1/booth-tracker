@@ -1,0 +1,82 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Licenses & certifications</title><link rel="stylesheet" href="style.css">
+<style>
+:root{--teal:#3f7f7a;--teal-l:#e2efed;--amber:#c08a2c;--rose:#b5483d}
+.card{min-height:100vh;height:auto}
+h1 small{font-size:13px;color:var(--muted);font-family:Lora,serif}
+.cr{display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px dashed var(--line);cursor:pointer}
+.cr:last-child{border-bottom:0}
+.dot{width:42px;height:42px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;line-height:1;background:var(--sl);color:var(--sc);border:2px solid var(--sc)}
+.dot small{font-size:8.5px;letter-spacing:.04em;margin-top:2px}
+.nm{font-size:15px}.nm small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.st{font-size:12px;border-radius:10px;padding:3px 9px;background:var(--sl);color:var(--sc);white-space:nowrap}
+.add{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}.add input{font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;flex:1;min-width:120px;color:var(--ink)}.add button{background:var(--teal);color:#fff;border-radius:8px;font-size:13.5px;padding:0 14px}
+h2{font-family:Fraunces,Lora,serif;font-weight:400;font-size:19px;margin:22px 0 6px;display:flex;justify-content:space-between;align-items:baseline}h2 small{font-family:Lora,serif;font-size:12.5px;color:var(--muted)}
+.bar{height:9px;background:var(--teal-l)}.bar i{background:var(--teal)}
+.ce{display:grid;grid-template-columns:70px 1fr auto 20px;gap:8px;font-size:13.5px;padding:5px 0;border-bottom:1px solid var(--line);align-items:baseline}.ce small{color:var(--muted)}.ce .x{font-size:12px;color:var(--muted);padding:0}
+.goal{font-size:13px;color:var(--muted)}.goal input{width:56px;font:inherit;font-size:13px;padding:2px 5px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.sheet{position:fixed;inset:0;background:#26342866;display:flex;align-items:flex-start;justify-content:center;padding:16px;z-index:5}.pane{background:var(--card);border-radius:14px;padding:16px 18px;width:100%;max-width:380px;box-shadow:0 10px 30px #0003}
+.pane label{display:block;font-size:12px;color:var(--muted);margin-top:9px}.pane input{display:block;width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:3px}
+.acts{display:flex;justify-content:space-between;margin-top:14px}.ghost{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 12px}.del{color:#a5543b}.pane .btn{background:var(--teal)}
+</style>
+<script src="../config.js"></script><script src="../vendor/supabase.js"></script><script src="data.js?v=5"></script></head><body><div class="card">
+<h1>Licenses &amp; certifications <small id="sum"></small></h1>
+<div id="body" class="muted small">Loading…</div>
+</div><script>
+// Nursing license, life-support cards and continuing-education hours, with how long until each one is due.
+const START = ['RN license (Arkansas)', 'BLS', 'ACLS', 'NRP'];
+let SB, S = null, editId = null;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6), T = () => isoDay(new Date());
+const dt = d => new Date(d + 'T12:00'), daysTo = d => Math.round((dt(d) - dt(T())) / 864e5);
+function status(c) {
+  if (!c.expires) return { t: 'add the date', c: '#8a8f86', l: '#f1efe9', n: '?', u: '' };
+  const n = daysTo(c.expires);
+  if (n < 0) return { t: 'expired', c: '#b5483d', l: '#f8e1dd', n: '!', u: '' };
+  const big = n > 99 ? Math.round(n / 30.4) : n, u = n > 99 ? 'MOS' : 'DAYS';
+  return n <= 30 ? { t: 'renew now', c: '#b5483d', l: '#f8e1dd', n: big, u } : n <= 90 ? { t: 'renew soon', c: '#c08a2c', l: '#f7ecd8', n: big, u } : { t: 'good', c: '#3f7f7a', l: '#e2efed', n: big, u };
+}
+const save = () => hubSet(SB, 'credentials', S);
+function draw() {
+  if (document.querySelector('.sheet')) return;
+  const el = document.getElementById('body'); el.className = '';
+  const L = S.list.slice().sort((a, b) => (a.expires || '9999').localeCompare(b.expires || '9999'));
+  const soon = L.filter(c => c.expires && daysTo(c.expires) <= 90).length;
+  document.getElementById('sum').textContent = soon ? soon + ' due within 90 days' : 'all current';
+  const ceIn = (S.ce || []).filter(x => !S.ceFrom || x.date >= S.ceFrom), hrs = ceIn.reduce((a, x) => a + Number(x.hours || 0), 0), goal = Number(S.ceGoal) || 0;
+  el.innerHTML = L.map(c => { const s = status(c);
+    return '<div class="cr" data-ed="' + c.id + '" style="--sc:' + s.c + ';--sl:' + s.l + '"><div class="dot">' + s.n + (s.u ? '<small>' + s.u + '</small>' : '') + '</div><div class="nm">' + esc(c.name) +
+      '<small>' + (c.expires ? 'Expires ' + dt(c.expires).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Tap to add when it expires') + (c.notes ? ' — ' + esc(c.notes) : '') + '</small></div><span class="st">' + s.t + '</span></div>'; }).join('') +
+    '<form class="add" id="addF"><input id="addN" placeholder="Add a license or card (PALS, CPN, Inpatient OB…)"><input id="addD" type="date" style="flex:0 0 150px"><button>Add</button></form>' +
+    '<h2>Continuing education <small>' + hrs + (goal ? ' of ' + goal : '') + ' contact hours</small></h2>' +
+    (goal ? '<div class="bar"><i style="width:' + Math.min(100, hrs / goal * 100) + '%"></i></div>' : '') +
+    '<p class="goal">Goal <input id="ceGoal" type="number" min="0" value="' + (S.ceGoal || '') + '" placeholder="15"> hours, counting from <input id="ceFrom" type="date" value="' + (S.ceFrom || '') + '" style="width:140px"></p>' +
+    (S.ce || []).slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => '<div class="ce"><small>' + dt(x.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) + '</small><span>' + esc(x.title) + '</span><span>' + x.hours + ' hr</span><button class="x" data-cx="' + x.id + '" title="Remove">✕</button></div>').join('') +
+    '<form class="add" id="ceF"><input id="ceT" placeholder="Course or conference"><input id="ceH" type="number" step="0.25" min="0" placeholder="hours" style="flex:0 0 80px"><input id="ceD" type="date" value="' + T() + '" style="flex:0 0 150px"><button>Log hours</button></form>';
+}
+function sheet(c) {
+  editId = c.id;
+  document.body.insertAdjacentHTML('beforeend', '<div class="sheet"><form class="pane" id="edF"><h2 style="margin-top:0">' + esc(c.name) + '</h2><label>Name<input id="eN" value="' + esc(c.name) + '"></label>' +
+    '<label>Expires<input id="eD" type="date" value="' + (c.expires || '') + '"></label><label>Notes (number, where to renew…)<input id="eO" value="' + esc(c.notes || '') + '"></label>' +
+    '<div class="acts"><button type="button" class="ghost del" id="eDel">Delete</button><span><button type="button" class="ghost" id="eX">Cancel</button> <button class="btn">Save</button></span></div></form></div>');
+}
+const closeSheet = () => { const s = document.querySelector('.sheet'); if (s) s.remove(); editId = null; draw(); };
+document.addEventListener('submit', async e => {
+  e.preventDefault(); const id = e.target.id;
+  if (id === 'addF') { const n = document.getElementById('addN').value.trim(); if (!n) return; S.list.push({ id: uid(), name: n, expires: document.getElementById('addD').value }); draw(); await save(); }
+  if (id === 'ceF') { const t = document.getElementById('ceT').value.trim(), h = Number(document.getElementById('ceH').value); if (!t || !h) return; (S.ce = S.ce || []).push({ id: uid(), title: t, hours: h, date: document.getElementById('ceD').value || T() }); draw(); await save(); }
+  if (id === 'edF') { const c = S.list.find(x => x.id === editId); c.name = document.getElementById('eN').value.trim() || c.name; c.expires = document.getElementById('eD').value; c.notes = document.getElementById('eO').value.trim(); closeSheet(); await save(); }
+});
+document.addEventListener('change', async e => { if (e.target.id === 'ceGoal' || e.target.id === 'ceFrom') { S.ceGoal = Number(document.getElementById('ceGoal').value) || 0; S.ceFrom = document.getElementById('ceFrom').value; draw(); await save(); } });
+document.addEventListener('click', async e => {
+  if (e.target.id === 'eX' || e.target.classList.contains('sheet')) return closeSheet();
+  if (e.target.id === 'eDel') { const c = S.list.find(x => x.id === editId); if (!(await ask('Delete ' + c.name + '?'))) return; S.list = S.list.filter(x => x !== c); closeSheet(); await save(); return; }
+  const cx = e.target.closest('[data-cx]'); if (cx) { S.ce = S.ce.filter(x => x.id !== cx.dataset.cx); draw(); await save(); return; }
+  const r = e.target.closest('[data-ed]'); if (r) sheet(S.list.find(x => x.id === r.dataset.ed));
+});
+hubData(async sb => {
+  SB = sb; if (document.querySelector('.sheet')) return;
+  const d = await hubGet(sb, 'credentials');
+  S = d && d.list ? d : { list: START.map(name => ({ id: uid(), name, expires: '' })), ce: [], ceGoal: 0, ceFrom: '' };
+  if (!(d && d.list)) save();
+  draw();
+}, 30);
+</script></body></html>
