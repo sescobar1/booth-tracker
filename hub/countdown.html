@@ -24,7 +24,7 @@ function nextOf(md) {
 function occasionOf(t) {
   const anniv = /anniversary/i.test(t), bday = /\b(birthday|bday|b-day)\b|🎂/i.test(t);
   if (!anniv && !bday) return null;
-  if (/\b(buy|wrap|card|gift|party|plan|order|bake|pick ?up)\b/i.test(t) && !/^happy\b/i.test(t)) return null;
+  if (/\b(buy|wrap|card|gift|party|parties|dinner|lunch|movies?|celebrat\w*|plan|order|bake|pick ?up|post|stuff|tomorrow|sometime)\b/i.test(t)) return null;
   let n = t.replace(/[\u{1F300}-\u{1FAFF}☀-➿️]/gu, ' ').replace(/[’']s\b/gi, '')
     .replace(/\b(happy|birthday|bday|b-day|anniversary|wedding|celebration|day|of|the|for|to)\b/gi, ' ')
     .replace(/\b\d+(st|nd|rd|th)?\b/gi, ' ').replace(/[()\-–—:!.,#|/]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(our|my|us)\b\s*/i, '').trim();
