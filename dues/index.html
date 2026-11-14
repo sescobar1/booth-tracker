@@ -62,11 +62,12 @@
     .pay { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .92rem; align-items: center; }
     .pay:first-child { border-top: 0; }
     .linkbox { font-size: .82rem; word-break: break-word; background: var(--card); border: 1px dashed var(--line); padding: 8px; border-radius: 8px; white-space: pre-wrap; }
-    .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
+    .toast { display: flex; align-items: center; position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
     .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; border: 0; background: #24536f; color: #fff; font-size: 1.8rem; box-shadow: 0 6px 18px #0003; }
     .quick { border: 1px solid var(--line); background: var(--card); color: var(--green); border-radius: 8px; padding: 4px 8px; font-size: .8rem; font-weight: 700; }
     @media (max-width: 560px) { .stats { grid-template-columns: 1fr 1fr; } }
     [hidden] { display: none !important; }
+    .quick { padding: 8px 12px; font-size: .88rem; }
   </style>
 </head>
 <body>
@@ -100,7 +101,7 @@
     const statusBase = location.href.split('#')[0].replace(/[^/]*$/, '') + 'status.html?t=';
     let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '';
     let toastTimer;
-    const toast = m => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200); };
+    const toast = (m, undo) => { const t = $('toast'); t.innerHTML = esc(m) + (undo ? ' <button type="button" id="undoBtn" style="margin-left:10px;background:none;border:1px solid currentColor;color:inherit;border-radius:99px;padding:3px 10px;font-weight:700">Undo</button>' : ''); t.hidden = false; if (undo) $('undoBtn').onclick = () => { t.hidden = true; undo(); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 6000 : 3200); };
     const open = html => { $('sheet').innerHTML = html; $('modal').hidden = false; };
     const close = () => { $('modal').hidden = true; $('sheet').innerHTML = ''; };
     $('modal').addEventListener('click', e => { if (e.target.id === 'modal') close(); });
@@ -173,10 +174,10 @@
       $('view').innerHTML = (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + ' / ' + active.length + '</b></div><div class="stat"><span>Still owe</span><b style="color:var(--red)">' + nOwe + '</b>' + (settings.amount > 0 ? '<small class="helper" style="display:block;margin:0">' + money(nOwe * settings.amount) + '</small>' : '') + '</div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">' + (settings.due_date ? 'due ' + esc(fmtDate(settings.due_date)) : 'per semester') + '</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn" id="remBtn"' + (nOwe ? '' : ' disabled') + '>📣 Reminders (' + nOwe + ')</button><button type="button" class="btn ghost" id="bulkBtn">👥 Add students</button><button type="button" class="btn ghost" id="csvBtn">⬇ Download</button></div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="bulkBtn">👥 Add students</button><button type="button" class="btn ghost" id="csvBtn">⬇ Download</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['grad', 'Graduated']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
-        '<input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
+        '<p class="helper">Tap <b>✓ Paid</b> to record ' + money(settings.amount || 5) + ' by Cash App today. For cash, paying ahead or a receipt #, tap the student\'s name instead.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
         (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
           return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
             xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
@@ -185,9 +186,9 @@
       document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
       document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
       document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('[data-quick]')) showMember(r.dataset.m); });
-      document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payForm(b.dataset.quick));
+      document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => { b.disabled = true; quickPay(b.dataset.quick); });
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('remBtn').onclick = reminders; $('bulkBtn').onclick = bulkAdd; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -195,7 +196,7 @@
       open('<h2>' + (first ? 'One more thing' : 'Settings') + '</h2>' + (first ? '<p class="helper">How much are dues each semester? You can change this any time under ⚙ Settings.</p>' : '') +
         '<label>Organization name<input id="sOrg" value="' + esc(settings.org) + '"></label>' +
         '<div class="grid2"><label>Dues per semester<input id="sAmt" inputmode="decimal" value="' + (Number(settings.amount) || '') + '" placeholder="25"></label><label>Due date this semester<input id="sDue" type="date" value="' + esc(settings.due_date || '') + '"></label></div>' +
-        '<label>How students can pay (shown on their status page and in reminders)<textarea id="sPay" rows="3" placeholder="Venmo @ATU-SNA, Cash App $ATUSNA, or cash to any officer">' + esc(settings.pay_info) + '</textarea></label>' +
+        '<label>How students can pay (shown on their status page)<textarea id="sPay" rows="3" placeholder="Venmo @ATU-SNA, Cash App $ATUSNA, or cash to any officer">' + esc(settings.pay_info) + '</textarea></label>' +
         '<p class="helper">Current semester: <b>' + termName(cur()) + '</b>. In January and August everyone moves up a level on their own, and Level 4 students graduate.</p>' +
         '<div class="actions"><button type="button" class="btn" id="sSave">Save</button>' + (first ? '' : '<button type="button" class="btn ghost" id="sCancel">Cancel</button>') + '</div>' +
         (first ? '' : '<div class="card"><h2>Move up early</h2><p class="helper">Only if you need to start ' + termName(cur() + 1) + ' before ' + (cur() % 2 ? 'January' : 'August') + '. Everyone moves up one level and Level 4 graduates.</p><button type="button" class="btn ghost small" id="sUp">Start ' + termName(cur() + 1) + ' now</button></div><div class="actions"><button type="button" class="btn ghost small" id="sOut">Sign out</button></div>'));
@@ -269,7 +270,7 @@
         '<label>Paid with</label><div class="methods">' + METHODS.map(x => '<button type="button" class="chip" data-meth="' + x + '">' + x + '</button>').join('') + '</div>' +
         '<div class="grid2"><label>Receipt #<input id="pRec" placeholder="1042"></label><label>Note<input id="pNote"></label></div>' +
         '<div class="actions"><button type="button" class="btn" id="pSave">Save payment</button><button type="button" class="btn ghost" id="pCancel">Cancel</button></div>');
-      let n = 1, meth = '';
+      let n = 1, meth = 'Cash App'; document.querySelector('[data-meth="Cash App"]').classList.add('on');
       document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = Number(b.dataset.n); document.querySelectorAll('[data-n]').forEach(x => x.classList.toggle('on', x === b)); if (settings.amount > 0) $('pAmt').value = +(settings.amount * n).toFixed(2); });
       document.querySelectorAll('[data-meth]').forEach(b => b.onclick = () => { meth = b.dataset.meth; document.querySelectorAll('[data-meth]').forEach(x => x.classList.toggle('on', x === b)); });
       $('pCancel').onclick = close;
@@ -283,6 +284,21 @@
       };
     }
 
+    // ---- one tap: dues amount, Cash App, today, this semester ----
+    async function quickPay(id) {
+      const m = members.find(x => x.id === id); if (!m) return;
+      const before = m.paid_through, thru = Math.max(cur(), m.paid_through + 1), amount = Number(settings.amount) || 5;
+      const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: today(), method: 'Cash App', receipt: '', note: '', through_term: thru }).select().single();
+      if (fail(r)) { draw(); return; }
+      if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) { draw(); return; }
+      payments.push(r.data); m.paid_through = thru; draw();
+      toast('✓ ' + firstName(m.name) + ' paid ' + money(amount) + ' Cash App', async () => {
+        if (fail(await sb.from('dues_payments').delete().eq('id', r.data.id))) return;
+        if (fail(await sb.from('dues_members').update({ paid_through: before }).eq('id', id))) return;
+        payments = payments.filter(p => p.id !== r.data.id); m.paid_through = before; draw(); toast('Undone');
+      });
+    }
+
     // ---- one student ----
     function showMember(id) {
       const m = members.find(x => x.id === id); if (!m) return;
@@ -291,8 +307,8 @@
         (m.notes ? '<p class="helper">📝 ' + esc(m.notes) + '</p>' : '') +
         (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' : '') +
         '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(p.receipt) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Delete payment">✕</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
-        '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. It only shows their own dues.</p><div class="linkbox">' + esc(link) + '</div>' +
-        '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + (s.key === 'unpaid' ? '<button type="button" class="btn ghost small" id="lMsg">Copy reminder</button>' + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '?subject=' + encodeURIComponent((settings.org || 'SNA') + ' dues') + '&body=' + encodeURIComponent(personalMsg(m)) + '">✉ Email</a>' : '') + (m.phone ? '<a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '?&body=' + encodeURIComponent(personalMsg(m)) + '">💬 Text</a>' : '') : '') + '</div></div>' +
+        '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. They can check their own dues any time; it shows nothing about anyone else.</p><div class="linkbox">' + esc(link) + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + '</div></div>' +
         '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
       if ($('mPay')) $('mPay').onclick = () => payForm(id);
       document.querySelectorAll('[data-delpay]').forEach(b => b.onclick = async () => {
@@ -301,7 +317,6 @@
         payments = payments.filter(p => p.id !== b.dataset.delpay); draw(); showMember(id);
       });
       $('lCopy').onclick = () => copy(link, 'Link copied ✓');
-      if ($('lMsg')) $('lMsg').onclick = () => copy(personalMsg(m), 'Reminder copied ✓');
       $('mEdit').onclick = () => editMember(m);
       $('mClose').onclick = close;
       $('mAct').onclick = async () => {
@@ -309,29 +324,6 @@
         if (fail(await sb.from('dues_members').update(row).eq('id', id))) return;
         Object.assign(m, row); close(); draw(); toast(m.active ? 'Back on the roster' : 'Removed from the roster');
       };
-    }
-
-    // ---- reminders ----
-    function personalMsg(m) {
-      return 'Hi ' + firstName(m.name) + '! Friendly reminder from ' + (settings.org || 'SNA') + ' that your ' + termName(cur()) + ' dues' + (settings.amount > 0 ? ' (' + money(settings.amount) + ')' : '') + ' are still open' + (settings.due_date ? ' — due ' + fmtDate(settings.due_date) : '') + '.' +
-        (settings.pay_info ? '\n\nHow to pay: ' + settings.pay_info : '') + '\n\nCheck your status any time: ' + statusBase + m.token + '\n\nThank you! 💙';
-    }
-    function reminders() {
-      const owe = members.filter(m => m.active && stateOf(m).key === 'unpaid');
-      const group = 'Hi SNA members! Friendly reminder that ' + termName(cur()) + ' dues' + (settings.amount > 0 ? ' of ' + money(settings.amount) : '') + ' are ' + (settings.due_date ? 'due ' + fmtDate(settings.due_date) : 'due soon') + '.' + (settings.pay_info ? ' How to pay: ' + settings.pay_info + '.' : '') + ' If you\'ve already paid, thank you! 💙';
-      const emails = owe.map(m => m.email).filter(Boolean);
-      open('<h2>📣 Reminders</h2><p class="helper">' + owe.length + ' student' + (owe.length === 1 ? ' hasn\'t' : 's haven\'t') + ' paid for ' + termName(cur()) + '.</p>' +
-        '<div class="card"><h2>Group message</h2><p class="helper">For GroupMe, Canvas or a class email. It doesn\'t name anyone.</p><div class="linkbox">' + esc(group) + '</div><div class="actions"><button type="button" class="btn small" id="gCopy">Copy message</button>' + (emails.length ? '<button type="button" class="btn ghost small" id="eCopy">Copy ' + emails.length + ' emails (for BCC)</button>' : '') + '<button type="button" class="btn ghost small" id="nCopy">Copy list of names by level</button></div></div>' +
-        '<div class="card"><h2>One at a time</h2><p class="helper">Each message has their private status link.</p>' +
-        owe.map(m => '<div class="pay"><span><b>' + esc(m.name) + '</b><br><small class="helper">' + esc(lvlName(m.lvl)) + '</small></span><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn ghost small" data-rcopy="' + m.id + '">Copy</button>' +
-          (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '?subject=' + encodeURIComponent((settings.org || 'SNA') + ' dues') + '&body=' + encodeURIComponent(personalMsg(m)) + '">✉</a>' : '') +
-          (m.phone ? '<a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '?&body=' + encodeURIComponent(personalMsg(m)) + '">💬</a>' : '') + '</span></div>').join('') + '</div>' +
-        '<div class="actions"><button type="button" class="btn ghost" id="rClose">Close</button></div>');
-      $('gCopy').onclick = () => copy(group, 'Group message copied ✓');
-      if ($('eCopy')) $('eCopy').onclick = () => copy(emails.join(', '), 'Emails copied ✓');
-      $('nCopy').onclick = () => copy(LEVELS.map(l => { const xs = owe.filter(m => m.lvl === l); return xs.length ? lvlName(l) + ' (' + xs.length + ')\n' + xs.map(m => '  ' + m.name).join('\n') : ''; }).filter(Boolean).join('\n\n'), 'Names copied ✓');
-      document.querySelectorAll('[data-rcopy]').forEach(b => b.onclick = () => copy(personalMsg(members.find(m => m.id === b.dataset.rcopy)), 'Copied ✓'));
-      $('rClose').onclick = close;
     }
 
     // ---- download ----
