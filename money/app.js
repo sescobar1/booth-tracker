@@ -904,7 +904,7 @@ function safeToSpend(acc, balance) {
 }
 
 // ---------- Bills calendar ----------
-let calMonth = '';
+let calMonth = '', calDay = '';
 function viewCalendar() {
   const acc = activeAccount(); if (!acc) { location.hash = 'register'; return; }
   if (!calMonth) calMonth = today().slice(0, 7);
@@ -924,7 +924,7 @@ function viewCalendar() {
   for (let d = 1; d <= n; d++) {
     const iso = calMonth + '-' + pad(d), xs = items[iso] || [];
     const out = xs.filter(x => x.type === 'expense').reduce((s, x) => s + x.amt, 0), inc = xs.filter(x => x.type === 'income').reduce((s, x) => s + x.amt, 0);
-    cells += '<button type="button" class="cal-d' + (iso === today() ? ' today' : '') + (xs.length ? ' has' : '') + '" data-day="' + iso + '"><span class="n">' + d + '</span>' +
+    cells += '<button type="button" class="cal-d' + (iso === today() ? ' today' : '') + (xs.length ? ' has' : '') + (iso === calDay ? ' sel' : '') + '" data-day="' + iso + '"><span class="n">' + d + '</span>' +
       (inc ? '<span class="calamt income">+' + Math.round(inc).toLocaleString() + '</span>' : '') + (out ? '<span class="calamt expense">−' + Math.round(out).toLocaleString() + '</span>' : '') + '</button>';
   }
   const list = Object.keys(items).sort().map(d => '<div class="day" id="d' + d + '">' + esc(fmtDate(d, true)) + '</div>' + items[d].map(x => '<div class="mini-row" ' + (x.rec ? 'data-crec="' + x.rec + '"' : 'data-ctx="' + x.tx + '"') + ' style="cursor:pointer"><span>' + (x.rec ? '🔁 ' : '') + esc(x.name) + (x.done ? ' <span class="chip">✓ cleared</span>' : '') + '</span><b class="' + x.type + '">' + signedAmt(x.type, x.amt) + '</b></div>').join('')).join('');
@@ -932,14 +932,29 @@ function viewCalendar() {
     '<div class="cal-head"><button type="button" class="ghost small" id="calPrev">‹</button><h2>' + esc(monthName(calMonth)) + '</h2><button type="button" class="ghost small" id="calNext">›</button></div>' +
     '<p class="helper">Bills <b class="expense">' + money(totOut) + '</b> · Deposits <b class="income">' + money(totIn) + '</b></p>' +
     '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-w">' + x + '</div>').join('') + cells + '</div>' +
-    '<label class="check"><input type="checkbox" id="calAll"' + (viewCalendar.all ? ' checked' : '') + '> Show everyday spending too</label>' +
+    '<div id="dayPanel"></div>' + '<label class="check"><input type="checkbox" id="calAll"' + (viewCalendar.all ? ' checked' : '') + '> Show everyday spending too</label>' +
     '<div class="card pad">' + (list || '<p class="helper">No bills this month. <a href="#recurring">Set up recurring bills</a></p>') + '</div>';
-  $('calPrev').onclick = () => { const d = new Date(y, m - 2, 1); calMonth = isoDay(d).slice(0, 7); viewCalendar(); };
-  $('calNext').onclick = () => { const d = new Date(y, m, 1); calMonth = isoDay(d).slice(0, 7); viewCalendar(); };
+  $('calPrev').onclick = () => { calDay = ''; const d = new Date(y, m - 2, 1); calMonth = isoDay(d).slice(0, 7); viewCalendar(); };
+  $('calNext').onclick = () => { calDay = ''; const d = new Date(y, m, 1); calMonth = isoDay(d).slice(0, 7); viewCalendar(); };
   $('calAll').onchange = e => { viewCalendar.all = e.target.checked; viewCalendar(); };
-  $('view').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { const el = $('d' + b.dataset.day); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); else editTx(null, 'expense', { date: b.dataset.day }); });
+  $('view').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { calDay = b.dataset.day; viewCalendar(); const p = $('dayPanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  if (calDay) drawDayPanel(acc, calDay, 'dayPanel', viewCalendar);
   $('view').querySelectorAll('[data-crec]').forEach(b => b.onclick = () => editRecurring(b.dataset.crec));
   $('view').querySelectorAll('[data-ctx]').forEach(b => b.onclick = () => editTx(b.dataset.ctx));
+}
+
+// Every entry on one day, with totals; tap one to edit it.
+function drawDayPanel(acc, day, el, back) {
+  const xs = data.tx.filter(t => t.accountId === acc.id && t.date === day).sort(byTime);
+  const out = xs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0), inc = xs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+  $(el).innerHTML = '<div class="card pad"><h2>' + esc(fmtDate(day, true)) + '</h2>' +
+    '<p class="helper">' + xs.length + ' entr' + (xs.length === 1 ? 'y' : 'ies') + (out ? ' · out <b class="expense">' + money(out) + '</b>' : '') + (inc ? ' · in <b class="income">' + money(inc) + '</b>' : '') + '</p>' +
+    (xs.map(t => { const k = revKind(t), b = boughtOn(t);
+      return '<div class="mini-row rrow ' + k + '" data-dedit="' + t.id + '" style="cursor:pointer"><span class="rmain"><b>' + esc(t.payee || '(no name)') + '</b><span class="sub">' + (t.source === 'Bank' ? '🏦 from bank' : '✍️ you typed it') + (t.cleared ? ' · ✓ cleared' : ' · not on bank yet') + (t.category ? ' · ' + esc(t.category) : '') + (b && b !== t.date ? ' · bought ' + esc(fmtDate(b)) : '') + '</span></span><b class="' + t.type + '">' + signedAmt(t.type, t.amount) + '</b></div>'; }).join('') || '<p class="helper">Nothing on this day.</p>') +
+    '<div class="row-actions"><button type="button" class="ghost" data-dadd="' + day + '">+ Add entry for this day</button><button type="button" class="ghost" data-dclose>Close</button></div></div>';
+  $(el).querySelectorAll('[data-dedit]').forEach(r => r.onclick = () => editTx(r.dataset.dedit));
+  $(el).querySelector('[data-dadd]').onclick = () => editTx(null, 'expense', { date: day });
+  $(el).querySelector('[data-dclose]').onclick = () => { if (back === viewCalendar) calDay = ''; else revDay = ''; back(); };
 }
 
 // ---------- Review calendar ----------
@@ -977,8 +992,8 @@ function viewReview() {
 }
 function drawReviewDay(acc) {
   // The day she tapped plus the day before and after: she often writes it the day before it posts, and weekend charges post Monday.
-  const t0 = new Date(revDay + 'T12:00'), days = [-1, 0, 1].map(k => isoDay(new Date(t0.getTime() + k * 864e5)));
-  if (t0.getDay() === 1) days.unshift(isoDay(new Date(t0.getTime() - 3 * 864e5)), isoDay(new Date(t0.getTime() - 2 * 864e5)));
+  const t0 = new Date(revDay + 'T12:00'), days = drawReviewDay.near ? [-1, 0, 1].map(k => isoDay(new Date(t0.getTime() + k * 864e5))) : [revDay];
+  if (drawReviewDay.near && t0.getDay() === 1) days.unshift(isoDay(new Date(t0.getTime() - 3 * 864e5)), isoDay(new Date(t0.getTime() - 2 * 864e5)));
   const list = data.tx.filter(t => t.accountId === acc.id && days.includes(t.date));
   const row = t => { const k = revKind(t), b = boughtOn(t);
     return '<label class="rrow ' + k + '"><input type="checkbox" data-rpick="' + t.id + '"' + (revPick.has(t.id) ? ' checked' : '') + '>' +
@@ -990,10 +1005,11 @@ function drawReviewDay(acc) {
       (xs.length ? xs.map(row).join('') : '<p class="helper">Nothing.</p>'); }).join('');
   $('revPanel').innerHTML = '<div class="card pad"><h2>' + esc(fmtDate(revDay, true)) + '</h2>' +
     '<p class="helper">✍️ = you typed it, 🏦 = from the bank. To pair, tick one of yours and the bank charge(s) it goes with, then tap <b>Pair</b>. Your entry keeps its name and category and takes the bank amount; the bank line is removed so nothing counts twice.</p>' +
-    html + '<div class="row-actions"><button type="button" id="revPair">Pair ticked entries</button><button type="button" class="ghost" id="revAdd">+ Add entry for this day</button></div><p class="helper" id="revMsg"></p></div>';
+    '<label class="check"><input type="checkbox" id="revNear"' + (drawReviewDay.near ? ' checked' : '') + '> Show the days around it too/label>' + html + '<div class="row-actions"><button type="button" id="revPair">Pair ticked entries</button><button type="button" class="ghost" id="revAdd">+ Add entry for this day</button></div><p class="helper" id="revMsg"></p></div>';
   $('revPanel').querySelectorAll('[data-rpick]').forEach(c => c.onchange = () => { c.checked ? revPick.add(c.dataset.rpick) : revPick.delete(c.dataset.rpick); });
   $('revPanel').querySelectorAll('[data-redit]').forEach(b => b.onclick = e => { e.preventDefault(); editTx(b.dataset.redit); });
   $('revAdd').onclick = () => editTx(null, 'expense', { date: revDay });
+  $('revNear').onchange = e => { drawReviewDay.near = e.target.checked; drawReviewDay(acc); };
   $('revPair').onclick = () => {
     const picked = data.tx.filter(t => revPick.has(t.id)), yours = picked.filter(t => t.source !== 'Bank'), bank = picked.filter(t => t.source === 'Bank');
     const msg = s => { $('revMsg').textContent = s; };
