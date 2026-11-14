@@ -173,7 +173,7 @@
         const ids = keep.filter(m => m.lvl === l).map(m => m.id);
         if (ids.length && fail(await sb.from('dues_members').update({ lvl: l + 1, level: 'Level ' + (l + 1), updated_at: now }).in('id', ids))) return;
       }
-      for (const m of act.filter(m => m.role)) {
+      for (const m of act.filter(m => m.role && settings.officers_saved !== from)) {
         const h = (m.officer_history || []).filter(x => x.term !== termName(from)).concat(m.role.split(' · ').map(role => ({ term: termName(from), role })));
         if (fail(await sb.from('dues_members').update({ officer_history: h }).eq('id', m.id))) return;
         m.officer_history = h;
@@ -509,7 +509,7 @@
       members.forEach(m => (m.officer_history || []).forEach(h => { (hist[h.term] = hist[h.term] || []).push({ m, role: h.role }); }));
       const terms = Object.keys(hist).sort((a, b) => termRank(b) - termRank(a));
       const contact = m => (m.phone ? '<a class="btn ghost small" href="tel:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">📞</a><a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">💬</a>' : '') + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '">✉</a>' : '');
-      $('view').innerHTML = modeTabs() +
+      $('view').innerHTML = modeTabs() + electionCard() +
         '<div class="actions" style="margin-top:0"><button type="button" class="btn" id="oAdd">➕ Add an officer</button><button type="button" class="btn ghost" id="oCsv">⬇ Officer list</button><button type="button" class="btn ghost" id="oMail"' + (now.some(m => m.email) ? '' : ' disabled') + '>✉ Copy officer emails</button></div>' +
         '<div class="lvlhead"><h3>' + termName(cur()) + ' officers</h3><small>' + now.length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
         (now.length ? now.map(m => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small><small>' + esc([lvlName(m.lvl), m.phone, m.email].filter(Boolean).join(' · ')) + '</small></div><span style="display:flex;gap:4px">' + contact(m) + '</span></div>').join('') : '<p class="helper">No officers yet. Tap ➕ Add an officer.</p>') + '</div>' +
@@ -518,7 +518,7 @@
           hist[t].sort((a, b) => roleRank(a.role) - roleRank(b.role)).map(({ m, role }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + esc(role) + (m.active ? '' : ' · ' + (m.graduated ? 'graduated ' + esc(m.graduated) : 'past student')) + '</small></div></div>').join('') + '</div>').join('');
       wireModes();
       document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('a')) showMember(r.dataset.m); });
-      $('oAdd').onclick = addOfficer;
+      $('oAdd').onclick = addOfficer; wireElection();
       $('oMail').onclick = () => copy(now.map(m => m.email).filter(Boolean).join(', '), 'Officer emails copied ✓');
       $('oCsv').onclick = () => {
         const lines = [[(settings.org || 'SNA') + ' officers'], ['Semester', 'Role', 'Name', 'Level', 'Phone', 'Email']]
@@ -541,6 +541,154 @@
         const row = { role: m.role ? m.role + ' · ' + role : role, phone: $('aPh').value.trim(), email: $('aEm').value.trim(), updated_at: new Date().toISOString() };
         if (fail(await sb.from('dues_members').update(row).eq('id', m.id))) return;
         Object.assign(m, row); close(); draw(); toast(firstName(m.name) + ' is now ' + role);
+      };
+    }
+
+    // Positions and descriptions from the SNA nominations form. "level" = only that level can run (and vote for it).
+    const ELECTION_POSITIONS = [
+      { name: 'President', seats: 1, on: false, desc: 'Communicates with Dr. Escobar, Dr. Dubose and SNA members about upcoming events through monthly meetings. Organizes and sends timely notice of meeting and volunteer dates, leads the meetings, attends volunteer events, and represents ATU and SNA professionally. Works with many people and organizations to strengthen the community and SNA. A strong commitment of time and effort is expected.' },
+      { name: 'Vice President', seats: 1, on: true, desc: 'Needs to be well organized. Runs two of the monthly meetings and helps the other officers organize volunteer activities. Moves into the President role the following semester.' },
+      ...[0, 1, 2, 3, 4].map(l => ({ name: 'Level ' + l + ' Representative', seats: 1, on: true, level: l, desc: 'The voice of your level on the SNA board. Attend meetings, keep your level updated on discussions and decisions, and bring your class\'s feedback, questions and concerns to the board, so both sides know about key events, volunteer opportunities and issues.' })),
+      { name: 'Fundraising Rep. – T-Shirts', seats: 1, on: true, desc: 'Work with Dr. Goodner (kgoodner@atu.edu) to set the timeline, run design submissions and the design vote, get the design approved, and order and hand out the T-shirts.' },
+      { name: 'Fundraising Rep. – Snack Room', seats: 2, on: true, desc: 'Oversee the SNA snack room in Dean 217: keep it stocked, coordinate purchasing with Dr. Escobar (sescobar@atu.edu), and check it at least twice a week.' },
+      { name: 'Curriculum Committee Rep.', seats: 2, on: true, desc: 'Work with level coordinators to collect positive and negative curriculum feedback from Levels 0–4 (a survey or message shared in each GroupMe at the end of the semester). Compile it into a typed report to present at the faculty curriculum meeting; confirm the date with Dr. Henderson (khenderson20@atu.edu). You must attend at least one curriculum meeting a semester to earn points.' },
+      { name: 'Welfare Committee Rep.', seats: 1, on: true, desc: 'Bring student issues about the dress code or policies to the Nursing Faculty Welfare Committee. Arrange with Dr. Randell to attend a welfare meeting, survey each level mid-semester, present the concerns, then report back on the outcome. Represent and ask for input on these issues at each SNA meeting.' },
+      { name: 'Recognition Committee Co-Chair', seats: 2, on: true, level: 3, desc: 'Level 3 students. Manage the student volunteers for the recognition ceremony: make the sign-up sheet and be there for set-up, the ceremony and clean-up. Then move to the Level 4 Recognition Committee.' },
+      { name: 'Recognition Committee', seats: 7, on: true, level: 4, desc: 'Level 4 students. Help faculty plan parts of the recognition ceremony.' }
+    ];
+    const ELECTION_INTRO = 'SNA is a nationally and locally affiliated organization focused on volunteer work. Our chapter serves Pope County and the River Valley, including River Valley Food for Kids, the ATU Health and Wellness Center, the Russellville School District, the Pregnancy Center and more. Joining is voluntary, but we strongly encourage it — it can boost your scholarship, resume and job applications.\n\nEvery executive and committee position must attend three meetings a semester. Please consider running for one of these positions!';
+    // ---- officer elections ----
+    let elections = null, eCands = [], eVotes = [];
+    const electBase = location.href.split('#')[0].replace(/[^/]*$/, '') + 'elect.html?t=';
+    async function loadElection() {
+      const r = await sb.from('dues_elections').select('*').order('created_at', { ascending: false });
+      if (r.error) { elections = []; return; }
+      elections = r.data || [];
+      const e = elections[0];
+      if (e) {
+        const [c, v] = await Promise.all([sb.from('dues_candidates').select('*').eq('election_id', e.id), sb.from('dues_votes').select('*').eq('election_id', e.id)]);
+        eCands = c.data || []; eVotes = v.data || [];
+      }
+    }
+    function results(e) {
+      return (e.positions || []).map(p => {
+        const cs = eCands.filter(c => c.position === p.name).map(c => ({ c, n: eVotes.filter(v => v.candidate_id === c.id).length })).sort((a, b) => b.n - a.n || a.c.name.localeCompare(b.c.name));
+        const seats = Math.max(1, Number(p.seats) || 1), cutoff = cs[seats - 1] ? cs[seats - 1].n : -1;
+        const win = cs.filter((x, i) => i < seats && (x.n > 0 || cs.length <= seats)), tie = cs.length > seats && cutoff > 0 && cs[seats].n === cutoff;
+        return { p, seats, cs, win, tie };
+      });
+    }
+    function electionCard() {
+      if (elections === null) { loadElection().then(() => { if (mode === 'officers') draw(); }); return '<div class="card"><p class="helper">Loading election…</p></div>'; }
+      const e = elections[0];
+      if (!e || e.phase === 'closed') return '<div class="card"><h2>🗳 Officer election</h2><p class="helper">' + (e ? 'Last election: ' + esc(e.title) + ' (closed).' : 'Students run for a position, then vote, all from one link.') + '</p><button type="button" class="btn" id="eNew">🗳 Start an officer election</button>' + (e ? ' <button type="button" class="btn ghost" id="eOld">See last results</button>' : '') + '</div>';
+      const voters = new Set(eVotes.map(v => v.member_id)).size, link = electBase + e.token;
+      const steps = [['nominations', '1. Students sign up to run'], ['voting', '2. Voting'], ['closed', '3. Results']];
+      const R = results(e);
+      return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">🗳 ' + esc(e.title) + '</h2><span class="tag paid">' + (e.phase === 'nominations' ? 'Sign-ups open' : 'Voting open') + '</span></div>' +
+        '<p class="helper">' + steps.map(([k, l]) => k === e.phase ? '<b style="color:var(--ink)">' + l + '</b>' : l).join(' → ') + (e.paid_only ? ' · paid members only' : '') + '</p>' +
+        '<div class="linkbox">' + esc(link) + '</div><div class="actions"><button type="button" class="btn small" id="eCopy">Copy link for students</button><a class="btn ghost small" href="' + esc(link) + '" target="_blank" rel="noopener">Open it</a></div>' +
+        '<p class="helper" style="margin-top:12px">' + eCands.length + ' on the ballot' + (e.phase === 'voting' ? ' · <b>' + voters + '</b> students have voted' : '') + '</p>' +
+        R.map(({ p, seats, cs, win, tie }) => '<div style="margin:10px 0"><b>' + esc(p.name) + '</b>' + (p.level != null ? ' <small class="helper">Level ' + p.level + ' only</small>' : '') + (seats > 1 ? ' <small class="helper">(' + seats + ' spots)</small>' : '') +
+          (cs.length ? cs.map(x => '<div class="pay"><span>' + (e.phase === 'voting' && win.includes(x) ? '🏆 ' : '') + esc(x.c.name) + ((x.c.phone || x.c.email) ? '<br><small class="helper">' + esc([x.c.phone, x.c.email].filter(Boolean).join(' · ')) + '</small>' : '') + (x.c.statement ? '<br><small class="helper">“' + esc(x.c.statement) + '”</small>' : '') + '</span><span style="display:flex;gap:6px;align-items:center">' + (e.phase === 'voting' ? '<b>' + x.n + '</b>' : '') + '<button type="button" class="btn ghost small" data-cdel="' + x.c.id + '" aria-label="Remove">✕</button></span></div>').join('') : '<p class="helper" style="margin:2px 0">No one yet</p>') +
+          (tie && e.phase === 'voting' ? '<small style="color:var(--amber)">Tie for the last spot — you\'ll pick when you finish.</small>' : '') + '</div>').join('') +
+        '<div class="actions"><button type="button" class="btn ghost small" id="eAddC">➕ Add someone to the ballot</button><button type="button" class="btn ghost small" id="eRef">↻ Refresh</button></div>' +
+        '<div class="actions">' + (e.phase === 'nominations' ? '<button type="button" class="btn" id="eVote">Close sign-ups and open voting</button>' : '<button type="button" class="btn" id="eDone">Close voting and see winners</button>') + '<button type="button" class="btn ghost small" id="eDel">Delete election</button></div></div>';
+    }
+    function wireElection() {
+      const e = elections && elections[0];
+      if ($('eNew')) $('eNew').onclick = newElection;
+      if ($('eOld')) $('eOld').onclick = () => finishElection(e, true);
+      if (!e || e.phase === 'closed') return;
+      if ($('eCopy')) $('eCopy').onclick = () => copy(electBase + e.token, 'Election link copied ✓');
+      if ($('eRef')) $('eRef').onclick = async () => { await loadElection(); draw(); toast('Up to date ✓'); };
+      document.querySelectorAll('[data-cdel]').forEach(b => b.onclick = async () => {
+        if (!confirm('Take this person off the ballot? Any votes for them are removed too.')) return;
+        if (fail(await sb.from('dues_candidates').delete().eq('id', b.dataset.cdel))) return;
+        eCands = eCands.filter(c => c.id !== b.dataset.cdel); eVotes = eVotes.filter(v => v.candidate_id !== b.dataset.cdel); draw();
+      });
+      if ($('eAddC')) $('eAddC').onclick = () => {
+        const act = members.filter(m => m.active).sort((a, b) => a.name.localeCompare(b.name));
+        open('<h2>Add someone to the ballot</h2><label>Student<select id="acW"><option value="">Pick a student…</option>' + act.map(m => '<option value="' + m.id + '">' + esc(m.name) + ' · ' + esc(lvlName(m.lvl)) + '</option>').join('') + '</select></label><label>Position<select id="acP">' + e.positions.map(p => '<option>' + esc(p.name) + '</option>').join('') + '</select></label><div class="actions"><button type="button" class="btn" id="acS">Add</button><button type="button" class="btn ghost" id="acX">Cancel</button></div>');
+        $('acX').onclick = close;
+        $('acS').onclick = async () => {
+          const m = members.find(x => x.id === $('acW').value); if (!m) { toast('Pick a student.'); return; }
+          const nm = (m.name.split(',')[1] || '').trim() + ' ' + m.name.split(',')[0].replace(/\s*\(.*?\)/g, '').trim();
+          const r = await sb.from('dues_candidates').insert({ owner: user.id, election_id: e.id, member_id: m.id, position: $('acP').value, name: nm.trim() }).select().single();
+          if (r.error) { toast(/duplicate/.test(r.error.message) ? 'Already on the ballot for that position.' : r.error.message); return; }
+          eCands.push(r.data); close(); draw();
+        };
+      };
+      if ($('eVote')) $('eVote').onclick = async () => {
+        if (!eCands.length) { toast('No one is on the ballot yet.'); return; }
+        if (!confirm('Close sign-ups and open voting? The same link becomes the ballot.')) return;
+        if (fail(await sb.from('dues_elections').update({ phase: 'voting' }).eq('id', e.id))) return;
+        e.phase = 'voting'; draw(); toast('Voting is open ✓ Same link');
+      };
+      if ($('eDone')) $('eDone').onclick = async () => {
+        if (!confirm('Close voting? Students won\'t be able to vote after this.')) return;
+        await loadElection();
+        if (fail(await sb.from('dues_elections').update({ phase: 'closed' }).eq('id', e.id))) return;
+        e.phase = 'closed'; finishElection(e, false);
+      };
+      if ($('eDel')) $('eDel').onclick = async () => {
+        if (!confirm('Delete this election, its ballot and all votes? This can\'t be undone.')) return;
+        if (fail(await sb.from('dues_elections').delete().eq('id', e.id))) return;
+        elections.shift(); eCands = []; eVotes = []; draw();
+      };
+    }
+    function newElection() {
+      const next = termName(cur() + 1);
+      open('<h2>🗳 New officer election</h2><label>Title<input id="neT" value="' + esc(next + ' SNA officer election') + '"></label>' +
+        '<label>Message at the top of the page<textarea id="neI" rows="5">' + esc(ELECTION_INTRO) + '</textarea></label>' +
+        '<label>Positions on the ballot · how many people get each one</label>' + ELECTION_POSITIONS.map((r, i) => '<div style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" data-np="' + i + '"' + (r.on ? ' checked' : '') + ' style="width:auto"><span style="flex:1">' + esc(r.name) + (r.level != null ? ' <small class="helper">(Level ' + r.level + ' only)</small>' : '') + '</span><input data-ns="' + i + '" inputmode="numeric" value="' + r.seats + '" style="width:56px"></div>').join('') +
+        '<label>Other positions (one per line)<textarea id="neO" rows="2" placeholder="Social Media Chair"></textarea></label>' +
+        '<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:400"><input type="checkbox" id="neP" style="width:auto">Only students who paid this semester\'s dues can run and vote</label>' +
+        '<p class="helper">Students type their name and level; the app checks it against your list and allows one ballot per student. Level positions are run for and voted on by that level only. Each position shows its job description from your nominations form.</p>' +
+        '<div class="actions"><button type="button" class="btn" id="neS">Open sign-ups</button><button type="button" class="btn ghost" id="neX">Cancel</button></div>');
+      $('neX').onclick = close;
+      $('neS').onclick = async () => {
+        const positions = ELECTION_POSITIONS.map((r, i) => ({ ...r, seats: Math.max(1, Number(document.querySelector('[data-ns="' + i + '"]').value) || 1), on: document.querySelector('[data-np="' + i + '"]').checked })).filter(p => p.on).map(({ on, ...p }) => p)
+          .concat($('neO').value.split(/\n/).map(x => x.trim()).filter(Boolean).map(name => ({ name, seats: 1 })));
+        if (!positions.length) { toast('Pick at least one position.'); return; }
+        const r = await sb.from('dues_elections').insert({ owner: user.id, title: $('neT').value.trim() || next + ' SNA officer election', intro: $('neI').value.trim(), term_key: cur() + 1, positions, paid_only: $('neP').checked, phase: 'nominations' }).select().single();
+        if (fail(r)) return;
+        elections.unshift(r.data); eCands = []; eVotes = []; close(); draw(); toast('Sign-ups are open ✓ Copy the link for students');
+      };
+    }
+    // Results; ties are settled by you. Then winners become the officers.
+    function finishElection(e, viewOnly) {
+      const R = results(e), voters = new Set(eVotes.map(v => v.member_id)).size;
+      open('<h2>🏆 ' + esc(e.title) + '</h2><p class="helper">' + voters + ' students voted.' + (viewOnly ? '' : ' Check the winners, settle any ties, then make them your officers.') + '</p>' +
+        R.map(({ p, seats, cs, win, tie }, i) => '<div class="card"><b>' + esc(p.name) + '</b>' + (seats > 1 ? ' <small class="helper">(' + seats + ' spots)</small>' : '') +
+          (cs.length ? cs.map(x => '<label style="display:flex;gap:8px;align-items:center;margin:6px 0;color:var(--ink);font-weight:400"><input type="checkbox" data-win="' + i + '" value="' + x.c.id + '"' + (win.includes(x) ? ' checked' : '') + (viewOnly ? ' disabled' : '') + ' style="width:auto"><span style="flex:1">' + esc(x.c.name) + '</span><b>' + x.n + '</b></label>').join('') : '<p class="helper">No one ran.</p>') +
+          (tie ? '<small style="color:var(--amber)">Tie for the last spot — check who gets it.</small>' : '') + '</div>').join('') +
+        (viewOnly ? '' : '<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:400"><input type="checkbox" id="fiClear" checked style="width:auto">Replace the current officers (they\'re saved to Past officers first)</label>') +
+        '<div class="actions">' + (viewOnly ? '' : '<button type="button" class="btn" id="fiGo">Make them the officers</button>') + '<button type="button" class="btn ghost" id="fiX">' + (viewOnly ? 'Close' : 'Later') + '</button></div>');
+      $('fiX').onclick = () => { close(); draw(); };
+      if (viewOnly) return;
+      $('fiGo').onclick = async () => {
+        const picks = {};
+        R.forEach(({ p }, i) => document.querySelectorAll('[data-win="' + i + '"]:checked').forEach(cb => { const c = eCands.find(x => x.id === cb.value); if (c && c.member_id) (picks[c.member_id] = picks[c.member_id] || []).push(p.name); }));
+        if (!Object.keys(picks).length) { toast('No winners checked.'); return; }
+        $('fiGo').disabled = true;
+        const now = new Date().toISOString(), term = termName(cur());
+        if ($('fiClear').checked) {
+          for (const m of members.filter(m => m.active && m.role)) {
+            const h = (m.officer_history || []).filter(x => x.term !== term).concat(m.role.split(' · ').map(role => ({ term, role })));
+            if (fail(await sb.from('dues_members').update({ officer_history: h, role: '', updated_at: now }).eq('id', m.id))) return;
+            Object.assign(m, { officer_history: h, role: '' });
+          }
+          await sb.from('dues_settings').update({ officers_saved: cur() }).eq('owner', user.id); settings.officers_saved = cur();
+        }
+        for (const [id, roles] of Object.entries(picks)) {
+          const m = members.find(x => x.id === id); if (!m) continue;
+          const role = [...new Set((m.role ? m.role.split(' · ') : []).concat(roles))].join(' · ');
+          const cc = eCands.filter(c => c.member_id === id), ph = m.phone || (cc.find(c => c.phone) || {}).phone || '', em = m.email || (cc.find(c => c.email) || {}).email || '';
+          if (fail(await sb.from('dues_members').update({ role, phone: ph, email: em, updated_at: now }).eq('id', id))) return;
+          Object.assign(m, { role, phone: ph, email: em });
+        }
+        close(); mode = 'officers'; draw(); toast('🎉 ' + Object.keys(picks).length + ' new officers added');
       };
     }
 
@@ -732,7 +880,7 @@
           const keepIds = new Set(rows.filter(r => r.m).map(r => r.m.id));
           const leaving = left.filter(m => !keepIds.has(m.id) && document.querySelector('[data-rl="' + m.id + '"]')?.checked);
           if (newSem) {
-            for (const m of members.filter(m => m.active && m.role)) {
+            for (const m of members.filter(m => m.active && m.role && settings.officers_saved !== from)) {
               const h = (m.officer_history || []).filter(x => x.term !== termName(from)).concat(m.role.split(' · ').map(role => ({ term: termName(from), role })));
               if (fail(await sb.from('dues_members').update({ officer_history: h }).eq('id', m.id))) return; m.officer_history = h;
             }
