@@ -49,7 +49,9 @@
     const show = html => { $('view').innerHTML = html; };
     const LEVELS = [['0', 'Level 0'], ['1', 'Level 1'], ['2', 'Level 2'], ['3', 'Level 3'], ['4', 'Level 4'], ['-1', 'Lower division']];
     const who = () => '<div class="grid2"><label>First name<input id="f" autocomplete="given-name" autocapitalize="words"></label><label>Last name<input id="l" autocomplete="family-name" autocapitalize="words"></label></div>' +
-      '<label>Your level right now<select id="v"><option value="">Pick your level…</option>' + LEVELS.map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('') + '</select></label>';
+      '<label>Your level this semester<select id="v"><option value="">Pick your level…</option>' + LEVELS.map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('') + '</select></label>';
+    const contact = () => '<div class="grid2"><label>Cell phone<input id="ph" type="tel" autocomplete="tel" placeholder="479-555-1234"></label><label>ATU email<input id="em" type="email" autocomplete="email" placeholder="you@atu.edu"></label></div>';
+    const contactBad = () => !/^[^\s@]+@atu\.edu$/i.test($('em').value.trim()) ? 'Enter your ATU email (ending in @atu.edu).' : $('ph').value.replace(/\D/g, '').length < 10 ? 'Enter your cell phone number with area code.' : '';
     const me = () => ({ p_first: $('f').value.trim(), p_last: $('l').value.trim(), p_lvl: $('v').value === '' ? null : Number($('v').value) });
     const note = (ok, text) => '<div class="msg ' + (ok ? 'ok' : 'bad') + '">' + esc(text) + '</div>';
     if (!/^[0-9a-f]{32}$/.test(token)) { show('<div class="card"><p>This link isn\'t complete. Ask an SNA officer for it again.</p></div>'); return; }
@@ -58,11 +60,13 @@
       $('title').textContent = d.title || 'SNA Officer Election'; if (d.org) $('org').textContent = d.org;
       const byPos = p => d.candidates.filter(c => c.position === p);
       const intro = d.intro ? '<div class="card"><p style="margin:0;white-space:pre-wrap">' + esc(d.intro) + '</p></div>' : '';
-      const forLvl = (p, lvl) => p.level == null || p.level === '' || lvl === null || Number(p.level) === lvl;
-      const tagLvl = p => p.level != null && p.level !== '' ? ' <span class="muted">· Level ' + p.level + ' only</span>' : '';
+      const shift = Number(d.shift) || 0, soon = l => l + shift;
+      const forLvl = (p, lvl) => p.level == null || p.level === '' || lvl === null || Number(p.level) === soon(lvl);
+      const tagLvl = p => p.level != null && p.level !== '' ? ' <span class="muted">· ' + (shift ? 'for students in Level ' + p.level + ' in ' + esc(d.term) : 'Level ' + p.level + ' only') + '</span>' : '';
+      const shiftNote = shift ? ' Pick the level you\'re in <b>now</b>; level positions are for the level you\'ll be in during ' + esc(d.term) + '.' : '';
       if (d.phase === 'nominations') {
-        show(intro + '<div class="card"><h2>🙋 Sign up for an SNA position</h2><p class="muted">You can sign up for more than one position; submit once for each.' + (d.paid_only ? ' You need to have paid this semester\'s SNA dues.' : '') + '</p>' + who() +
-          '<div class="grid2"><label>Cell phone<input id="ph" type="tel" autocomplete="tel" placeholder="479-555-1234"></label><label>ATU email<input id="em" type="email" autocomplete="email" placeholder="you@atu.edu"></label></div>' +
+        show(intro + '<div class="card"><h2>🙋 Sign up for an SNA position</h2><p class="muted">You can sign up for more than one position; submit once for each.' + shiftNote + (d.paid_only ? ' You need to have paid this semester\'s SNA dues.' : '') + '</p>' + who() +
+          contact() +
           '<label>Position<select id="p"></select></label><p class="muted" id="pd" style="margin:6px 0 0"></p>' +
           '<label>Why you\'d be great (optional)<textarea id="s" rows="3" maxlength="400" placeholder="A sentence or two for your classmates"></textarea></label>' +
           '<button type="button" class="btn" id="go">Sign me up</button><div id="out"></div></div>' +
@@ -76,19 +80,19 @@
         $('v').onchange = fill; $('p').onchange = desc; fill();
         $('go').onclick = async () => {
           const b = me(); if (!b.p_first || !b.p_last || b.p_lvl === null || !$('p').value) { $('out').innerHTML = note(false, 'Fill in your name, level and a position.'); return; }
-          if (!$('ph').value.trim() || !/@/.test($('em').value)) { $('out').innerHTML = note(false, 'Add your cell phone and email so the officers can reach you.'); return; }
+          if (contactBad()) { $('out').innerHTML = note(false, contactBad()); return; }
           $('go').disabled = true;
           try { const r = await rpc('elect_signup', { ...b, p_position: $('p').value, p_statement: $('s').value.trim(), p_phone: $('ph').value.trim(), p_email: $('em').value.trim() }); $('out').innerHTML = note(r.ok, r.msg); if (r.ok) { $('p').value = ''; $('s').value = ''; desc(); } }
           catch (e) { $('out').innerHTML = note(false, 'Something went wrong. Please try again.'); }
           $('go').disabled = false;
         };
       } else if (d.phase === 'voting') {
-        show(intro + '<div class="card"><h2>🗳 Vote for your SNA officers</h2><p class="muted">One ballot per student. Pick your level first; level positions are voted on by that level only.' + (d.paid_only ? ' You need to have paid this semester\'s SNA dues.' : '') + '</p>' + who() + '</div>' +
+        show(intro + '<div class="card"><h2>🗳 Vote for your SNA officers</h2><p class="muted">One ballot per student. Pick your level first; level positions are voted on by that level only.' + shiftNote + (d.paid_only ? ' You need to have paid this semester\'s SNA dues.' : '') + '</p>' + who() + contact() + '</div>' +
           d.positions.map(p => { const cs = byPos(p.name), seats = Math.max(1, Number(p.seats) || 1);
             return '<div class="card" data-pos="' + esc(p.name) + '" data-lvl="' + (p.level == null ? '' : p.level) + '" data-seats="' + seats + '"><h2>' + esc(p.name) + tagLvl(p) + '</h2><p class="muted" style="margin:0 0 6px">' + (seats > 1 ? 'Pick up to ' + seats : 'Pick one') + '</p>' +
               (cs.length ? cs.map(c => '<label class="opt"><input type="' + (seats > 1 ? 'checkbox' : 'radio') + '" name="' + esc(p.name) + '" value="' + c.id + '"><span><b style="color:var(--ink)">' + esc(c.name) + '</b>' + (c.statement ? '<br><span class="muted" style="font-weight:400">' + esc(c.statement) + '</span>' : '') + '</span></label>').join('') : '<p class="muted">No one is running.</p>') + '</div>'; }).join('') +
           '<button type="button" class="btn" id="go">Submit my vote</button><div id="out"></div>');
-        const showFor = () => { const lvl = $('v').value === '' ? null : Number($('v').value); document.querySelectorAll('[data-pos]').forEach(c => { const ok = c.dataset.lvl === '' || (lvl !== null && Number(c.dataset.lvl) === lvl); c.hidden = !ok; if (!ok) c.querySelectorAll('input').forEach(i => { i.checked = false; }); }); };
+        const showFor = () => { const lvl = $('v').value === '' ? null : Number($('v').value); document.querySelectorAll('[data-pos]').forEach(c => { const ok = c.dataset.lvl === '' || (lvl !== null && Number(c.dataset.lvl) === soon(lvl)); c.hidden = !ok; if (!ok) c.querySelectorAll('input').forEach(i => { i.checked = false; }); }); };
         $('v').onchange = showFor; showFor();
         document.querySelectorAll('[data-pos]').forEach(card => {
           const seats = Number(card.dataset.seats);
@@ -99,11 +103,12 @@
           });
         });
         $('go').onclick = async () => {
-          const b = me(); if (!b.p_first || !b.p_last || b.p_lvl === null) { $('out').innerHTML = note(false, 'Fill in your name and level at the top.'); scrollTo(0, 0); return; }
+          const b = me(); if (!b.p_first || !b.p_last || b.p_lvl === null) { $('out').innerHTML = note(false, 'Fill in your name and level at the top.'); return; }
+          if (contactBad()) { $('out').innerHTML = note(false, contactBad()); return; }
           const votes = {}; document.querySelectorAll('[data-pos]:not([hidden])').forEach(card => { const v = [...card.querySelectorAll('input:checked')].map(i => i.value); if (v.length) votes[card.dataset.pos] = v; });
           if (!Object.keys(votes).length) { $('out').innerHTML = note(false, 'Pick at least one candidate.'); return; }
           $('go').disabled = true;
-          try { const r = await rpc('elect_vote', { ...b, p_votes: votes }); $('out').innerHTML = note(r.ok, r.msg); if (r.ok) { document.querySelectorAll('input').forEach(i => i.disabled = true); $('go').style.display = 'none'; } else $('go').disabled = false; }
+          try { const r = await rpc('elect_ballot', { ...b, p_phone: $('ph').value.trim(), p_email: $('em').value.trim(), p_votes: votes }); $('out').innerHTML = note(r.ok, r.msg); if (r.ok) { document.querySelectorAll('input').forEach(i => i.disabled = true); $('go').style.display = 'none'; } else $('go').disabled = false; }
           catch (e) { $('out').innerHTML = note(false, 'Something went wrong. Please try again.'); $('go').disabled = false; }
         };
       } else {

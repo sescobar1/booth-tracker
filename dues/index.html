@@ -19,7 +19,7 @@
     header .in { max-width: 820px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     header h1 { margin: 0; font-size: 1.25rem; }
     header small { opacity: .85; display: block; font-size: .85rem; }
-    main { max-width: 820px; margin: 0 auto; padding: 14px 14px 110px; }
+    main { max-width: 820px; margin: 0 auto; padding: 14px 14px 170px; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; }
     h2 { font-size: 1rem; margin: 0 0 8px; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -62,8 +62,13 @@
     .pay { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .92rem; align-items: center; }
     .pay:first-child { border-top: 0; }
     .linkbox { font-size: .82rem; word-break: break-word; background: var(--card); border: 1px dashed var(--line); padding: 8px; border-radius: 8px; white-space: pre-wrap; }
-    .toast { display: flex; align-items: center; position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
-    .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; border: 0; background: #24536f; color: #fff; font-size: 1.8rem; box-shadow: 0 6px 18px #0003; }
+    .toast { display: flex; align-items: center; position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
+    nav#nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+    nav#nav button { border: 0; background: none; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 700; padding: 8px 0 10px; display: grid; justify-items: center; gap: 1px; cursor: pointer; }
+    nav#nav button span { font-size: 1.35rem; line-height: 1.2; filter: grayscale(1); opacity: .6; }
+    nav#nav button.on { color: var(--navy); }
+    nav#nav button.on span { filter: none; opacity: 1; }
+    .fab { position: fixed; right: 18px; bottom: calc(80px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; border: 0; background: #24536f; color: #fff; font-size: 1.8rem; box-shadow: 0 6px 18px #0003; }
     .quick { border: 1px solid var(--line); background: var(--card); color: var(--green); border-radius: 8px; padding: 4px 8px; font-size: .8rem; font-weight: 700; }
     
     [hidden] { display: none !important; }
@@ -188,11 +193,18 @@
     }
 
     // ---- main screen ----
-    function modeTabs() { return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">' + [['dues', '💵 Dues'], ['cords', '🎓 Cords'], ['officers', '⭐ Officers']].map(([k, l]) => '<button type="button" class="btn' + (mode === k ? '' : ' ghost') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>'; }
-    function wireModes() { document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); scrollTo(0, 0); }); }
+    function modeTabs() { return ''; }
+    function drawNav() {
+      let nav = $('nav'); if (!nav) { nav = document.createElement('nav'); nav.id = 'nav'; document.body.appendChild(nav); }
+      nav.innerHTML = [['dues', '💵', 'Dues'], ['cords', '🎓', 'Cords'], ['officers', '⭐', 'Officers'], ['election', '🗳', 'Election']].map(([k, ic, l]) => '<button type="button" class="' + (mode === k ? 'on' : '') + '" data-mode="' + k + '"><span>' + ic + '</span>' + l + '</button>').join('');
+      nav.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); scrollTo(0, 0); });
+      $('fab').hidden = mode !== 'dues';
+    }
+    function wireModes() { drawNav(); }
     function draw() {
       if (mode === 'cords') return drawCords();
       if (mode === 'officers') return drawOfficers();
+      if (mode === 'election') return drawElection();
       $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · ' + termName(cur());
       const active = members.filter(m => m.active), st = active.map(m => ({ m, s: stateOf(m) }));
       const nPaid = st.filter(x => x.s.key !== 'unpaid').length, nOwe = active.length - nPaid;
@@ -211,7 +223,7 @@
         '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', '🎓 Graduated'], ['left', '🚪 Left program']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (past ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
-        '<p class="helper"><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
+        '<p class="helper"><span class="nm paid">Yellow</span> = paid this semester · <span class="nm ahead">Purple</span> = paid ahead · no color = not paid.<br><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
         (groups.length ? groups.map(([title, xs]) => { const all = (past ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
           return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (past ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
             xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + s.key + '">' + esc(m.name) + '</span></b>' + (m.role ? '<small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small>' : '') + (m.notes ? '<small>' + esc(m.notes) + '</small>' : '') + '</div>' +
@@ -381,7 +393,7 @@
         classes.map(k => { const xs = shown.filter(x => x.k === k); if (!xs.length) return ''; xs.sort((a, b) => b.t - a.t || a.m.name.localeCompare(b.m.name));
           const all = st.filter(x => x.k === k);
           return '<div class="lvlhead"><h3>' + esc(className(k)) + '</h3><small>' + (k ? 'Level ' + (4 - (k - cur())) + ' now · ' : '') + all.filter(x => x.t >= FREE || x.c.key === 'given').length + ' of ' + all.length + ' free</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
-            xs.map(({ m, c, t }) => '<div class="row" data-c="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + [0, 1, 2, 3, 4].map(i => (m.points || {})[i] != null ? 'L' + i + ' ' + m.points[i] : '').filter(Boolean).join(' · ') + '</small></div><b style="min-width:2.5em;text-align:right">' + t + '</b><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div>').join('') + '</div>'; }).join('') +
+            xs.map(({ m, c, t }) => '<div class="row" data-c="' + m.id + '"><div class="who"><b><span class="nm ' + stateOf(m).key + '">' + esc(m.name) + '</span></b><small>' + [0, 1, 2, 3, 4].map(i => (m.points || {})[i] != null ? 'L' + i + ' ' + m.points[i] : '').filter(Boolean).join(' · ') + '</small></div><b style="min-width:2.5em;text-align:right">' + t + '</b><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div>').join('') + '</div>'; }).join('') +
         (shown.length ? '' : '<div class="card"><p class="helper">No students match.</p></div>');
       wireModes();
       document.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { cFilter = b.dataset.cf; draw(); });
@@ -509,16 +521,16 @@
       members.forEach(m => (m.officer_history || []).forEach(h => { (hist[h.term] = hist[h.term] || []).push({ m, role: h.role }); }));
       const terms = Object.keys(hist).sort((a, b) => termRank(b) - termRank(a));
       const contact = m => (m.phone ? '<a class="btn ghost small" href="tel:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">📞</a><a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">💬</a>' : '') + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '">✉</a>' : '');
-      $('view').innerHTML = modeTabs() + electionCard() +
+      $('view').innerHTML = modeTabs() +
         '<div class="actions" style="margin-top:0"><button type="button" class="btn" id="oAdd">➕ Add an officer</button><button type="button" class="btn ghost" id="oCsv">⬇ Officer list</button><button type="button" class="btn ghost" id="oMail"' + (now.some(m => m.email) ? '' : ' disabled') + '>✉ Copy officer emails</button></div>' +
         '<div class="lvlhead"><h3>' + termName(cur()) + ' officers</h3><small>' + now.length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
-        (now.length ? now.map(m => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small><small>' + esc([lvlName(m.lvl), m.phone, m.email].filter(Boolean).join(' · ')) + '</small></div><span style="display:flex;gap:4px">' + contact(m) + '</span></div>').join('') : '<p class="helper">No officers yet. Tap ➕ Add an officer.</p>') + '</div>' +
+        (now.length ? now.map(m => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + stateOf(m).key + '">' + esc(m.name) + '</span></b><small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small><small>' + esc([lvlName(m.lvl), m.phone, m.email].filter(Boolean).join(' · ')) + '</small></div><span style="display:flex;gap:4px">' + contact(m) + '</span></div>').join('') : '<p class="helper">No officers yet. Tap ➕ Add an officer.</p>') + '</div>' +
         '<p class="helper">When you tap 🔄 Start next semester, this semester\'s officers are saved below automatically. Their roles stay on until you change them.</p>' +
         terms.map(t => '<div class="lvlhead"><h3>' + esc(t) + ' officers</h3><small>' + hist[t].length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
           hist[t].sort((a, b) => roleRank(a.role) - roleRank(b.role)).map(({ m, role }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + esc(role) + (m.active ? '' : ' · ' + (m.graduated ? 'graduated ' + esc(m.graduated) : 'past student')) + '</small></div></div>').join('') + '</div>').join('');
       wireModes();
       document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('a')) showMember(r.dataset.m); });
-      $('oAdd').onclick = addOfficer; wireElection();
+      $('oAdd').onclick = addOfficer;
       $('oMail').onclick = () => copy(now.map(m => m.email).filter(Boolean).join(', '), 'Officer emails copied ✓');
       $('oCsv').onclick = () => {
         const lines = [[(settings.org || 'SNA') + ' officers'], ['Semester', 'Role', 'Name', 'Level', 'Phone', 'Email']]
@@ -579,7 +591,7 @@
       });
     }
     function electionCard() {
-      if (elections === null) { loadElection().then(() => { if (mode === 'officers') draw(); }); return '<div class="card"><p class="helper">Loading election…</p></div>'; }
+      if (elections === null) { loadElection().then(() => { if (mode === 'election') draw(); }); return '<div class="card"><p class="helper">Loading election…</p></div>'; }
       const e = elections[0];
       if (!e || e.phase === 'closed') return '<div class="card"><h2>🗳 Officer election</h2><p class="helper">' + (e ? 'Last election: ' + esc(e.title) + ' (closed).' : 'Students run for a position, then vote, all from one link.') + '</p><button type="button" class="btn" id="eNew">🗳 Start an officer election</button>' + (e ? ' <button type="button" class="btn ghost" id="eOld">See last results</button>' : '') + '</div>';
       const voters = new Set(eVotes.map(v => v.member_id)).size, link = electBase + e.token;
@@ -589,7 +601,7 @@
         '<p class="helper">' + steps.map(([k, l]) => k === e.phase ? '<b style="color:var(--ink)">' + l + '</b>' : l).join(' → ') + (e.paid_only ? ' · paid members only' : '') + '</p>' +
         '<div class="linkbox">' + esc(link) + '</div><div class="actions"><button type="button" class="btn small" id="eCopy">Copy link for students</button><a class="btn ghost small" href="' + esc(link) + '" target="_blank" rel="noopener">Open it</a></div>' +
         '<p class="helper" style="margin-top:12px">' + eCands.length + ' on the ballot' + (e.phase === 'voting' ? ' · <b>' + voters + '</b> students have voted' : '') + '</p>' +
-        R.map(({ p, seats, cs, win, tie }) => '<div style="margin:10px 0"><b>' + esc(p.name) + '</b>' + (p.level != null ? ' <small class="helper">Level ' + p.level + ' only</small>' : '') + (seats > 1 ? ' <small class="helper">(' + seats + ' spots)</small>' : '') +
+        R.map(({ p, seats, cs, win, tie }) => '<div style="margin:10px 0"><b>' + esc(p.name) + '</b>' + (p.level != null ? ' <small class="helper">' + (e.term_key > cur() ? 'Level ' + p.level + ' in ' + termName(e.term_key) + ' (' + lvlName(p.level - (e.term_key - cur())) + ' now)' : 'Level ' + p.level + ' only') + '</small>' : '') + (seats > 1 ? ' <small class="helper">(' + seats + ' spots)</small>' : '') +
           (cs.length ? cs.map(x => '<div class="pay"><span>' + (e.phase === 'voting' && win.includes(x) ? '🏆 ' : '') + esc(x.c.name) + ((x.c.phone || x.c.email) ? '<br><small class="helper">' + esc([x.c.phone, x.c.email].filter(Boolean).join(' · ')) + '</small>' : '') + (x.c.statement ? '<br><small class="helper">“' + esc(x.c.statement) + '”</small>' : '') + '</span><span style="display:flex;gap:6px;align-items:center">' + (e.phase === 'voting' ? '<b>' + x.n + '</b>' : '') + '<button type="button" class="btn ghost small" data-cdel="' + x.c.id + '" aria-label="Remove">✕</button></span></div>').join('') : '<p class="helper" style="margin:2px 0">No one yet</p>') +
           (tie && e.phase === 'voting' ? '<small style="color:var(--amber)">Tie for the last spot — you\'ll pick when you finish.</small>' : '') + '</div>').join('') +
         '<div class="actions"><button type="button" class="btn ghost small" id="eAddC">➕ Add someone to the ballot</button><button type="button" class="btn ghost small" id="eRef">↻ Refresh</button></div>' +
@@ -637,6 +649,19 @@
         elections.shift(); eCands = []; eVotes = []; draw();
       };
     }
+    function drawElection() {
+      $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · Election';
+      const past = (elections || []).filter((e, i) => e.phase === 'closed' && i > 0 || (i === 0 && e.phase === 'closed'));
+      $('view').innerHTML = electionCard() +
+        '<div class="card"><h2>How it works</h2><p class="helper" style="margin:0">1. Start an election and share the link. Students sign up for a position with their name, level, ATU email and cell phone.<br>2. Close sign-ups to open voting — the same link becomes the ballot. Each student votes once, with their ATU email and cell phone.<br>3. Close voting, check the winners, and make them your officers. Current officers are saved to Past officers first.</p></div>' +
+        (past.length ? '<div class="lvlhead"><h3>Past elections</h3></div><div class="card" style="padding:4px 12px;margin-top:0">' + past.map(e => '<div class="row" data-pe="' + e.id + '"><div class="who"><b>' + esc(e.title) + '</b><small>' + esc(fmtDate(String(e.created_at).slice(0, 10))) + '</small></div></div>').join('') + '</div>' : '');
+      wireModes(); wireElection();
+      document.querySelectorAll('[data-pe]').forEach(r => r.onclick = async () => {
+        const e = elections.find(x => x.id === r.dataset.pe);
+        const [c, v] = await Promise.all([sb.from('dues_candidates').select('*').eq('election_id', e.id), sb.from('dues_votes').select('*').eq('election_id', e.id)]);
+        eCands = c.data || []; eVotes = v.data || []; finishElection(e, true);
+      });
+    }
     function newElection() {
       const next = termName(cur() + 1);
       open('<h2>🗳 New officer election</h2><label>Title<input id="neT" value="' + esc(next + ' SNA officer election') + '"></label>' +
@@ -665,7 +690,7 @@
           (tie ? '<small style="color:var(--amber)">Tie for the last spot — check who gets it.</small>' : '') + '</div>').join('') +
         (viewOnly ? '' : '<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:400"><input type="checkbox" id="fiClear" checked style="width:auto">Replace the current officers (they\'re saved to Past officers first)</label>') +
         '<div class="actions">' + (viewOnly ? '' : '<button type="button" class="btn" id="fiGo">Make them the officers</button>') + '<button type="button" class="btn ghost" id="fiX">' + (viewOnly ? 'Close' : 'Later') + '</button></div>');
-      $('fiX').onclick = () => { close(); draw(); };
+      $('fiX').onclick = async () => { close(); if (!viewOnly) await loadElection(); draw(); };
       if (viewOnly) return;
       $('fiGo').onclick = async () => {
         const picks = {};
@@ -688,7 +713,7 @@
           if (fail(await sb.from('dues_members').update({ role, phone: ph, email: em, updated_at: now }).eq('id', id))) return;
           Object.assign(m, { role, phone: ph, email: em });
         }
-        close(); mode = 'officers'; draw(); toast('🎉 ' + Object.keys(picks).length + ' new officers added');
+        close(); mode = 'officers'; await loadElection(); draw(); toast('🎉 ' + Object.keys(picks).length + ' new officers added');
       };
     }
 
@@ -722,7 +747,7 @@
       return rows.filter(r => r.length > 1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] || ''])));
     }
     function cashImport() {
-      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. The app picks out this semester\'s payments with "dues" in the note, skips any already recorded, and shows you every match before saving.</p>' +
+      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. The app picks out this semester\'s dues payments (notes like "dues", "SNA" or "Level 2" — not snacks), skips any already recorded, and shows you every match before saving.</p>' +
         '<label>Cash App CSV<input type="file" id="ciFile" accept=".csv,text/csv"></label><p class="helper" id="ciMsg"></p><div id="ciOut"></div><div class="actions"><button type="button" class="btn ghost" id="ciCancel">Cancel</button></div>');
       $('ciCancel').onclick = close;
       $('ciFile').onchange = async e => {
@@ -731,7 +756,8 @@
         if (!rows.length || !('Notes' in rows[0])) { $('ciMsg').textContent = 'That doesn\'t look like a Cash App export. It should have Date, Amount, Notes and Name of sender/receiver columns.'; return; }
         const amt = s => Number(String(s).replace(/[$,]/g, '')) || 0, each = Number(settings.amount) || 5, start = termStart(cur());
         const seen = new Set(payments.map(p => String(p.receipt)));
-        const dues = rows.filter(r => /\bdue/i.test(r.Notes) && (r.Status || 'COMPLETE') === 'COMPLETE' && amt(r.Amount) > 0 && r.Date.slice(0, 10) >= start);
+        const isDues = n => /\bdue|member|\bfee\b/i.test(n) || (/\bsna\b|\blevel\s*[0-4i]/i.test(n) && !/snack|snac|chip|drink|food|candy|closet|shirt|cord|cpr|poptart|water|soda|room/i.test(n));
+        const dues = rows.filter(r => isDues(r.Notes) && (r.Status || 'COMPLETE') === 'COMPLETE' && amt(r.Amount) > 0 && r.Date.slice(0, 10) >= start);
         const fresh = dues.filter(r => !seen.has(r['Transaction ID']));
         const everyone = members.filter(m => m.active), extra = members.filter(m => !m.active);
         const found = fresh.map(r => {
