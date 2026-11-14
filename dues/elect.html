@@ -70,7 +70,7 @@
           '<label>Position<select id="p"></select></label><p class="muted" id="pd" style="margin:6px 0 0"></p>' +
           '<label>Why you\'d be great (optional)<textarea id="s" rows="3" maxlength="400" placeholder="A sentence or two for your classmates"></textarea></label>' +
           '<button type="button" class="btn" id="go">Sign me up</button><div id="out"></div></div>' +
-          '<div class="card"><h2>Positions</h2>' + d.positions.map(p => '<details style="margin:8px 0"><summary><b>' + esc(p.name) + '</b>' + tagLvl(p) + (p.seats > 1 ? ' <span class="muted">(' + p.seats + ' spots)</span>' : '') + '</summary><p class="muted" style="margin:6px 0">' + esc(p.desc || '') + '</p><p class="muted" style="margin:0">Signed up: ' + (byPos(p.name).map(c => esc(c.name)).join(', ') || 'no one yet') + '</p></details>').join('') + '</div>');
+          '<div class="card"><h2>Positions</h2>' + d.positions.map(p => '<details style="margin:8px 0"><summary><b>' + esc(p.name) + '</b>' + tagLvl(p) + (p.volunteer ? ' <span class="muted">(volunteer — no vote; everyone who signs up is on it)</span>' : p.seats > 1 ? ' <span class="muted">(top ' + p.seats + ' get it)</span>' : '') + '</summary><p class="muted" style="margin:6px 0">' + esc(p.desc || '') + '</p><p class="muted" style="margin:0">Signed up: ' + (byPos(p.name).map(c => esc(c.name)).join(', ') || 'no one yet') + '</p></details>').join('') + '</div>');
         const fill = () => {
           const lvl = $('v').value === '' ? null : Number($('v').value), was = $('p').value;
           $('p').innerHTML = '<option value="">Pick a position…</option>' + d.positions.filter(p => forLvl(p, lvl)).map(p => '<option' + (p.name === was ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
@@ -88,7 +88,7 @@
         };
       } else if (d.phase === 'voting') {
         show(intro + '<div class="card"><h2>🗳 Vote for your SNA officers</h2><p class="muted">One ballot per student. Pick your level first; level positions are voted on by that level only.' + shiftNote + (d.paid_only ? ' You need to have paid this semester\'s SNA dues.' : '') + '</p>' + who() + contact() + '</div>' +
-          d.positions.map(p => { const cs = byPos(p.name), seats = Math.max(1, Number(p.seats) || 1);
+          d.positions.filter(p => !p.volunteer).map(p => { const cs = byPos(p.name), seats = Math.max(1, Number(p.seats) || 1);
             return '<div class="card" data-pos="' + esc(p.name) + '" data-lvl="' + (p.level == null ? '' : p.level) + '" data-seats="' + seats + '"><h2>' + esc(p.name) + tagLvl(p) + '</h2><p class="muted" style="margin:0 0 6px">' + (seats > 1 ? 'Pick up to ' + seats : 'Pick one') + '</p>' +
               (cs.length ? cs.map(c => '<label class="opt"><input type="' + (seats > 1 ? 'checkbox' : 'radio') + '" name="' + esc(p.name) + '" value="' + c.id + '"><span><b style="color:var(--ink)">' + esc(c.name) + '</b>' + (c.statement ? '<br><span class="muted" style="font-weight:400">' + esc(c.statement) + '</span>' : '') + '</span></label>').join('') : '<p class="muted">No one is running.</p>') + '</div>'; }).join('') +
           '<button type="button" class="btn" id="go">Submit my vote</button><div id="out"></div>');
