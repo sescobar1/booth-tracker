@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SNA Dues · Faculty</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#24536f">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #f6f4ef; --card: #fff; --ink: #1d2b33; --muted: #6b7880; --line: #e2e3dc; --navy: #24536f; --green: #2e7d4f; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #141a1d; --card: #1e262a; --ink: #e8eef0; --muted: #9aa8ae; --line: #2f3a3f; --navy: #8cc0dd; --green: #7fd1a0; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    header { background: #24536f; color: #fff; padding: calc(14px + env(safe-area-inset-top)) 16px 14px; }
+    header .in { max-width: 820px; margin: 0 auto; }
+    header h1 { margin: 0; font-size: 1.2rem; }
+    header small { opacity: .85; }
+    main { max-width: 820px; margin: 0 auto; padding: 14px 14px 40px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .big b { font-size: 1.5rem; color: var(--green); }
+    .btn { border: 0; border-radius: 10px; background: #24536f; color: #fff; padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+    .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: .9rem; cursor: pointer; }
+    .chip.on { background: var(--navy); color: var(--bg); border-color: var(--navy); }
+    input { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); }
+    .lvl { display: flex; justify-content: space-between; margin: 18px 4px 6px; }
+    .lvl h3 { margin: 0; font-size: 1.05rem; }
+    .lvl small, .muted { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 12px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 2px; border-top: 1px solid var(--line); }
+    .row:first-child { border-top: 0; }
+    .nm { padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+    .nm.paid { background: #fff200; color: #1d2b33; }
+    .nm.ahead { background: #d9c8f5; color: #2a1a4a; }
+    .st { font-size: .85rem; color: var(--muted); white-space: nowrap; }
+    .key { font-size: .85rem; color: var(--muted); margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <header><div class="in"><h1 id="org">Student Nurses Association</h1><small id="term">Dues · faculty view</small></div></header>
+  <main id="view"><p class="muted">Loading…</p></main>
+  <script src="config.js"></script>
+  <script>
+  // Read-only list for faculty: names, levels and who has paid. The token in the link is the key.
+  (function () {
+    const CFG = window.DUES_CONFIG.sync, $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const until = k => (k % 2 ? 'Dec ' : 'May ') + String(Math.floor(k / 2)).slice(2);
+    const LEVELS = [0, 1, 2, 3, 4, -1], lvlName = l => l < 0 ? 'Lower division' : 'Level ' + l;
+    const token = new URLSearchParams(location.search).get('t') || '';
+    let d, filter = 'all', lvl = 'all', find = '';
+    if (!/^[0-9a-f]{32}$/.test(token)) { $('view').innerHTML = '<p>This link isn\'t complete. Ask for it again.</p>'; return; }
+    function draw() {
+      const cur = d.term_key, st = x => x.paid_through > cur ? 'ahead' : x.paid_through === cur ? 'paid' : 'unpaid';
+      const all = d.students, paid = all.filter(x => st(x) !== 'unpaid');
+      const q = find.toLowerCase();
+      const shown = all.filter(x => filter === 'all' || (filter === 'paid' ? st(x) !== 'unpaid' : st(x) === 'unpaid'))
+        .filter(x => lvl === 'all' || x.lvl === Number(lvl)).filter(x => !q || x.name.toLowerCase().includes(q));
+      $('view').innerHTML = '<div class="top"><div class="big"><b>' + paid.length + '</b> of ' + all.length + ' students paid</div><button type="button" class="btn" id="dl">📄 Download paid list</button></div>' +
+        '<p class="key"><span class="nm paid">Yellow</span> paid this semester · <span class="nm ahead">Purple</span> paid ahead · no color = not paid</p>' +
+        '<div class="tabs">' + [['all', 'Everyone'], ['paid', 'Paid'], ['unpaid', 'Not paid']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
+        LEVELS.map(l => { const xs = shown.filter(x => x.lvl === l); if (!xs.length) return ''; const inL = all.filter(x => x.lvl === l);
+          return '<div class="lvl"><h3>' + lvlName(l) + '</h3><small>' + inL.filter(x => st(x) !== 'unpaid').length + ' of ' + inL.length + ' paid</small></div><div class="card">' +
+            xs.map(x => { const k = st(x); return '<div class="row"><span class="nm ' + k + '">' + esc(x.name) + '</span><span class="st">' + (k === 'unpaid' ? 'Not paid' : 'Paid until ' + until(x.paid_through)) + '</span></div>'; }).join('') + '</div>'; }).join('') +
+        (shown.length ? '' : '<p class="muted">No students match.</p>');
+      document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
+      document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvl = b.dataset.l; draw(); });
+      $('find').oninput = e => { find = e.target.value; const p = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(p, p); };
+      $('dl').onclick = () => download(paid.slice().sort((a, b) => LEVELS.indexOf(a.lvl) - LEVELS.indexOf(b.lvl) || a.name.localeCompare(b.name)));
+    }
+    async function download(paid) {
+      const line = r => r.map(x => /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x)).join(',');
+      const rows = [[(d.org || 'SNA') + ' dues paid · ' + d.term], ['Level', 'Name', 'Paid until']].concat(paid.map(x => [lvlName(x.lvl), x.name, until(x.paid_through)]));
+      rows.push([], ['Total paid', paid.length]);
+      const name = 'SNA dues paid ' + d.term + '.csv', file = new File(['﻿' + rows.map(line).join('\n')], name, { type: 'text/csv' });
+      try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
+    }
+    fetch(CFG.url + '/rest/v1/rpc/dues_faculty', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(x => {
+        if (!x) { $('view').innerHTML = '<p>This link no longer works. Ask for a new one.</p>'; return; }
+        d = x; if (d.org) $('org').textContent = d.org; $('term').textContent = 'Dues · ' + d.term + ' · faculty view'; draw();
+      })
+      .catch(() => { $('view').innerHTML = '<p>Couldn\'t load the list right now. Please try again in a minute.</p>'; });
+  })();
+  </script>
+</body>
+</html>

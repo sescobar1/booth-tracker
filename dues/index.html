@@ -106,6 +106,14 @@
     const lvlName = l => l < 0 ? 'Lower division' : 'Level ' + l;
     const METHODS = ['Cash', 'Venmo', 'Cash App', 'Zelle', 'Check', 'Card', 'Other'];
     const statusBase = location.href.split('#')[0].replace(/[^/]*$/, '') + 'status.html?t=';
+    const facultyBase = location.href.split('#')[0].replace(/[^/]*$/, '') + 'faculty.html?t=';
+    // Send a file: on a phone this opens the share sheet (Mail, Messages…); otherwise it downloads.
+    async function sendFile(name, text) {
+      const file = new File(['\ufeff' + text], name, { type: 'text/csv' });
+      try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
+    }
+    const csvLine = r => r.map(x => /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x)).join(',');
     let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '';
     let toastTimer;
     const toast = (m, undo) => { const t = $('toast'); t.innerHTML = esc(m) + (undo ? ' <button type="button" id="undoBtn" style="margin-left:10px;background:none;border:1px solid currentColor;color:inherit;border-radius:99px;padding:3px 10px;font-weight:700">Undo</button>' : ''); t.hidden = false; if (undo) $('undoBtn').onclick = () => { t.hidden = true; undo(); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 6000 : 3200); };
@@ -159,7 +167,7 @@
       drop.forEach(m => { m.active = false; m.graduated = ''; });
       keep.forEach(m => { if (m.lvl >= 0) { m.lvl += 1; m.level = 'Level ' + m.lvl; } });
       settings.term_key = to; settings.due_date = null; filter = 'all';
-      banner = '🔄 ' + termName(to) + ' started. ' + keep.length + ' paid-ahead students moved up a level. Add the rest as they pay with 👥 Add students.';
+      banner = '🔄 ' + termName(to) + ' started. ' + keep.length + ' paid-ahead students moved up a level. Add the rest as they pay with ➕ Add a student.';
       draw();
     }
 
@@ -179,10 +187,10 @@
       $('view').innerHTML = (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn ghost" id="bulkBtn">👥 Add students</button><button type="button" class="btn ghost" id="csvBtn">⬇ Download</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['grad', 'Past students']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
-        '<p class="helper"><b>✓ Paid</b> records ' + money(settings.amount || 5) + ' by Cash App for this semester. <b style="color:var(--purple)">⏩</b> is for paying more than one semester. For cash or a receipt #, tap the name.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
+        '<p class="helper"><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
         (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
           return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
             xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + s.key + '">' + esc(m.name) + '</span></b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
@@ -191,10 +199,10 @@
       document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
       document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
       document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('[data-quick],[data-ahead]')) showMember(r.dataset.m); });
-      document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => { b.disabled = true; quickPay(b.dataset.quick); });
-      document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => aheadPicker(b.dataset.ahead));
+      document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payPicker(b.dataset.quick, false));
+      document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => payPicker(b.dataset.ahead, true));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('bulkBtn').onclick = bulkAdd; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -226,7 +234,7 @@
         '<div class="grid2"><label>Email<input id="mEmail" type="email" value="' + esc(m.email) + '" placeholder="name@atu.edu"></label><label>Phone<input id="mPhone" type="tel" value="' + esc(m.phone) + '"></label></div>' +
         '<label>Notes (cords, points…)<input id="mNotes" value="' + esc(m.notes) + '"></label>' +
         '<div class="actions"><button type="button" class="btn" id="mSave">Save</button><button type="button" class="btn ghost" id="mCancel">Cancel</button></div>');
-      if (isNew) setTimeout(() => $('mName').focus(), 50);
+      if (isNew) setTimeout(() => { if ($('mName')) $('mName').focus(); }, 50);
       $('mCancel').onclick = () => isNew ? close() : showMember(m.id);
       $('mSave').onclick = async () => {
         const lvl = Number($('mLvl').value);
@@ -295,23 +303,33 @@
     }
 
     // ---- one tap: dues amount, Cash App, today, this semester ----
-    function aheadPicker(id) {
+    // Pop-up for ✓ Paid (this semester) and ⏩ (pick a "paid until" date). One tap on how they paid saves it.
+    const PAYWAYS = [['Cash App', '📱'], ['Cash', '💵'], ['Check', '🧾']];
+    function payPicker(id, ahead) {
       const m = members.find(x => x.id === id); if (!m) return;
       const start = Math.max(cur(), m.paid_through + 1), each = Number(settings.amount) || 5;
-      open('<h2>' + esc(firstName(m.name)) + ' paid until…</h2><p class="helper">' + esc(m.name) + ' · Cash App · ' + money(each) + ' a semester' + (m.paid_through >= cur() ? ' · already paid until ' + until(m.paid_through) : '') + '</p>' +
-        '<div class="methods" style="gap:8px">' + range(start, Math.max(LAST, start)).map(k => '<button type="button" class="chip" style="padding:10px 14px;font-size:1rem" data-until="' + k + '">' + until(k) + '<br><small>' + money(each * (k - start + 1)) + '</small></button>').join('') + '</div>' +
-        '<div class="actions"><button type="button" class="btn ghost" id="aCancel">Cancel</button></div>');
-      $('aCancel').onclick = close;
-      document.querySelectorAll('[data-until]').forEach(b => b.onclick = () => { close(); quickPay(id, Number(b.dataset.until)); });
+      let thru = ahead ? start + 1 : start;
+      const body = () => '<h2>' + esc(firstName(m.name)) + (ahead ? ' paid until…' : ' paid ' + money(each)) + '</h2><p class="helper">' + esc(m.name) + ' · ' + esc(lvlName(m.lvl)) + (m.paid_through >= cur() ? ' · already paid until ' + until(m.paid_through) : '') + '</p>' +
+        (ahead ? '<div class="methods" style="gap:8px;margin-bottom:12px">' + range(start, Math.max(LAST, start)).map(k => '<button type="button" class="chip' + (k === thru ? ' on' : '') + '" style="padding:8px 12px" data-until="' + k + '">' + until(k) + '<br><small>' + money(each * (k - start + 1)) + '</small></button>').join('') + '</div>' : '') +
+        '<label>Check or receipt # (optional)<input id="qRec" inputmode="numeric"></label>' +
+        '<label>How did they pay' + (ahead ? ' ' + money(each * (thru - start + 1)) : '') + '?</label><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' + PAYWAYS.map(([w, ic]) => '<button type="button" class="btn" style="padding:16px 6px;font-size:1rem" data-way="' + w + '">' + ic + '<br>' + w + '</button>').join('') + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="qCancel">Cancel</button></div>';
+      const wire = () => {
+        $('qCancel').onclick = close;
+        document.querySelectorAll('[data-until]').forEach(b => b.onclick = () => { const rec = $('qRec').value; thru = Number(b.dataset.until); $('sheet').innerHTML = body(); $('qRec').value = rec; wire(); });
+        document.querySelectorAll('[data-way]').forEach(b => b.onclick = () => { const rec = $('qRec').value.trim(); close(); quickPay(id, thru, b.dataset.way, rec); });
+      };
+      open(body()); wire();
     }
-    async function quickPay(id, upTo) {
+    async function quickPay(id, upTo, way, rec) {
       const m = members.find(x => x.id === id); if (!m) return;
+      way = way || 'Cash App'; rec = rec || '';
       const before = m.paid_through, start = Math.max(cur(), m.paid_through + 1), thru = upTo || start, amount = (Number(settings.amount) || 5) * (thru - start + 1);
-      const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: today(), method: 'Cash App', receipt: '', note: '', through_term: thru }).select().single();
+      const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: today(), method: way, receipt: rec, note: '', through_term: thru }).select().single();
       if (fail(r)) { draw(); return; }
       if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) { draw(); return; }
       payments.push(r.data); m.paid_through = thru; draw();
-      toast('✓ ' + firstName(m.name) + ' paid ' + money(amount) + (thru > cur() ? ' · until ' + until(thru) : '') + ' Cash App', async () => {
+      toast('✓ ' + firstName(m.name) + ' paid ' + money(amount) + (thru > cur() ? ' · until ' + until(thru) : '') + ' ' + way, async () => {
         if (fail(await sb.from('dues_payments').delete().eq('id', r.data.id))) return;
         if (fail(await sb.from('dues_members').update({ paid_through: before }).eq('id', id))) return;
         payments = payments.filter(p => p.id !== r.data.id); m.paid_through = before; draw(); toast('Undone');
@@ -324,11 +342,12 @@
       const s = stateOf(m), mine = payments.filter(p => p.member_id === id), link = statusBase + m.token;
       open('<div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h2 style="margin:0">' + esc(m.name) + '</h2><p class="helper" style="margin:2px 0">' + esc([lvlName(m.lvl), m.email, m.phone].filter(Boolean).join(' · ')) + '</p></div><span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>' +
         (m.notes ? '<p class="helper">📝 ' + esc(m.notes) + '</p>' : '') +
-        (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' : '') +
+        (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' +
+          '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px"><button type="button" class="btn ghost small" id="lvDown"' + (m.lvl <= -1 ? ' disabled' : '') + '>⬇ Back a level</button><b>' + esc(lvlName(m.lvl)) + '</b><button type="button" class="btn ghost small" id="lvUp"' + (m.lvl >= 4 ? ' disabled' : '') + '>⬆ Up a level</button></div>' : '') +
         '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(p.receipt) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Delete payment">✕</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
         '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. They can check their own dues any time; it shows nothing about anyone else.</p><div class="linkbox">' + esc(link) + '</div>' +
         '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + '</div></div>' +
-        '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
+        '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit name &amp; info</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
       if ($('mPay')) $('mPay').onclick = () => payForm(id);
       document.querySelectorAll('[data-delpay]').forEach(b => b.onclick = async () => {
         if (!confirm('Delete this payment? Their "paid through" semester stays as it is; change it with Edit if needed.')) return;
@@ -337,6 +356,12 @@
       });
       $('lCopy').onclick = () => copy(link, 'Link copied ✓');
       $('mEdit').onclick = () => editMember(m);
+      const step = async d => {
+        const lvl = m.lvl + d; if (lvl < -1 || lvl > 4) return;
+        if (fail(await sb.from('dues_members').update({ lvl, level: lvlName(lvl), updated_at: new Date().toISOString() }).eq('id', id))) return;
+        m.lvl = lvl; m.level = lvlName(lvl); draw(); showMember(id); toast(firstName(m.name) + ' is now ' + lvlName(lvl));
+      };
+      if ($('lvDown')) { $('lvDown').onclick = () => step(-1); $('lvUp').onclick = () => step(1); }
       $('mClose').onclick = close;
       $('mAct').onclick = async () => {
         const row = { active: !m.active, graduated: '' };
@@ -347,12 +372,32 @@
 
     // ---- download ----
     function csv() {
-      const cell = x => /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x);
       const rows = members.slice().sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1) || LEVELS.indexOf(a.lvl) - LEVELS.indexOf(b.lvl) || a.name.localeCompare(b.name));
       const lines = [['Name', 'Level', 'Status ' + termName(cur()), 'Paid through', 'Email', 'Phone', 'Notes', 'Payments']].concat(rows.map(m => [m.name, m.active ? lvlName(m.lvl) : (m.graduated ? 'Graduated ' + m.graduated : 'Removed'), stateOf(m).label, termName(m.paid_through), m.email, m.phone, m.notes,
         payments.filter(p => p.member_id === m.id).map(p => p.paid_on + ' ' + money(p.amount) + (p.method ? ' ' + p.method : '') + (p.receipt ? ' #' + p.receipt : '')).join('; ')]));
-      const blob = new Blob([lines.map(r => r.map(cell).join(',')).join('\n')], { type: 'text/csv' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SNA dues ' + termName(cur()) + '.csv'; a.click();
+      sendFile('SNA dues ' + termName(cur()) + ' (all).csv', lines.map(csvLine).join('\n'));
+    }
+    function paidList() {
+      const paid = members.filter(m => m.active && m.paid_through >= cur()).sort((a, b) => LEVELS.indexOf(a.lvl) - LEVELS.indexOf(b.lvl) || a.name.localeCompare(b.name));
+      if (!paid.length) { toast('No one has paid yet this semester.'); return; }
+      const lines = [[(settings.org || 'SNA') + ' dues paid · ' + termName(cur())], ['Level', 'Name', 'Paid until']].concat(paid.map(m => [lvlName(m.lvl), m.name, until(m.paid_through)]));
+      lines.push([], ['Total paid', paid.length]);
+      sendFile('SNA dues paid ' + termName(cur()) + '.csv', lines.map(csvLine).join('\n'));
+    }
+    function facultyLink() {
+      const link = facultyBase + settings.faculty_token;
+      open('<h2>🔗 Faculty link</h2><p class="helper">Faculty can open this without a password. It shows each student\'s name, level and whether they\'ve paid, and has a Paid list download. It doesn\'t show notes, emails or payment details, and they can\'t change anything.</p>' +
+        '<div class="linkbox">' + esc(link) + '</div><div class="actions"><button type="button" class="btn small" id="fCopy">Copy link</button><a class="btn ghost small" href="' + esc(link) + '" target="_blank" rel="noopener">Open it</a></div>' +
+        '<p class="helper" style="margin-top:16px">If the link gets passed around too far, make a new one. The old link stops working.</p><button type="button" class="btn ghost small" id="fNew">Make a new link</button>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="fClose">Close</button></div>');
+      $('fCopy').onclick = () => copy(link, 'Faculty link copied ✓');
+      $('fClose').onclick = close;
+      $('fNew').onclick = async () => {
+        if (!confirm('Make a new faculty link? The old one will stop working.')) return;
+        const t = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+        if (fail(await sb.from('dues_settings').update({ faculty_token: t }).eq('owner', user.id))) return;
+        settings.faculty_token = t; facultyLink(); toast('New link made ✓');
+      };
     }
 
     // ---- sign in ----
