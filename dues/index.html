@@ -47,7 +47,7 @@
     .row:first-child { border-top: 0; }
     .row .who { flex: 1; min-width: 0; }
     .row .who b { display: block; overflow-wrap: anywhere; font-weight: 600; }
-    .row .who small { color: var(--muted); }
+    .row .who small { color: var(--muted); display: block; }
     .tag { font-size: .78rem; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
     .tag.paid { background: var(--green-soft); color: var(--green); }
     .tag.ahead { background: var(--purple-soft); color: var(--purple); }
@@ -114,7 +114,18 @@
       const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
     }
     const csvLine = r => r.map(x => /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x)).join(',');
-    let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '';
+    let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '', mode = 'dues', cFilter = 'all';
+    // Cords: up to 2 points a level; 5 or more points in all = free cords.
+    const FREE = 5;
+    const ptsTotal = m => Math.round(Object.values(m.points || {}).reduce((t, v) => t + Number(v || 0), 0) * 100) / 100;
+    const cordsState = m => m.cords === 'given' ? { key: 'given', label: 'Cords given' } : ptsTotal(m) >= FREE ? { key: 'free', label: 'Free cords ✓' } : m.cords === 'purchase' ? { key: 'buy', label: 'Buying cords' } : { key: 'need', label: 'Needs ' + (Math.round((FREE - ptsTotal(m)) * 100) / 100) };
+    // Every semester we know they paid: old lists, payments recorded here, and what's marked paid through now.
+    function paidTermsOf(m) {
+      const t = new Set(m.paid_terms || []);
+      payments.filter(p => p.member_id === m.id && p.through_term).forEach(p => { const n = Math.max(1, Math.round(Number(p.amount) / (Number(settings.amount) || 5))); for (let k = p.through_term - n + 1; k <= p.through_term; k++) t.add(k); });
+      if (m.paid_through >= cur()) for (let k = cur(); k <= m.paid_through; k++) t.add(k);
+      return [...t].filter(k => k > 0).sort((a, b) => a - b);
+    }
     let toastTimer;
     const toast = (m, undo) => { const t = $('toast'); t.innerHTML = esc(m) + (undo ? ' <button type="button" id="undoBtn" style="margin-left:10px;background:none;border:1px solid currentColor;color:inherit;border-radius:99px;padding:3px 10px;font-weight:700">Undo</button>' : ''); t.hidden = false; if (undo) $('undoBtn').onclick = () => { t.hidden = true; undo(); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 6000 : 3200); };
     const open = html => { $('sheet').innerHTML = html; $('modal').hidden = false; };
@@ -172,7 +183,10 @@
     }
 
     // ---- main screen ----
+    function modeTabs() { return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' + [['dues', '💵 Dues'], ['cords', '🎓 Cords']].map(([k, l]) => '<button type="button" class="btn' + (mode === k ? '' : ' ghost') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>'; }
+    function wireModes() { document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); scrollTo(0, 0); }); }
     function draw() {
+      if (mode === 'cords') return drawCords();
       $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · ' + termName(cur());
       const active = members.filter(m => m.active), st = active.map(m => ({ m, s: stateOf(m) }));
       const nPaid = st.filter(x => x.s.key !== 'unpaid').length, nOwe = active.length - nPaid;
@@ -180,22 +194,23 @@
       const collected = termPays.reduce((t, p) => t + Number(p.amount), 0);
       const q = find.toLowerCase();
       const pool = filter === 'grad' ? members.filter(m => !m.active).map(m => ({ m, s: stateOf(m) })) : st;
-      const shown = pool.filter(x => filter === 'all' || filter === 'grad' || (filter === 'unpaid' ? x.s.key === 'unpaid' : x.s.key !== 'unpaid'))
+      const shown = pool.filter(x => filter === 'all' || filter === 'grad' || (filter === 'officers' ? !!x.m.role : filter === 'unpaid' ? x.s.key === 'unpaid' : x.s.key !== 'unpaid'))
         .filter(x => lvlFilter === 'all' || filter === 'grad' || x.m.lvl === Number(lvlFilter))
-        .filter(x => !q || (x.m.name + ' ' + x.m.email + ' ' + x.m.notes).toLowerCase().includes(q));
+        .filter(x => !q || (x.m.name + ' ' + x.m.email + ' ' + x.m.notes + ' ' + x.m.role).toLowerCase().includes(q));
       const groups = filter === 'grad' ? [['Past students', shown]] : LEVELS.map(l => [lvlName(l), shown.filter(x => x.m.lvl === l)]).filter(g => g[1].length);
-      $('view').innerHTML = (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
+      $('view').innerHTML = modeTabs() + (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
         '<div class="actions"><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
-        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['grad', 'Past students']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', 'Past students']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
         '<p class="helper"><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
         (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
           return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
-            xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + s.key + '">' + esc(m.name) + '</span></b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
+            xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + s.key + '">' + esc(m.name) + '</span></b>' + (m.role ? '<small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small>' : '') + (m.notes ? '<small>' + esc(m.notes) + '</small>' : '') + '</div>' +
               (m.active ? '<button type="button" class="quick" data-ahead="' + m.id + '" style="color:var(--purple)">⏩</button>' : '') + (s.key === 'unpaid' ? '<button type="button" class="quick" data-quick="' + m.id + '">✓ Paid</button>' : '') + '<span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>').join('') + '</div>'; }).join('')
           : '<div class="card"><p class="helper">' + (members.length ? 'No students match.' : 'No students yet. Tap ＋ to add one.') + '</p></div>');
+      wireModes();
       document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
       document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
       document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('[data-quick],[data-ahead]')) showMember(r.dataset.m); });
@@ -232,13 +247,14 @@
         '<label>Name (Last, First)<input id="mName" value="' + esc(m.name) + '" autocapitalize="words" placeholder="Smith, Jane"></label>' +
         '<div class="grid2"><label>Level' + lvlSelect('mLvl', m.lvl) + '</label><label>Dues' + thruSelect('mThru', m.paid_through) + '</label></div>' +
         '<div class="grid2"><label>Email<input id="mEmail" type="email" value="' + esc(m.email) + '" placeholder="name@atu.edu"></label><label>Phone<input id="mPhone" type="tel" value="' + esc(m.phone) + '"></label></div>' +
-        '<label>Notes (cords, points…)<input id="mNotes" value="' + esc(m.notes) + '"></label>' +
+        '<label>Officer role (leave blank if none)<input id="mRole" value="' + esc(m.role || '') + '" placeholder="President, Level 2 Representative…"></label>' +
+        '<label>Notes<input id="mNotes" value="' + esc(m.notes) + '"></label>' +
         '<div class="actions"><button type="button" class="btn" id="mSave">Save</button><button type="button" class="btn ghost" id="mCancel">Cancel</button></div>');
       if (isNew) setTimeout(() => { if ($('mName')) $('mName').focus(); }, 50);
       $('mCancel').onclick = () => isNew ? close() : showMember(m.id);
       $('mSave').onclick = async () => {
         const lvl = Number($('mLvl').value);
-        const row = { name: $('mName').value.trim(), lvl, level: lvlName(lvl), paid_through: Number($('mThru').value), email: $('mEmail').value.trim(), phone: $('mPhone').value.trim(), notes: $('mNotes').value.trim(), updated_at: new Date().toISOString() };
+        const row = { name: $('mName').value.trim(), lvl, level: lvlName(lvl), paid_through: Number($('mThru').value), email: $('mEmail').value.trim(), phone: $('mPhone').value.trim(), notes: $('mNotes').value.trim(), role: $('mRole').value.trim(), updated_at: new Date().toISOString() };
         if (!row.name) { toast('Type the student\'s name.'); return; }
         const past = isNew && members.find(x => !x.active && x.name.toLowerCase() === row.name.toLowerCase());
         if (past) {
@@ -336,15 +352,69 @@
       });
     }
 
+    // ---- cords ----
+    function drawCords() {
+      $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · Cords';
+      const active = members.filter(m => m.active), q = find.toLowerCase();
+      const st = active.map(m => ({ m, c: cordsState(m), t: ptsTotal(m) }));
+      const shown = st.filter(x => cFilter === 'all' || (cFilter === 'free' ? x.c.key === 'free' || x.c.key === 'given' : cFilter === 'need' ? x.c.key === 'need' || x.c.key === 'buy' : x.c.key === cFilter))
+        .filter(x => lvlFilter === 'all' || x.m.lvl === Number(lvlFilter)).filter(x => !q || x.m.name.toLowerCase().includes(q));
+      const l4 = st.filter(x => x.m.lvl === 4), l4free = l4.filter(x => x.c.key !== 'need' && x.c.key !== 'buy').length;
+      $('view').innerHTML = modeTabs() +
+        '<div class="stats"><div class="stat"><span>Level 4 earning free cords</span><b style="color:var(--green)">' + l4free + '</b><small class="helper" style="display:block;margin:0">of ' + l4.length + '</small></div><div class="stat"><span>Everyone at 5+ points</span><b>' + st.filter(x => x.t >= FREE).length + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + '</small></div><div class="stat"><span>Free cords at</span><b>' + FREE + ' pts</b><small class="helper" style="display:block;margin:0">up to 2 a level</small></div></div>' +
+        '<div class="actions"><button type="button" class="btn" id="cCsv">📄 Cords list</button></div>' +
+        '<div class="tabs">' + [['all', 'Everyone'], ['free', 'Free cords'], ['need', 'Needs points'], ['given', 'Cords given']].map(([k, l]) => '<button type="button" class="chip' + (cFilter === k ? ' on' : '') + '" data-cf="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<p class="helper">Tap a student to enter points for each level.</p><input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
+        LEVELS.map(l => { const xs = shown.filter(x => x.m.lvl === l); if (!xs.length) return ''; xs.sort((a, b) => b.t - a.t || a.m.name.localeCompare(b.m.name));
+          return '<div class="lvlhead"><h3>' + lvlName(l) + '</h3><small>' + xs.length + ' students</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+            xs.map(({ m, c, t }) => '<div class="row" data-c="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + [0, 1, 2, 3, 4].map(k => (m.points || {})[k] != null ? 'L' + k + ' ' + m.points[k] : '').filter(Boolean).join(' · ') + '</small></div><b style="min-width:2.5em;text-align:right">' + t + '</b><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div>').join('') + '</div>'; }).join('') +
+        (shown.length ? '' : '<div class="card"><p class="helper">No students match.</p></div>');
+      wireModes();
+      document.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { cFilter = b.dataset.cf; draw(); });
+      document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
+      document.querySelectorAll('[data-c]').forEach(r => r.onclick = () => cordsEditor(r.dataset.c));
+      $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
+      $('cCsv').onclick = () => {
+        const rows = st.slice().sort((a, b) => LEVELS.indexOf(a.m.lvl) - LEVELS.indexOf(b.m.lvl) || a.m.name.localeCompare(b.m.name));
+        const lines = [[(settings.org || 'SNA') + ' cords points'], ['Level', 'Name', 'Level 0', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Total', 'Status']].concat(rows.map(x => [lvlName(x.m.lvl), x.m.name].concat([0, 1, 2, 3, 4].map(k => (x.m.points || {})[k] != null ? x.m.points[k] : '')).concat([x.t, x.c.label])));
+        sendFile('SNA cords points.csv', lines.map(csvLine).join('\n'));
+      };
+    }
+    function cordsEditor(id, back) {
+      const m = members.find(x => x.id === id); if (!m) return;
+      const P = m.points || {};
+      const body = () => '<h2>🎓 ' + esc(m.name) + '</h2><p class="helper">' + esc(lvlName(m.lvl)) + ' · up to 2 points a level · ' + FREE + ' points = free cords</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">' + [0, 1, 2, 3, 4].map(k => '<label style="margin:0">Level ' + k + '<input id="cp' + k + '" inputmode="decimal" value="' + (P[k] != null ? P[k] : '') + '" placeholder="0"></label>').join('') + '</div>' +
+        '<p style="font-size:1.1rem;margin:12px 0" id="cTot"></p>' +
+        '<label>Cords</label><div class="methods">' + [['', 'Not yet'], ['purchase', 'Wants to buy'], ['given', 'Cords given']].map(([k, l]) => '<button type="button" class="chip' + ((m.cords || '') === k ? ' on' : '') + '" data-cs="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<div class="actions"><button type="button" class="btn" id="cSave">Save</button><button type="button" class="btn ghost" id="cCancel">Cancel</button></div>';
+      open(body());
+      let cs = m.cords || '';
+      const read = () => { const o = {}; [0, 1, 2, 3, 4].forEach(k => { const v = $('cp' + k).value.trim(); if (v !== '' && !isNaN(Number(v))) o[k] = Math.round(Number(v) * 100) / 100; }); return o; };
+      const tot = () => { const t = ptsTotal({ points: read() }); $('cTot').innerHTML = 'Total: <b>' + t + '</b> · ' + (t >= FREE ? '<span style="color:var(--green);font-weight:700">Free cords ✓</span>' : 'needs ' + (Math.round((FREE - t) * 100) / 100) + ' more'); };
+      tot(); [0, 1, 2, 3, 4].forEach(k => $('cp' + k).oninput = tot);
+      document.querySelectorAll('[data-cs]').forEach(b => b.onclick = () => { cs = b.dataset.cs; document.querySelectorAll('[data-cs]').forEach(x => x.classList.toggle('on', x === b)); });
+      $('cCancel').onclick = () => back ? back() : close();
+      $('cSave').onclick = async () => {
+        const row = { points: read(), cords: cs, updated_at: new Date().toISOString() };
+        if (fail(await sb.from('dues_members').update(row).eq('id', id))) return;
+        Object.assign(m, row); draw(); back ? back() : close(); toast('Saved ✓ ' + ptsTotal(m) + ' points');
+      };
+    }
+
     // ---- one student ----
     function showMember(id) {
       const m = members.find(x => x.id === id); if (!m) return;
       const s = stateOf(m), mine = payments.filter(p => p.member_id === id), link = statusBase + m.token;
-      open('<div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h2 style="margin:0">' + esc(m.name) + '</h2><p class="helper" style="margin:2px 0">' + esc([lvlName(m.lvl), m.email, m.phone].filter(Boolean).join(' · ')) + '</p></div><span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>' +
+      open('<div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h2 style="margin:0">' + esc(m.name) + '</h2><p class="helper" style="margin:2px 0">' + esc(lvlName(m.lvl)) + '</p>' + (m.role ? '<p style="margin:2px 0;color:var(--navy);font-weight:700">⭐ ' + esc(m.role) + '</p>' : '') + '</div><span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>' +
         (m.notes ? '<p class="helper">📝 ' + esc(m.notes) + '</p>' : '') +
+        (m.phone || m.email ? '<div class="actions" style="margin-top:6px">' + (m.phone ? '<a class="btn ghost small" href="tel:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">📞 ' + esc(m.phone) + '</a><a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">💬 Text</a>' : '') + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '">✉ ' + esc(m.email) + '</a>' : '') + '</div>' : '') +
+        (() => { const t = paidTermsOf(m); return '<div class="card"><h2>Dues history</h2>' + (t.length ? '<div class="methods">' + t.map(k => '<span class="tag ' + (k > cur() ? 'ahead' : 'paid') + '">' + termName(k) + ' ✓</span>').join('') + '</div>' : '<p class="helper" style="margin:0">No paid semesters on record.</p>') + '</div>'; })() +
+        (() => { const c = cordsState(m), P = m.points || {}; return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">🎓 Cords · ' + ptsTotal(m) + ' points</h2><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div><p class="helper" style="margin:6px 0">' + [0, 1, 2, 3, 4].map(l => 'L' + l + ': ' + (P[l] != null ? P[l] : '–')).join(' · ') + '</p><button type="button" class="btn ghost small" id="mCords">Edit points</button></div>'; })() +
         (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' +
           '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px"><button type="button" class="btn ghost small" id="lvDown"' + (m.lvl <= -1 ? ' disabled' : '') + '>⬇ Back a level</button><b>' + esc(lvlName(m.lvl)) + '</b><button type="button" class="btn ghost small" id="lvUp"' + (m.lvl >= 4 ? ' disabled' : '') + '>⬆ Up a level</button></div>' : '') +
-        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(p.receipt) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Delete payment">✕</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
+        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(String(p.receipt).replace(/^#/, '')) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Delete payment">✕</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
         '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. They can check their own dues any time; it shows nothing about anyone else.</p><div class="linkbox">' + esc(link) + '</div>' +
         '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + '</div></div>' +
         '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit name &amp; info</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
@@ -356,6 +426,7 @@
       });
       $('lCopy').onclick = () => copy(link, 'Link copied ✓');
       $('mEdit').onclick = () => editMember(m);
+      $('mCords').onclick = () => cordsEditor(id, () => showMember(id));
       const step = async d => {
         const lvl = m.lvl + d; if (lvl < -1 || lvl > 4) return;
         if (fail(await sb.from('dues_members').update({ lvl, level: lvlName(lvl), updated_at: new Date().toISOString() }).eq('id', id))) return;
@@ -373,7 +444,7 @@
     // ---- download ----
     function csv() {
       const rows = members.slice().sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1) || LEVELS.indexOf(a.lvl) - LEVELS.indexOf(b.lvl) || a.name.localeCompare(b.name));
-      const lines = [['Name', 'Level', 'Status ' + termName(cur()), 'Paid through', 'Email', 'Phone', 'Notes', 'Payments']].concat(rows.map(m => [m.name, m.active ? lvlName(m.lvl) : (m.graduated ? 'Graduated ' + m.graduated : 'Removed'), stateOf(m).label, termName(m.paid_through), m.email, m.phone, m.notes,
+      const lines = [['Name', 'Level', 'Officer role', 'Status ' + termName(cur()), 'Paid through', 'Semesters paid', 'Cords points', 'Email', 'Phone', 'Notes', 'Payments']].concat(rows.map(m => [m.name, m.active ? lvlName(m.lvl) : (m.graduated ? 'Graduated ' + m.graduated : 'Removed'), m.role || '', stateOf(m).label, termName(m.paid_through), paidTermsOf(m).map(termName).join('; '), ptsTotal(m), m.email, m.phone, m.notes,
         payments.filter(p => p.member_id === m.id).map(p => p.paid_on + ' ' + money(p.amount) + (p.method ? ' ' + p.method : '') + (p.receipt ? ' #' + p.receipt : '')).join('; ')]));
       sendFile('SNA dues ' + termName(cur()) + ' (all).csv', lines.map(csvLine).join('\n'));
     }

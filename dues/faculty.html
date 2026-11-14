@@ -49,7 +49,9 @@
     const until = k => (k % 2 ? 'Dec ' : 'May ') + String(Math.floor(k / 2)).slice(2);
     const LEVELS = [0, 1, 2, 3, 4, -1], lvlName = l => l < 0 ? 'Lower division' : 'Level ' + l;
     const token = new URLSearchParams(location.search).get('t') || '';
-    let d, filter = 'all', lvl = 'all', find = '';
+    let d, filter = 'all', lvl = 'all', find = '', mode = 'dues';
+    const tot = x => Math.round(Object.values(x.points || {}).reduce((t, v) => t + Number(v || 0), 0) * 100) / 100;
+    const cordLabel = x => x.cords === 'given' ? 'Cords given' : tot(x) >= 5 ? 'Free cords ✓' : x.cords === 'purchase' ? 'Buying cords' : 'Needs ' + (Math.round((5 - tot(x)) * 100) / 100);
     if (!/^[0-9a-f]{32}$/.test(token)) { $('view').innerHTML = '<p>This link isn\'t complete. Ask for it again.</p>'; return; }
     function draw() {
       const cur = d.term_key, st = x => x.paid_through > cur ? 'ahead' : x.paid_through === cur ? 'paid' : 'unpaid';
@@ -57,15 +59,29 @@
       const q = find.toLowerCase();
       const shown = all.filter(x => filter === 'all' || (filter === 'paid' ? st(x) !== 'unpaid' : st(x) === 'unpaid'))
         .filter(x => lvl === 'all' || x.lvl === Number(lvl)).filter(x => !q || x.name.toLowerCase().includes(q));
-      $('view').innerHTML = '<div class="top"><div class="big"><b>' + paid.length + '</b> of ' + all.length + ' students paid</div><button type="button" class="btn" id="dl">📄 Download paid list</button></div>' +
+      const tabs = '<div class="tabs" style="margin-top:0">' + [['dues', '💵 Dues'], ['cords', '🎓 Cords']].map(([k, l]) => '<button type="button" class="chip' + (mode === k ? ' on' : '') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>';
+      if (mode === 'cords') {
+        const xs = all.filter(x => lvl === 'all' || x.lvl === Number(lvl)).filter(x => !q || x.name.toLowerCase().includes(q));
+        $('view').innerHTML = tabs + '<p class="key">Up to 2 points a level · 5 points = free cords</p>' +
+          '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
+          '<input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
+          LEVELS.map(l => { const ys = xs.filter(x => x.lvl === l).sort((a, b) => tot(b) - tot(a)); if (!ys.length) return '';
+            return '<div class="lvl"><h3>' + lvlName(l) + '</h3></div><div class="card">' + ys.map(x => '<div class="row"><span><b>' + esc(x.name) + '</b><br><span class="st">' + [0, 1, 2, 3, 4].map(k => (x.points || {})[k] != null ? 'L' + k + ' ' + x.points[k] : '').filter(Boolean).join(' · ') + '</span></span><span class="st"><b>' + tot(x) + '</b> · ' + cordLabel(x) + '</span></div>').join('') + '</div>'; }).join('');
+        document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); });
+        document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvl = b.dataset.l; draw(); });
+        $('find').oninput = e => { find = e.target.value; const p = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(p, p); };
+        return;
+      }
+      $('view').innerHTML = tabs + '<div class="top"><div class="big"><b>' + paid.length + '</b> of ' + all.length + ' students paid</div><button type="button" class="btn" id="dl">📄 Download paid list</button></div>' +
         '<p class="key"><span class="nm paid">Yellow</span> paid this semester · <span class="nm ahead">Purple</span> paid ahead · no color = not paid</p>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['paid', 'Paid'], ['unpaid', 'Not paid']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
         '<input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
         LEVELS.map(l => { const xs = shown.filter(x => x.lvl === l); if (!xs.length) return ''; const inL = all.filter(x => x.lvl === l);
           return '<div class="lvl"><h3>' + lvlName(l) + '</h3><small>' + inL.filter(x => st(x) !== 'unpaid').length + ' of ' + inL.length + ' paid</small></div><div class="card">' +
-            xs.map(x => { const k = st(x); return '<div class="row"><span class="nm ' + k + '">' + esc(x.name) + '</span><span class="st">' + (k === 'unpaid' ? 'Not paid' : 'Paid until ' + until(x.paid_through)) + '</span></div>'; }).join('') + '</div>'; }).join('') +
+            xs.map(x => { const k = st(x); return '<div class="row"><span><span class="nm ' + k + '">' + esc(x.name) + '</span>' + (x.role ? '<br><span class="st" style="color:var(--navy)">⭐ ' + esc(x.role) + '</span>' : '') + '</span><span class="st">' + (k === 'unpaid' ? 'Not paid' : 'Paid until ' + until(x.paid_through)) + '</span></div>'; }).join('') + '</div>'; }).join('') +
         (shown.length ? '' : '<p class="muted">No students match.</p>');
+      document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); });
       document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
       document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvl = b.dataset.l; draw(); });
       $('find').oninput = e => { find = e.target.value; const p = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(p, p); };
