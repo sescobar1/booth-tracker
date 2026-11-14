@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SNA Dues</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#24536f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SNA Dues">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #f6f4ef; --card: #fff; --ink: #1d2b33; --muted: #6b7880; --line: #e2e3dc; --navy: #24536f; --green: #2e7d4f; --green-soft: #e3f1e8; --amber: #a3620f; --amber-soft: #fbefd9; --red: #a43c2c; --red-soft: #f8e3df; --purple: #6b4fa0; --purple-soft: #ece6f7; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #141a1d; --card: #1e262a; --ink: #e8eef0; --muted: #9aa8ae; --line: #2f3a3f; --navy: #8cc0dd; --green: #7fd1a0; --green-soft: #1f3a2b; --amber: #f0c477; --amber-soft: #3a2f1c; --red: #f0a096; --red-soft: #3d2420; --purple: #c3b0ea; --purple-soft: #2e2840; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    header { background: #24536f; color: #fff; padding: calc(14px + env(safe-area-inset-top)) 16px 14px; }
+    header .in { max-width: 820px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header small { opacity: .85; display: block; font-size: .85rem; }
+    main { max-width: 820px; margin: 0 auto; padding: 14px 14px 110px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; }
+    h2 { font-size: 1rem; margin: 0 0 8px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+    .stat span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 700; }
+    .stat b { font-size: 1.25rem; }
+    .meter { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 10px; }
+    .meter i { display: block; height: 100%; background: var(--green); }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+    .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: .9rem; cursor: pointer; }
+    .chip.on { background: var(--navy); color: var(--bg); border-color: var(--navy); }
+    input, select, textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); }
+    label { display: block; font-size: .85rem; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button { font: inherit; cursor: pointer; }
+    .btn { border: 0; border-radius: 10px; background: #24536f; color: #fff; padding: 10px 16px; font-weight: 700; text-decoration: none; display: inline-block; }
+    .btn.ghost { background: transparent; color: var(--navy); border: 1px solid var(--line); }
+    .btn.small { padding: 6px 10px; font-size: .85rem; }
+    .btn:disabled { opacity: .45; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .lvlhead { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 4px 6px; }
+    .lvlhead h3 { margin: 0; font-size: 1.05rem; }
+    .lvlhead small { color: var(--muted); }
+    .row { display: flex; align-items: center; gap: 10px; padding: 11px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+    .row:first-child { border-top: 0; }
+    .row .who { flex: 1; min-width: 0; }
+    .row .who b { display: block; overflow-wrap: anywhere; font-weight: 600; }
+    .row .who small { color: var(--muted); }
+    .tag { font-size: .78rem; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
+    .tag.paid { background: var(--green-soft); color: var(--green); }
+    .tag.ahead { background: var(--purple-soft); color: var(--purple); }
+    .tag.unpaid { background: var(--red-soft); color: var(--red); }
+    .tag.grad { background: var(--line); color: var(--muted); }
+    .helper { color: var(--muted); font-size: .88rem; margin: 6px 0; }
+    .banner { background: var(--amber-soft); color: var(--amber); border-radius: 12px; padding: 10px 12px; font-size: .92rem; margin: 10px 0; }
+    .modal { position: fixed; inset: 0; background: #0007; display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
+    .sheet { background: var(--bg); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; border-radius: 18px 18px 0 0; padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); }
+    @media (min-width: 700px) { .modal { align-items: center; } .sheet { border-radius: 18px; } }
+    .methods { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pay { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .92rem; align-items: center; }
+    .pay:first-child { border-top: 0; }
+    .linkbox { font-size: .82rem; word-break: break-word; background: var(--card); border: 1px dashed var(--line); padding: 8px; border-radius: 8px; white-space: pre-wrap; }
+    .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
+    .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; border: 0; background: #24536f; color: #fff; font-size: 1.8rem; box-shadow: 0 6px 18px #0003; }
+    .quick { border: 1px solid var(--line); background: var(--card); color: var(--green); border-radius: 8px; padding: 4px 8px; font-size: .8rem; font-weight: 700; }
+    @media (max-width: 560px) { .stats { grid-template-columns: 1fr 1fr; } }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header><div class="in"><div><h1>SNA Dues</h1><small id="sub">Student Nurses Association</small></div><button type="button" class="btn ghost small" id="setBtn" style="color:#fff;border-color:#ffffff66" hidden>⚙ Settings</button></div></header>
+  <main id="view"><p class="helper">Loading…</p></main>
+  <button type="button" class="fab" id="fab" hidden aria-label="Add a student">＋</button>
+  <div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
+  <div class="toast" id="toast" hidden></div>
+  <script src="config.js"></script>
+  <script src="vendor/supabase.js"></script>
+  <script>
+  // SNA Dues: students by level, which semester their dues are paid through, and who still owes.
+  // Semesters are numbered year*2 + (0 spring, 1 fall). In January and August everyone moves up a level
+  // on its own; Level 4 students graduate. Each student gets a private status link (status.html?t=…).
+  (function () {
+    const CFG = window.DUES_CONFIG.sync;
+    const sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { storageKey: 'duesAuth', persistSession: true, autoRefreshToken: true } });
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const money = n => '$' + (Math.round(Number(n || 0) * 100) / 100).toFixed(2).replace(/\.00$/, '');
+    const pad = n => String(n).padStart(2, '0');
+    const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+    const fmtDate = iso => iso ? new Date(iso + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    // Spring runs January–July (summer counts with spring), fall runs August–December.
+    const termOfDate = iso => { const [y, m] = iso.split('-').map(Number); return y * 2 + (m >= 8 ? 1 : 0); };
+    const termName = k => !(k > 0) ? '—' : (k % 2 ? 'Fall ' : 'Spring ') + Math.floor(k / 2);
+    const termStart = k => Math.floor(k / 2) + (k % 2 ? '-08-01' : '-01-01');
+    const LEVELS = [0, 1, 2, 3, 4, -1];
+    const lvlName = l => l < 0 ? 'Lower division' : 'Level ' + l;
+    const METHODS = ['Cash', 'Venmo', 'Cash App', 'Zelle', 'Check', 'Card', 'Other'];
+    const statusBase = location.href.split('#')[0].replace(/[^/]*$/, '') + 'status.html?t=';
+    let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '';
+    let toastTimer;
+    const toast = m => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200); };
+    const open = html => { $('sheet').innerHTML = html; $('modal').hidden = false; };
+    const close = () => { $('modal').hidden = true; $('sheet').innerHTML = ''; };
+    $('modal').addEventListener('click', e => { if (e.target.id === 'modal') close(); });
+    const copy = async (text, msg) => { try { await navigator.clipboard.writeText(text); toast(msg || 'Copied ✓'); } catch (e) { prompt('Copy this:', text); } };
+    const fail = r => { if (r.error) { toast('Could not save: ' + r.error.message); return true; } return false; };
+    const firstName = n => { const p = String(n).split(','); return (p.length > 1 ? p[1] : p[0]).trim().split(/\s+/)[0] || n; };
+    const cur = () => settings.term_key;
+
+    // Paid for this semester? Purple = paid ahead past this semester.
+    function stateOf(m) {
+      if (!m.active) return { key: 'grad', label: m.graduated ? 'Graduated ' + m.graduated : 'Removed', owed: 0 };
+      if (m.paid_through > cur()) return { key: 'ahead', label: 'Paid thru ' + termName(m.paid_through), owed: 0 };
+      if (m.paid_through === cur()) return { key: 'paid', label: 'Paid', owed: 0 };
+      return { key: 'unpaid', label: 'Unpaid', owed: Number(settings.amount) || 0 };
+    }
+
+    // ---- loading ----
+    async function load() {
+      const [s, m, p] = await Promise.all([
+        sb.from('dues_settings').select('*').maybeSingle(),
+        sb.from('dues_members').select('*').order('name'),
+        sb.from('dues_payments').select('*').order('paid_on')
+      ]);
+      const err = [s, m, p].find(r => r.error); if (err) { toast(err.error.message); return; }
+      settings = s.data || { org: 'ATU Student Nurses Association', term: '', term_key: termOfDate(today()), amount: 0, due_date: null, pay_info: '' };
+      if (!s.data) await sb.from('dues_settings').upsert({ owner: user.id, ...settings });
+      if (!settings.term_key) settings.term_key = termOfDate(today());
+      members = m.data || []; payments = p.data || [];
+      await newSemesterCheck();
+      draw();
+      if (!(Number(settings.amount) > 0)) editSettings(true);
+    }
+
+    // ---- new semester: everyone moves up a level, Level 4 graduates ----
+    async function moveUp(fromTerm) {
+      const grads = members.filter(m => m.active && m.lvl === 4), ups = members.filter(m => m.active && m.lvl >= 0 && m.lvl < 4);
+      if (grads.length && fail(await sb.from('dues_members').update({ active: false, graduated: termName(fromTerm), updated_at: new Date().toISOString() }).in('id', grads.map(m => m.id)))) return null;
+      for (const l of [3, 2, 1, 0]) {
+        const ids = ups.filter(m => m.lvl === l).map(m => m.id);
+        if (ids.length && fail(await sb.from('dues_members').update({ lvl: l + 1, level: 'Level ' + (l + 1), updated_at: new Date().toISOString() }).in('id', ids))) return null;
+      }
+      grads.forEach(m => { m.active = false; m.graduated = termName(fromTerm); });
+      ups.forEach(m => { m.lvl += 1; m.level = 'Level ' + m.lvl; });
+      return { up: ups.length, grad: grads.length };
+    }
+    async function newSemesterCheck() {
+      const now = termOfDate(today());
+      let moved = 0, grads = 0;
+      while (settings.term_key < now) {
+        const from = settings.term_key, r = await moveUp(from); if (!r) return;
+        settings.term_key = from + 1; moved += r.up; grads += r.grad;
+        if (fail(await sb.from('dues_settings').update({ term_key: settings.term_key, term: termName(settings.term_key), updated_at: new Date().toISOString() }).eq('owner', user.id))) return;
+      }
+      if (moved || grads) banner = '🎓 ' + termName(settings.term_key) + ' started: ' + moved + ' students moved up a level and ' + grads + ' Level 4 student' + (grads === 1 ? '' : 's') + ' graduated. Everyone who isn\'t paid ahead now shows as unpaid for this semester.';
+    }
+
+    // ---- main screen ----
+    function draw() {
+      $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · ' + termName(cur());
+      const active = members.filter(m => m.active), st = active.map(m => ({ m, s: stateOf(m) }));
+      const nPaid = st.filter(x => x.s.key !== 'unpaid').length, nOwe = active.length - nPaid;
+      const termPays = payments.filter(p => p.paid_on >= termStart(cur()) && termOfDate(p.paid_on) === cur());
+      const collected = termPays.reduce((t, p) => t + Number(p.amount), 0);
+      const q = find.toLowerCase();
+      const pool = filter === 'grad' ? members.filter(m => !m.active).map(m => ({ m, s: stateOf(m) })) : st;
+      const shown = pool.filter(x => filter === 'all' || filter === 'grad' || (filter === 'unpaid' ? x.s.key === 'unpaid' : x.s.key !== 'unpaid'))
+        .filter(x => lvlFilter === 'all' || filter === 'grad' || x.m.lvl === Number(lvlFilter))
+        .filter(x => !q || (x.m.name + ' ' + x.m.email + ' ' + x.m.notes).toLowerCase().includes(q));
+      const groups = filter === 'grad' ? [['Graduated / removed', shown]] : LEVELS.map(l => [lvlName(l), shown.filter(x => x.m.lvl === l)]).filter(g => g[1].length);
+      $('view').innerHTML = (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
+        '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + ' / ' + active.length + '</b></div><div class="stat"><span>Still owe</span><b style="color:var(--red)">' + nOwe + '</b>' + (settings.amount > 0 ? '<small class="helper" style="display:block;margin:0">' + money(nOwe * settings.amount) + '</small>' : '') + '</div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">' + (settings.due_date ? 'due ' + esc(fmtDate(settings.due_date)) : 'per semester') + '</small></div></div>' +
+        '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
+        '<div class="actions"><button type="button" class="btn" id="remBtn"' + (nOwe ? '' : ' disabled') + '>📣 Reminders (' + nOwe + ')</button><button type="button" class="btn ghost" id="bulkBtn">👥 Add students</button><button type="button" class="btn ghost" id="csvBtn">⬇ Download</button></div>' +
+        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['grad', 'Graduated']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
+        (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
+        '<input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
+        (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
+          return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+            xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
+              (s.key === 'unpaid' ? '<button type="button" class="quick" data-quick="' + m.id + '">✓ Paid</button>' : '') + '<span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>').join('') + '</div>'; }).join('')
+          : '<div class="card"><p class="helper">' + (members.length ? 'No students match.' : 'No students yet. Tap ＋ to add one.') + '</p></div>');
+      document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
+      document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
+      document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('[data-quick]')) showMember(r.dataset.m); });
+      document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payForm(b.dataset.quick));
+      $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
+      $('remBtn').onclick = reminders; $('bulkBtn').onclick = bulkAdd; $('csvBtn').onclick = csv;
+    }
+
+    // ---- settings ----
+    function editSettings(first) {
+      open('<h2>' + (first ? 'One more thing' : 'Settings') + '</h2>' + (first ? '<p class="helper">How much are dues each semester? You can change this any time under ⚙ Settings.</p>' : '') +
+        '<label>Organization name<input id="sOrg" value="' + esc(settings.org) + '"></label>' +
+        '<div class="grid2"><label>Dues per semester<input id="sAmt" inputmode="decimal" value="' + (Number(settings.amount) || '') + '" placeholder="25"></label><label>Due date this semester<input id="sDue" type="date" value="' + esc(settings.due_date || '') + '"></label></div>' +
+        '<label>How students can pay (shown on their status page and in reminders)<textarea id="sPay" rows="3" placeholder="Venmo @ATU-SNA, Cash App $ATUSNA, or cash to any officer">' + esc(settings.pay_info) + '</textarea></label>' +
+        '<p class="helper">Current semester: <b>' + termName(cur()) + '</b>. In January and August everyone moves up a level on their own, and Level 4 students graduate.</p>' +
+        '<div class="actions"><button type="button" class="btn" id="sSave">Save</button>' + (first ? '' : '<button type="button" class="btn ghost" id="sCancel">Cancel</button>') + '</div>' +
+        (first ? '' : '<div class="card"><h2>Move up early</h2><p class="helper">Only if you need to start ' + termName(cur() + 1) + ' before ' + (cur() % 2 ? 'January' : 'August') + '. Everyone moves up one level and Level 4 graduates.</p><button type="button" class="btn ghost small" id="sUp">Start ' + termName(cur() + 1) + ' now</button></div><div class="actions"><button type="button" class="btn ghost small" id="sOut">Sign out</button></div>'));
+      $('sSave').onclick = async () => {
+        const next = { org: $('sOrg').value.trim() || 'Student Nurses Association', amount: Number($('sAmt').value) || 0, due_date: $('sDue').value || null, pay_info: $('sPay').value.trim(), updated_at: new Date().toISOString() };
+        if (fail(await sb.from('dues_settings').update(next).eq('owner', user.id))) return;
+        Object.assign(settings, next); close(); draw(); toast('Saved ✓');
+      };
+      if ($('sCancel')) $('sCancel').onclick = close;
+      if ($('sOut')) $('sOut').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+      if ($('sUp')) $('sUp').onclick = async () => {
+        if (!confirm('Start ' + termName(cur() + 1) + ' now? Everyone moves up a level and Level 4 students graduate.')) return;
+        const from = cur(), r = await moveUp(from); if (!r) return;
+        settings.term_key = from + 1;
+        if (fail(await sb.from('dues_settings').update({ term_key: settings.term_key, term: termName(settings.term_key), due_date: null }).eq('owner', user.id))) return;
+        settings.due_date = null; banner = '🎓 ' + termName(cur()) + ' started: ' + r.up + ' moved up and ' + r.grad + ' graduated.'; close(); draw();
+      };
+    }
+
+    // ---- add / edit a student ----
+    const lvlSelect = (id, v) => '<select id="' + id + '">' + LEVELS.map(l => '<option value="' + l + '"' + (l === v ? ' selected' : '') + '>' + lvlName(l) + '</option>').join('') + '</select>';
+    const thruSelect = (id, v) => '<select id="' + id + '"><option value="0"' + (v < cur() ? ' selected' : '') + '>Not paid this semester</option>' + [0, 1, 2, 3, 4, 5].map(k => cur() + k).concat(v > cur() + 5 ? [v] : []).map(k => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>Paid through ' + termName(k) + '</option>').join('') + '</select>';
+    function editMember(m) {
+      const isNew = !m; m = m || { name: '', email: '', phone: '', lvl: lvlFilter !== 'all' ? Number(lvlFilter) : 0, paid_through: 0, notes: '' };
+      open('<h2>' + (isNew ? 'Add a student' : 'Edit student') + '</h2>' +
+        '<label>Name (Last, First)<input id="mName" value="' + esc(m.name) + '" autocapitalize="words" placeholder="Smith, Jane"></label>' +
+        '<div class="grid2"><label>Level' + lvlSelect('mLvl', m.lvl) + '</label><label>Dues' + thruSelect('mThru', m.paid_through) + '</label></div>' +
+        '<div class="grid2"><label>Email<input id="mEmail" type="email" value="' + esc(m.email) + '" placeholder="name@atu.edu"></label><label>Phone<input id="mPhone" type="tel" value="' + esc(m.phone) + '"></label></div>' +
+        '<label>Notes (cords, points…)<input id="mNotes" value="' + esc(m.notes) + '"></label>' +
+        '<div class="actions"><button type="button" class="btn" id="mSave">Save</button><button type="button" class="btn ghost" id="mCancel">Cancel</button></div>');
+      if (isNew) setTimeout(() => $('mName').focus(), 50);
+      $('mCancel').onclick = () => isNew ? close() : showMember(m.id);
+      $('mSave').onclick = async () => {
+        const lvl = Number($('mLvl').value);
+        const row = { name: $('mName').value.trim(), lvl, level: lvlName(lvl), paid_through: Number($('mThru').value), email: $('mEmail').value.trim(), phone: $('mPhone').value.trim(), notes: $('mNotes').value.trim(), updated_at: new Date().toISOString() };
+        if (!row.name) { toast('Type the student\'s name.'); return; }
+        if (isNew) {
+          const r = await sb.from('dues_members').insert({ owner: user.id, ...row }).select().single(); if (fail(r)) return;
+          members.push(r.data); members.sort((a, b) => a.name.localeCompare(b.name)); close(); draw(); toast('Added ' + row.name);
+        } else {
+          if (fail(await sb.from('dues_members').update(row).eq('id', m.id))) return;
+          Object.assign(m, row); draw(); showMember(m.id);
+        }
+      };
+    }
+    function bulkAdd() {
+      open('<h2>Add students</h2><p class="helper">Paste names, one per line (Last, First). You can add an email after the name with a tab or comma.</p>' +
+        '<div class="grid2"><label>Level' + lvlSelect('bLvl', lvlFilter !== 'all' ? Number(lvlFilter) : 0) + '</label><label>Dues' + thruSelect('bThru', 0) + '</label></div>' +
+        '<label>Students<textarea id="bList" rows="10" placeholder="Smith, Jane&#10;Doe, John"></textarea></label>' +
+        '<div class="actions"><button type="button" class="btn" id="bSave">Add students</button><button type="button" class="btn ghost" id="bCancel">Cancel</button></div>');
+      $('bCancel').onclick = close;
+      $('bSave').onclick = async () => {
+        const have = new Set(members.map(m => m.name.toLowerCase())), lvl = Number($('bLvl').value), thru = Number($('bThru').value);
+        const rows = $('bList').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+          const email = (l.match(/[^\s,;]+@[^\s,;]+/) || [''])[0];
+          return { owner: user.id, name: l.replace(email, '').replace(/[\t;]+/g, ' ').replace(/,\s*$/, '').replace(/\s+/g, ' ').trim(), email, lvl, level: lvlName(lvl), paid_through: thru };
+        }).filter(r => r.name && !have.has(r.name.toLowerCase()) && (have.add(r.name.toLowerCase()), true));
+        if (!rows.length) { toast('No new names to add.'); return; }
+        const r = await sb.from('dues_members').insert(rows).select(); if (fail(r)) return;
+        members = members.concat(r.data).sort((a, b) => a.name.localeCompare(b.name)); close(); draw(); toast('Added ' + r.data.length + ' students ✓');
+      };
+    }
+
+    // ---- record a payment ----
+    function payForm(id) {
+      const m = members.find(x => x.id === id); if (!m) return;
+      const start = Math.max(cur(), m.paid_through + 1);
+      open('<h2>Payment from ' + esc(m.name) + '</h2><p class="helper">' + esc(lvlName(m.lvl)) + ' · ' + (m.paid_through >= cur() ? 'paid through ' + termName(m.paid_through) : 'not paid for ' + termName(cur())) + '</p>' +
+        '<label>Covers</label><div class="methods" id="pSem">' + [1, 2, 3, 4].map(n => '<button type="button" class="chip' + (n === 1 ? ' on' : '') + '" data-n="' + n + '">' + (n === 1 ? termName(start) : n + ' semesters (thru ' + termName(start + n - 1) + ')') + '</button>').join('') + '</div>' +
+        '<div class="grid2"><label>Amount<input id="pAmt" inputmode="decimal" value="' + (settings.amount > 0 ? settings.amount : '') + '"></label><label>Date<input id="pDate" type="date" value="' + today() + '"></label></div>' +
+        '<label>Paid with</label><div class="methods">' + METHODS.map(x => '<button type="button" class="chip" data-meth="' + x + '">' + x + '</button>').join('') + '</div>' +
+        '<div class="grid2"><label>Receipt #<input id="pRec" placeholder="1042"></label><label>Note<input id="pNote"></label></div>' +
+        '<div class="actions"><button type="button" class="btn" id="pSave">Save payment</button><button type="button" class="btn ghost" id="pCancel">Cancel</button></div>');
+      let n = 1, meth = '';
+      document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = Number(b.dataset.n); document.querySelectorAll('[data-n]').forEach(x => x.classList.toggle('on', x === b)); if (settings.amount > 0) $('pAmt').value = +(settings.amount * n).toFixed(2); });
+      document.querySelectorAll('[data-meth]').forEach(b => b.onclick = () => { meth = b.dataset.meth; document.querySelectorAll('[data-meth]').forEach(x => x.classList.toggle('on', x === b)); });
+      $('pCancel').onclick = close;
+      $('pSave').onclick = async () => {
+        const amount = Number($('pAmt').value); if (!(amount > 0)) { toast('Type the amount paid.'); return; }
+        const thru = start + n - 1;
+        const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: $('pDate').value || today(), method: meth, receipt: $('pRec').value.trim(), note: $('pNote').value.trim(), through_term: thru }).select().single();
+        if (fail(r)) return;
+        if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) return;
+        payments.push(r.data); m.paid_through = thru; close(); draw(); toast('✓ ' + m.name + ' paid through ' + termName(thru));
+      };
+    }
+
+    // ---- one student ----
+    function showMember(id) {
+      const m = members.find(x => x.id === id); if (!m) return;
+      const s = stateOf(m), mine = payments.filter(p => p.member_id === id), link = statusBase + m.token;
+      open('<div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h2 style="margin:0">' + esc(m.name) + '</h2><p class="helper" style="margin:2px 0">' + esc([lvlName(m.lvl), m.email, m.phone].filter(Boolean).join(' · ')) + '</p></div><span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>' +
+        (m.notes ? '<p class="helper">📝 ' + esc(m.notes) + '</p>' : '') +
+        (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' : '') +
+        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(p.receipt) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Delete payment">✕</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
+        '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. It only shows their own dues.</p><div class="linkbox">' + esc(link) + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + (s.key === 'unpaid' ? '<button type="button" class="btn ghost small" id="lMsg">Copy reminder</button>' + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '?subject=' + encodeURIComponent((settings.org || 'SNA') + ' dues') + '&body=' + encodeURIComponent(personalMsg(m)) + '">✉ Email</a>' : '') + (m.phone ? '<a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '?&body=' + encodeURIComponent(personalMsg(m)) + '">💬 Text</a>' : '') : '') + '</div></div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
+      if ($('mPay')) $('mPay').onclick = () => payForm(id);
+      document.querySelectorAll('[data-delpay]').forEach(b => b.onclick = async () => {
+        if (!confirm('Delete this payment? Their "paid through" semester stays as it is; change it with Edit if needed.')) return;
+        if (fail(await sb.from('dues_payments').delete().eq('id', b.dataset.delpay))) return;
+        payments = payments.filter(p => p.id !== b.dataset.delpay); draw(); showMember(id);
+      });
+      $('lCopy').onclick = () => copy(link, 'Link copied ✓');
+      if ($('lMsg')) $('lMsg').onclick = () => copy(personalMsg(m), 'Reminder copied ✓');
+      $('mEdit').onclick = () => editMember(m);
+      $('mClose').onclick = close;
+      $('mAct').onclick = async () => {
+        const row = { active: !m.active, graduated: '' };
+        if (fail(await sb.from('dues_members').update(row).eq('id', id))) return;
+        Object.assign(m, row); close(); draw(); toast(m.active ? 'Back on the roster' : 'Removed from the roster');
+      };
+    }
+
+    // ---- reminders ----
+    function personalMsg(m) {
+      return 'Hi ' + firstName(m.name) + '! Friendly reminder from ' + (settings.org || 'SNA') + ' that your ' + termName(cur()) + ' dues' + (settings.amount > 0 ? ' (' + money(settings.amount) + ')' : '') + ' are still open' + (settings.due_date ? ' — due ' + fmtDate(settings.due_date) : '') + '.' +
+        (settings.pay_info ? '\n\nHow to pay: ' + settings.pay_info : '') + '\n\nCheck your status any time: ' + statusBase + m.token + '\n\nThank you! 💙';
+    }
+    function reminders() {
+      const owe = members.filter(m => m.active && stateOf(m).key === 'unpaid');
+      const group = 'Hi SNA members! Friendly reminder that ' + termName(cur()) + ' dues' + (settings.amount > 0 ? ' of ' + money(settings.amount) : '') + ' are ' + (settings.due_date ? 'due ' + fmtDate(settings.due_date) : 'due soon') + '.' + (settings.pay_info ? ' How to pay: ' + settings.pay_info + '.' : '') + ' If you\'ve already paid, thank you! 💙';
+      const emails = owe.map(m => m.email).filter(Boolean);
+      open('<h2>📣 Reminders</h2><p class="helper">' + owe.length + ' student' + (owe.length === 1 ? ' hasn\'t' : 's haven\'t') + ' paid for ' + termName(cur()) + '.</p>' +
+        '<div class="card"><h2>Group message</h2><p class="helper">For GroupMe, Canvas or a class email. It doesn\'t name anyone.</p><div class="linkbox">' + esc(group) + '</div><div class="actions"><button type="button" class="btn small" id="gCopy">Copy message</button>' + (emails.length ? '<button type="button" class="btn ghost small" id="eCopy">Copy ' + emails.length + ' emails (for BCC)</button>' : '') + '<button type="button" class="btn ghost small" id="nCopy">Copy list of names by level</button></div></div>' +
+        '<div class="card"><h2>One at a time</h2><p class="helper">Each message has their private status link.</p>' +
+        owe.map(m => '<div class="pay"><span><b>' + esc(m.name) + '</b><br><small class="helper">' + esc(lvlName(m.lvl)) + '</small></span><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn ghost small" data-rcopy="' + m.id + '">Copy</button>' +
+          (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '?subject=' + encodeURIComponent((settings.org || 'SNA') + ' dues') + '&body=' + encodeURIComponent(personalMsg(m)) + '">✉</a>' : '') +
+          (m.phone ? '<a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '?&body=' + encodeURIComponent(personalMsg(m)) + '">💬</a>' : '') + '</span></div>').join('') + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="rClose">Close</button></div>');
+      $('gCopy').onclick = () => copy(group, 'Group message copied ✓');
+      if ($('eCopy')) $('eCopy').onclick = () => copy(emails.join(', '), 'Emails copied ✓');
+      $('nCopy').onclick = () => copy(LEVELS.map(l => { const xs = owe.filter(m => m.lvl === l); return xs.length ? lvlName(l) + ' (' + xs.length + ')\n' + xs.map(m => '  ' + m.name).join('\n') : ''; }).filter(Boolean).join('\n\n'), 'Names copied ✓');
+      document.querySelectorAll('[data-rcopy]').forEach(b => b.onclick = () => copy(personalMsg(members.find(m => m.id === b.dataset.rcopy)), 'Copied ✓'));
+      $('rClose').onclick = close;
+    }
+
+    // ---- download ----
+    function csv() {
+      const cell = x => /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x);
+      const rows = members.slice().sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1) || LEVELS.indexOf(a.lvl) - LEVELS.indexOf(b.lvl) || a.name.localeCompare(b.name));
+      const lines = [['Name', 'Level', 'Status ' + termName(cur()), 'Paid through', 'Email', 'Phone', 'Notes', 'Payments']].concat(rows.map(m => [m.name, m.active ? lvlName(m.lvl) : (m.graduated ? 'Graduated ' + m.graduated : 'Removed'), stateOf(m).label, termName(m.paid_through), m.email, m.phone, m.notes,
+        payments.filter(p => p.member_id === m.id).map(p => p.paid_on + ' ' + money(p.amount) + (p.method ? ' ' + p.method : '') + (p.receipt ? ' #' + p.receipt : '')).join('; ')]));
+      const blob = new Blob([lines.map(r => r.map(cell).join(',')).join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SNA dues ' + termName(cur()) + '.csv'; a.click();
+    }
+
+    // ---- sign in ----
+    function signInView() {
+      $('view').innerHTML = '<div class="card"><h2>Sign in</h2><p class="helper">Use the same email and password as your Booth Tracker and Money apps.</p>' +
+        '<label>Email<input id="iEmail" type="email" autocomplete="username"></label><label>Password<input id="iPass" type="password" autocomplete="current-password"></label>' +
+        '<div class="actions"><button type="button" class="btn" id="iGo">Sign in</button></div><p class="helper" id="iMsg"></p></div>';
+      $('iGo').onclick = async () => {
+        $('iMsg').textContent = 'Signing in…';
+        const r = await sb.auth.signInWithPassword({ email: $('iEmail').value.trim(), password: $('iPass').value });
+        if (r.error) { $('iMsg').textContent = r.error.message; return; }
+        start(r.data.session.user);
+      };
+    }
+    function start(u) { user = u; $('setBtn').hidden = false; $('fab').hidden = false; load(); }
+    $('setBtn').onclick = () => editSettings(false);
+    $('fab').onclick = () => editMember(null);
+    sb.auth.getSession().then(({ data }) => data.session ? start(data.session.user) : signInView());
+    window.__dues = { termOfDate, termName };
+  })();
+  </script>
+</body>
+</html>

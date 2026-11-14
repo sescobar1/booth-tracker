@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My SNA Dues</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#24536f">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #f6f4ef; --card: #fff; --ink: #1d2b33; --muted: #6b7880; --line: #e2e3dc; --green: #2e7d4f; --green-soft: #e3f1e8; --red: #a43c2c; --red-soft: #f8e3df; --purple: #6b4fa0; --purple-soft: #ece6f7; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #141a1d; --card: #1e262a; --ink: #e8eef0; --muted: #9aa8ae; --line: #2f3a3f; --green: #7fd1a0; --green-soft: #1f3a2b; --red: #f0a096; --red-soft: #3d2420; --purple: #c3b0ea; --purple-soft: #2e2840; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    header { background: #24536f; color: #fff; padding: calc(16px + env(safe-area-inset-top)) 16px 16px; text-align: center; }
+    header h1 { margin: 0; font-size: 1.2rem; }
+    header small { opacity: .85; }
+    main { max-width: 520px; margin: 0 auto; padding: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 12px 0; }
+    .big { text-align: center; padding: 22px 16px; border-radius: 14px; }
+    .big b { display: block; font-size: 1.6rem; }
+    .paid { background: var(--green-soft); color: var(--green); }
+    .ahead { background: var(--purple-soft); color: var(--purple); }
+    .unpaid { background: var(--red-soft); color: var(--red); }
+    .muted { color: var(--muted); font-size: .9rem; }
+    .row { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .95rem; }
+    .row:first-child { border-top: 0; }
+    h2 { font-size: 1rem; margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <header><h1 id="org">Student Nurses Association</h1><small>Dues status</small></header>
+  <main id="view"><p class="muted">Loading…</p></main>
+  <script src="config.js"></script>
+  <script>
+  // A student's own dues status. The token in the link is the only key; it shows nothing about anyone else.
+  (function () {
+    const CFG = window.DUES_CONFIG.sync, $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const money = n => '$' + (Math.round(Number(n || 0) * 100) / 100).toFixed(2).replace(/\.00$/, '');
+    const fmt = iso => iso ? new Date(iso + 'T12:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const token = new URLSearchParams(location.search).get('t') || '';
+    const show = html => { $('view').innerHTML = html; };
+    if (!/^[0-9a-f]{32}$/.test(token)) { show('<div class="card"><p>This link isn\'t complete. Ask an SNA officer to send it again.</p></div>'); return; }
+    fetch(CFG.url + '/rest/v1/rpc/dues_status', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => {
+        if (!d) { show('<div class="card"><p>We couldn\'t find this link. Ask an SNA officer for a new one.</p></div>'); return; }
+        if (d.org) { $('org').textContent = d.org; document.title = 'My dues · ' + d.org; }
+        const first = (String(d.name).split(',')[1] || d.name).trim().split(/\s+/)[0];
+        let box;
+        if (d.graduated) box = '<div class="big paid"><b>🎓 Congratulations!</b>Graduated ' + esc(d.graduated) + '</div>';
+        else if (d.paid_now && d.paid_through && d.paid_through !== d.term) box = '<div class="big ahead"><b>✓ Paid ahead</b>You\'re paid through ' + esc(d.paid_through) + '</div>';
+        else if (d.paid_now) box = '<div class="big paid"><b>✓ Paid</b>' + esc(d.term) + ' dues are paid. Thank you!</div>';
+        else box = '<div class="big unpaid"><b>Not paid yet</b>' + esc(d.term) + ' dues' + (Number(d.amount) > 0 ? ': ' + money(d.amount) : '') + (d.due_date ? '<br>Due ' + esc(fmt(d.due_date)) : '') + '</div>';
+        const pays = d.payments || [];
+        show('<div class="card"><h2>Hi ' + esc(first) + '!</h2><p class="muted" style="margin:0">' + esc(d.name) + ' · ' + esc(d.level) + '</p></div>' + box +
+          (!d.paid_now && !d.graduated && d.pay_info ? '<div class="card"><h2>How to pay</h2><p style="margin:0;white-space:pre-wrap">' + esc(d.pay_info) + '</p></div>' : '') +
+          (pays.length ? '<div class="card"><h2>Your payments</h2>' + pays.map(p => '<div class="row"><span>' + esc(fmt(p.date)) + (p.method ? ' · ' + esc(p.method) : '') + (p.receipt ? ' · Receipt #' + esc(p.receipt) : '') + (p.through ? '<br><span class="muted">through ' + esc(p.through) + '</span>' : '') + '</span><b>' + money(p.amount) + '</b></div>').join('') + '</div>' : '') +
+          '<p class="muted" style="text-align:center">Questions? Reach out to an SNA officer.</p>');
+      })
+      .catch(() => show('<div class="card"><p>Couldn\'t load your status right now. Please try again in a minute.</p></div>'));
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+{ "name": "SNA Dues", "short_name": "SNA Dues", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#f6f4ef", "theme_color": "#24536f", "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }] }
