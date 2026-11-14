@@ -214,7 +214,8 @@ $('topAdd').onclick = () => {
 let regMonth = '', regSearch = '', regCat = '', regType = '';
 // Select-to-delete: picked entry ids, and the last batch deleted (for Undo).
 let selMode = false, picked = new Set(), lastDeleted = null;
-let balView = (() => { try { return localStorage.getItem(KEY + 'BalView') || 'bank'; } catch (e) { return 'bank'; } })();
+// The main number is what's left after pending bills; switching once moves every device to it (she can still tap 🏦 Bank).
+let balView = (() => { try { if (!localStorage.getItem(KEY + 'BalViewV2')) { localStorage.setItem(KEY + 'BalViewV2', '1'); localStorage.setItem(KEY + 'BalView', 'register'); } return localStorage.getItem(KEY + 'BalView') || 'register'; } catch (e) { return 'register'; } })();
 function viewRegister() {
   const acc = activeAccount();
   if (!acc) {
@@ -255,11 +256,11 @@ function viewRegister() {
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
     '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#review">🔍 Review</a><a href="#leaders">🏆 Top spending</a></div>' +
     (searching ? '' : '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
-    '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
+    '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 What\'s left</button></div>' +
     (balView === 'bank'
       ? '<div class="bal"><span>Bank balance (what\'s cleared)</span><b class="' + (b.cleared < 0 ? 'neg' : '') + '">' + money(b.cleared) + '</b></div>' +
         '<div class="bal-row"><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '<span>Register: <b>' + money(b.balance) + '</b></span></div></div>'
-      : '<div class="bal"><span>Register balance (after pending)</span><b class="' + (b.balance < 0 ? 'neg' : '') + '">' + money(b.balance) + '</b></div>' +
+      : '<div class="bal"><span>What\'s left (bank minus pending bills)</span><b class="' + (b.balance < 0 ? 'neg' : '') + '">' + money(b.balance) + '</b></div>' +
         '<div class="bal-row"><span>Bank: <b>' + money(b.cleared) + '</b></span><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '</div></div>') +
     safeToSpend(acc, b.balance) + budgetCard(acc) + comingUp(acc, b.balance) +
     (needCat ? '<a class="card pad inbox-link" href="#inbox">🗂 <b>' + needCat + '</b> ' + (needCat === 1 ? 'entry needs' : 'entries need') + ' a category <span class="sub">Sort them →</span></a>' : '') +
