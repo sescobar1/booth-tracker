@@ -66,7 +66,7 @@
         if (!x) { $('view').innerHTML = '<div class="card">This link no longer works. Ask an SNA officer for the new one.</div>'; return; }
         d = x; $('sub').textContent = d.term + ' dues paid list';
         const lvls = LEVELS.filter(l => d.students.some(s => s.lvl === l));
-        $('view').innerHTML = '<div class="card big"><span><b>' + d.students.length + '</b> members paid<br><span class="muted">' + esc(d.term) + (Number(d.amount) > 0 ? ' · ' + money(d.amount) + ' a semester' : '') + '</span></span><span style="font-size:2rem">💚💛</span></div>' +
+        $('view').innerHTML = '<div class="card big"><span><b>' + d.students.length + '</b> members paid<br><span class="muted">' + esc(d.term) + (Number(d.amount) > 0 ? ' · ' + money(d.amount) + ' a semester' : '') + '</span></span></div>' +
           '<input type="search" id="find" placeholder="🔍 Type your name to check" autocomplete="off">' +
           '<div class="chips">' + [['all', 'All levels']].concat(lvls.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
           '<p class="muted">Only students marked paid are listed. Don\'t see your name? You\'re not marked paid yet.' + (d.pay_info ? ' How to pay: ' + esc(d.pay_info) + '.' : '') + '</p><div id="list"></div>';
