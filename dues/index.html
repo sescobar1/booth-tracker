@@ -220,7 +220,7 @@
       $('view').innerHTML = modeTabs() + (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="stuBtn">💚 Student paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', '🎓 Graduated'], ['left', '🚪 Left program']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (past ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
         '<p class="helper"><span class="nm paid">Yellow</span> = paid this semester · <span class="nm ahead">Purple</span> = paid ahead · no color = not paid.<br><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
@@ -236,7 +236,7 @@
       document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payPicker(b.dataset.quick, false));
       document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => payPicker(b.dataset.ahead, true));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('rosBtn').onclick = rosterUpload; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('rosBtn').onclick = rosterUpload; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('stuBtn').onclick = studentLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -561,7 +561,7 @@
       { name: 'President', seats: 1, on: false, desc: 'Communicates with Dr. Escobar, Dr. Dubose and SNA members about upcoming events through monthly meetings. Organizes and sends timely notice of meeting and volunteer dates, leads the meetings, attends volunteer events, and represents ATU and SNA professionally. Works with many people and organizations to strengthen the community and SNA. A strong commitment of time and effort is expected.' },
       { name: 'Vice President', seats: 1, on: true, desc: 'Needs to be well organized. Runs two of the monthly meetings and helps the other officers organize volunteer activities. Moves into the President role the following semester.' },
       ...[0, 1, 2, 3, 4].map(l => ({ name: 'Level ' + l + ' Representative', seats: 1, on: true, level: l, desc: 'The voice of your level on the SNA board. Attend meetings, keep your level updated on discussions and decisions, and bring your class\'s feedback, questions and concerns to the board, so both sides know about key events, volunteer opportunities and issues.' })),
-      { name: 'Fundraising Rep. – T-Shirts', seats: 2, on: true, desc: 'Work with Dr. Goodner (kgoodner@atu.edu) to set the timeline, run design submissions and the design vote, get the design approved, and order and hand out the T-shirts.' },
+      { name: 'Fundraising Rep. – T-Shirts', seats: 1, on: true, desc: 'Work with Dr. Goodner (kgoodner@atu.edu) to set the timeline, run design submissions and the design vote, get the design approved, and order and hand out the T-shirts.' },
       { name: 'Fundraising Rep. – Snack Room', seats: 2, on: true, desc: 'Oversee the SNA snack room in Dean 217: keep it stocked, coordinate purchasing with Dr. Escobar (sescobar@atu.edu), and check it at least twice a week.' },
       { name: 'Curriculum Committee Rep.', seats: 1, on: true, desc: 'Work with level coordinators to collect positive and negative curriculum feedback from Levels 0–4 (a survey or message shared in each GroupMe at the end of the semester). Compile it into a typed report to present at the faculty curriculum meeting; confirm the date with Dr. Henderson (khenderson20@atu.edu). You must attend at least one curriculum meeting a semester to earn points.' },
       { name: 'Welfare Committee Rep.', seats: 1, on: true, desc: 'Bring student issues about the dress code or policies to the Nursing Faculty Welfare Committee. Arrange with Dr. Randell to attend a welfare meeting, survey each level mid-semester, present the concerns, then report back on the outcome. Represent and ask for input on these issues at each SNA meeting.' },
@@ -982,6 +982,21 @@
       const lines = [[(settings.org || 'SNA') + ' dues paid · ' + termName(cur())], ['Level', 'Name', 'Paid until']].concat(paid.map(m => [lvlName(m.lvl), m.name, until(m.paid_through)]));
       lines.push([], ['Total paid', paid.length]);
       sendFile('SNA dues paid ' + termName(cur()) + '.csv', lines.map(csvLine).join('\n'));
+    }
+    function studentLink() {
+      const link = location.href.split('#')[0].replace(/[^/]*$/, '') + 'paid.html?t=' + settings.student_token;
+      open('<h2>💚 Student paid list</h2><p class="helper">An ATU SNA page in green and gold that lists everyone marked paid this semester, by level, with a name search. Students who haven\'t paid are not listed, so no one sees who still owes. It updates as soon as you mark someone paid.</p>' +
+        '<div class="linkbox">' + esc(link) + '</div><div class="actions"><button type="button" class="btn small" id="sCopy">Copy link</button><a class="btn ghost small" href="' + esc(link) + '" target="_blank" rel="noopener">Open it</a></div>' +
+        '<p class="helper" style="margin-top:16px">Make a new link if this one gets shared too far. The old one stops working.</p><button type="button" class="btn ghost small" id="sNew">Make a new link</button>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="sClose">Close</button></div>');
+      $('sCopy').onclick = () => copy(link, 'Student list link copied ✓');
+      $('sClose').onclick = close;
+      $('sNew').onclick = async () => {
+        if (!confirm('Make a new student list link? The old one will stop working.')) return;
+        const t = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+        if (fail(await sb.from('dues_settings').update({ student_token: t }).eq('owner', user.id))) return;
+        settings.student_token = t; studentLink(); toast('New link made ✓');
+      };
     }
     function facultyLink() {
       const link = facultyBase + settings.faculty_token;
