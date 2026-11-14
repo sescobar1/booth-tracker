@@ -114,7 +114,7 @@
       const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
     }
     const csvLine = r => r.map(x => /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x)).join(',');
-    let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '', mode = 'dues', cFilter = 'all';
+    let user = null, settings = null, members = [], payments = [], filter = 'all', lvlFilter = 'all', find = '', banner = '', mode = 'dues', cFilter = 'all', classFilter = 'all';
     // Cords: up to 2 points a level; 5 or more points in all = free cords.
     const FREE = 5;
     const ptsTotal = m => Math.round(Object.values(m.points || {}).reduce((t, v) => t + Number(v || 0), 0) * 100) / 100;
@@ -353,38 +353,124 @@
     }
 
     // ---- cords ----
+    // Graduating class: Level 4 graduates this semester, Level 3 next semester, and so on.
+    const classKey = m => m.lvl >= 0 ? cur() + (4 - m.lvl) : 0;
+    const className = k => k > 0 ? 'Class of ' + (k % 2 ? 'Dec ' : 'May ') + Math.floor(k / 2) : 'Lower division';
     function drawCords() {
       $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · Cords';
       const active = members.filter(m => m.active), q = find.toLowerCase();
-      const st = active.map(m => ({ m, c: cordsState(m), t: ptsTotal(m) }));
+      const st = active.map(m => ({ m, c: cordsState(m), t: ptsTotal(m), k: classKey(m) }));
+      const classes = [...new Set(st.map(x => x.k))].sort((a, b) => (a || 1e9) - (b || 1e9));
+      if (classFilter !== 'all' && !classes.includes(Number(classFilter))) classFilter = 'all';
       const shown = st.filter(x => cFilter === 'all' || (cFilter === 'free' ? x.c.key === 'free' || x.c.key === 'given' : cFilter === 'need' ? x.c.key === 'need' || x.c.key === 'buy' : x.c.key === cFilter))
-        .filter(x => lvlFilter === 'all' || x.m.lvl === Number(lvlFilter)).filter(x => !q || x.m.name.toLowerCase().includes(q));
-      const l4 = st.filter(x => x.m.lvl === 4), l4free = l4.filter(x => x.c.key !== 'need' && x.c.key !== 'buy').length;
+        .filter(x => classFilter === 'all' || x.k === Number(classFilter)).filter(x => !q || x.m.name.toLowerCase().includes(q));
+      const next = st.filter(x => x.k === classes[0]), nextFree = next.filter(x => x.t >= FREE || x.c.key === 'given').length;
       $('view').innerHTML = modeTabs() +
-        '<div class="stats"><div class="stat"><span>Level 4 earning free cords</span><b style="color:var(--green)">' + l4free + '</b><small class="helper" style="display:block;margin:0">of ' + l4.length + '</small></div><div class="stat"><span>Everyone at 5+ points</span><b>' + st.filter(x => x.t >= FREE).length + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + '</small></div><div class="stat"><span>Free cords at</span><b>' + FREE + ' pts</b><small class="helper" style="display:block;margin:0">up to 2 a level</small></div></div>' +
-        '<div class="actions"><button type="button" class="btn" id="cCsv">📄 Cords list</button></div>' +
+        '<div class="stats"><div class="stat"><span>' + esc(className(classes[0])) + ' with free cords</span><b style="color:var(--green)">' + nextFree + '</b><small class="helper" style="display:block;margin:0">of ' + next.length + '</small></div><div class="stat"><span>Everyone at 5+ points</span><b>' + st.filter(x => x.t >= FREE).length + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + '</small></div><div class="stat"><span>Free cords</span><b>' + FREE + ' pts</b><small class="helper" style="display:block;margin:0">total, Level 0–4</small></div></div>' +
+        '<div class="actions"><button type="button" class="btn" id="cPdf">📄 Upload points PDF</button><button type="button" class="btn ghost" id="cCsv">⬇ Cords list</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['free', 'Free cords'], ['need', 'Needs points'], ['given', 'Cords given']].map(([k, l]) => '<button type="button" class="chip' + (cFilter === k ? ' on' : '') + '" data-cf="' + k + '">' + l + '</button>').join('') + '</div>' +
-        '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
-        '<p class="helper">Tap a student to enter points for each level.</p><input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
-        LEVELS.map(l => { const xs = shown.filter(x => x.m.lvl === l); if (!xs.length) return ''; xs.sort((a, b) => b.t - a.t || a.m.name.localeCompare(b.m.name));
-          return '<div class="lvlhead"><h3>' + lvlName(l) + '</h3><small>' + xs.length + ' students</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
-            xs.map(({ m, c, t }) => '<div class="row" data-c="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + [0, 1, 2, 3, 4].map(k => (m.points || {})[k] != null ? 'L' + k + ' ' + m.points[k] : '').filter(Boolean).join(' · ') + '</small></div><b style="min-width:2.5em;text-align:right">' + t + '</b><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div>').join('') + '</div>'; }).join('') +
+        '<div class="tabs">' + [['all', 'All classes']].concat(classes.map(k => [String(k), className(k).replace('Class of ', '')])).map(([k, l]) => '<button type="button" class="chip' + (String(classFilter) === k ? ' on' : '') + '" data-cl="' + k + '">' + esc(l) + '</button>').join('') + '</div>' +
+        '<p class="helper">Tap a student to type points by hand, or upload a PDF of a semester\'s points for one class.</p><input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
+        classes.map(k => { const xs = shown.filter(x => x.k === k); if (!xs.length) return ''; xs.sort((a, b) => b.t - a.t || a.m.name.localeCompare(b.m.name));
+          const all = st.filter(x => x.k === k);
+          return '<div class="lvlhead"><h3>' + esc(className(k)) + '</h3><small>' + (k ? 'Level ' + (4 - (k - cur())) + ' now · ' : '') + all.filter(x => x.t >= FREE || x.c.key === 'given').length + ' of ' + all.length + ' free</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+            xs.map(({ m, c, t }) => '<div class="row" data-c="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + [0, 1, 2, 3, 4].map(i => (m.points || {})[i] != null ? 'L' + i + ' ' + m.points[i] : '').filter(Boolean).join(' · ') + '</small></div><b style="min-width:2.5em;text-align:right">' + t + '</b><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div>').join('') + '</div>'; }).join('') +
         (shown.length ? '' : '<div class="card"><p class="helper">No students match.</p></div>');
       wireModes();
       document.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { cFilter = b.dataset.cf; draw(); });
-      document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
+      document.querySelectorAll('[data-cl]').forEach(b => b.onclick = () => { classFilter = b.dataset.cl; draw(); });
       document.querySelectorAll('[data-c]').forEach(r => r.onclick = () => cordsEditor(r.dataset.c));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
+      $('cPdf').onclick = () => pointsUpload(classFilter !== 'all' ? Number(classFilter) : classes[0]);
       $('cCsv').onclick = () => {
-        const rows = st.slice().sort((a, b) => LEVELS.indexOf(a.m.lvl) - LEVELS.indexOf(b.m.lvl) || a.m.name.localeCompare(b.m.name));
-        const lines = [[(settings.org || 'SNA') + ' cords points'], ['Level', 'Name', 'Level 0', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Total', 'Status']].concat(rows.map(x => [lvlName(x.m.lvl), x.m.name].concat([0, 1, 2, 3, 4].map(k => (x.m.points || {})[k] != null ? x.m.points[k] : '')).concat([x.t, x.c.label])));
-        sendFile('SNA cords points.csv', lines.map(csvLine).join('\n'));
+        const rows = st.filter(x => classFilter === 'all' || x.k === Number(classFilter)).sort((a, b) => (a.k || 1e9) - (b.k || 1e9) || a.m.name.localeCompare(b.m.name));
+        const lines = [[(settings.org || 'SNA') + ' cords points' + (classFilter !== 'all' ? ' · ' + className(Number(classFilter)) : '')], ['Graduating class', 'Level now', 'Name', 'Level 0', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Total', 'Status']].concat(rows.map(x => [className(x.k).replace('Class of ', ''), lvlName(x.m.lvl), x.m.name].concat([0, 1, 2, 3, 4].map(i => (x.m.points || {})[i] != null ? x.m.points[i] : '')).concat([x.t, x.c.label])));
+        sendFile('SNA cords points' + (classFilter !== 'all' ? ' ' + className(Number(classFilter)) : '') + '.csv', lines.map(csvLine).join('\n'));
       };
     }
+
+    // ---- upload a PDF of one semester's points for one graduating class ----
+    let pdfjs = null;
+    async function readPdfLines(file) {
+      if (!pdfjs) { pdfjs = await import('./vendor/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.mjs', location.href).href; }
+      const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise, lines = [];
+      for (let p = 1; p <= doc.numPages; p++) {
+        const items = (await (await doc.getPage(p)).getTextContent()).items.filter(i => i.str.trim());
+        const rows = [];
+        items.forEach(i => { const y = i.transform[5], x = i.transform[4]; let r = rows.find(r => Math.abs(r.y - y) < 3); if (!r) rows.push(r = { y, parts: [] }); r.parts.push({ x, s: i.str.trim() }); });
+        rows.sort((a, b) => b.y - a.y).forEach(r => lines.push(r.parts.sort((a, b) => a.x - b.x).map(p => p.s).join(' ')));
+      }
+      return lines;
+    }
+    const words = s => String(s).toLowerCase().normalize('NFKD').replace(/[’']/g, '').replace(/[^a-z0-9.\s-]/g, ' ').replace(/-/g, ' ').split(/\s+/).filter(Boolean);
+    function guessStudent(text, pool) {
+      const w = new Set(words(text)); let best = null, bestScore = 0, tie = false;
+      pool.forEach(m => {
+        const [last, first = ''] = m.name.split(','); const lw = words(last.replace(/\(.*?\)/g, '')), fw = words(first.replace(/\(.*?\)/g, '')), alt = words((m.name.match(/\((.*?)\)/g) || []).join(' '));
+        let s = 0;
+        if (lw.length && lw.every(x => w.has(x))) s += 2; else if (alt.some(x => w.has(x))) s += 1.5; else return;
+        if (fw[0] && w.has(fw[0])) s += 1; else if (fw[0] && [...w].some(x => x.length > 2 && (fw[0].startsWith(x) || x.startsWith(fw[0])))) s += 0.5;
+        if (s > bestScore) { best = m; bestScore = s; tie = false; } else if (s === bestScore) tie = true;
+      });
+      return bestScore >= 2.5 || (bestScore >= 2 && !tie) ? best : null;
+    }
+    function pointsUpload(k) {
+      const classes = [...new Set(members.filter(m => m.active && m.lvl >= 0).map(classKey))].sort((a, b) => a - b);
+      k = classes.includes(k) ? k : classes[0];
+      let lvl = 4 - (k - cur());
+      const head = () => '<h2>📄 Upload points PDF</h2><p class="helper">Pick the graduating class and which level the points are for, then choose the PDF. You\'ll see every match before anything is saved.</p>' +
+        '<label>Graduating class</label><div class="methods">' + classes.map(c => '<button type="button" class="chip' + (c === k ? ' on' : '') + '" data-uk="' + c + '">' + esc(className(c).replace('Class of ', '')) + '</button>').join('') + '</div>' +
+        '<label>Points are for</label><div class="methods">' + [0, 1, 2, 3, 4].map(l => '<button type="button" class="chip' + (l === lvl ? ' on' : '') + '" data-ul="' + l + '">Level ' + l + '</button>').join('') + '</div>' +
+        '<label>PDF<input type="file" id="uFile" accept="application/pdf,.pdf"></label><p class="helper" id="uMsg"></p><div id="uOut"></div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="uCancel">Cancel</button></div>';
+      open(head());
+      const wire = () => {
+        $('uCancel').onclick = close;
+        document.querySelectorAll('[data-uk]').forEach(b => b.onclick = () => { k = Number(b.dataset.uk); lvl = 4 - (k - cur()); open(head()); wire(); });
+        document.querySelectorAll('[data-ul]').forEach(b => b.onclick = () => { lvl = Number(b.dataset.ul); document.querySelectorAll('[data-ul]').forEach(x => x.classList.toggle('on', x === b)); });
+        $('uFile').onchange = async e => {
+          const f = e.target.files[0]; if (!f) return;
+          $('uMsg').textContent = 'Reading ' + f.name + '…';
+          let lines; try { lines = await readPdfLines(f); } catch (err) { $('uMsg').textContent = 'Couldn\'t read that PDF. If it\'s a scanned picture, it has no text to read; send me a copy and I\'ll load it.'; return; }
+          const pool = members.filter(m => m.active && classKey(m) === k), everyone = members.filter(m => m.active);
+          const found = [];
+          lines.forEach(line => {
+            const nums = (line.match(/(^|\s)\d{1,2}(\.\d+)?(?=\s|$)/g) || []).map(x => Number(x)).filter(x => x <= 10);
+            if (!nums.length) return;
+            const text = line.replace(/(^|\s)\d+(\.\d+)?(?=\s|$)/g, ' ');
+            let m = guessStudent(text, pool), other = false;
+            if (!m) { m = guessStudent(text, everyone); other = !!m; }
+            if (m && found.some(x => x.m && x.m.id === m.id)) return;
+            if (!m && words(text).filter(x => /^[a-z]{2,}$/.test(x)).length < 2) return;
+            found.push({ line, m, pts: nums[nums.length - 1], other });
+          });
+          const missing = pool.filter(m => !found.some(x => x.m && x.m.id === m.id));
+          if (!found.length) { $('uMsg').textContent = 'No names with points found in that PDF. If it\'s a scanned picture, send it to me and I\'ll load it.'; return; }
+          $('uMsg').innerHTML = 'Found <b>' + found.filter(x => x.m).length + '</b> students with points. Check the list, fix anything wrong, then save. These set each student\'s <b>Level ' + lvl + '</b> points.';
+          const opt = sel => '<option value="">— skip this line —</option>' + pool.concat(everyone.filter(m => !pool.includes(m))).map(m => '<option value="' + m.id + '"' + (sel && sel.id === m.id ? ' selected' : '') + '>' + esc(m.name) + (pool.includes(m) ? '' : ' (' + esc(className(classKey(m)).replace('Class of ', '')) + ')') + '</option>').join('');
+          $('uOut').innerHTML = '<div class="card">' + found.map((x, i) => '<div class="pay" style="flex-wrap:wrap"><small class="helper" style="width:100%;margin:0">PDF: ' + esc(x.line) + '</small><select data-us="' + i + '" style="flex:1;min-width:0">' + opt(x.m) + '</select><input data-up="' + i + '" inputmode="decimal" value="' + x.pts + '" style="width:70px">' + (x.other ? '<small style="width:100%;color:var(--amber)">Not in ' + esc(className(k)) + ' — double-check</small>' : '') + '</div>').join('') + '</div>' +
+            (missing.length ? '<p class="helper">Not in this PDF (' + missing.length + '): ' + esc(missing.map(m => m.name).join('; ')) + '</p>' : '') +
+            '<div class="actions"><button type="button" class="btn" id="uSave">Save points</button></div>';
+          $('uSave').onclick = async () => {
+            const picks = found.map((x, i) => ({ id: document.querySelector('[data-us="' + i + '"]').value, pts: Number(document.querySelector('[data-up="' + i + '"]').value) })).filter(x => x.id && !isNaN(x.pts));
+            if (!picks.length) { toast('Nothing picked to save.'); return; }
+            $('uSave').disabled = true; let n = 0;
+            for (const x of picks) {
+              const m = members.find(y => y.id === x.id), points = Object.assign({}, m.points || {}, { [lvl]: Math.round(x.pts * 100) / 100 });
+              if (fail(await sb.from('dues_members').update({ points, updated_at: new Date().toISOString() }).eq('id', m.id))) break;
+              m.points = points; n++;
+            }
+            close(); classFilter = String(k); draw(); toast('Saved Level ' + lvl + ' points for ' + n + ' students ✓');
+          };
+        };
+      };
+      wire();
+    }
+
     function cordsEditor(id, back) {
       const m = members.find(x => x.id === id); if (!m) return;
       const P = m.points || {};
-      const body = () => '<h2>🎓 ' + esc(m.name) + '</h2><p class="helper">' + esc(lvlName(m.lvl)) + ' · up to 2 points a level · ' + FREE + ' points = free cords</p>' +
+      const body = () => '<h2>🎓 ' + esc(m.name) + '</h2><p class="helper">' + esc(lvlName(m.lvl)) + (m.active ? ' · ' + esc(className(classKey(m))) : '') + ' · free cords at ' + FREE + ' points total</p>' +
         '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">' + [0, 1, 2, 3, 4].map(k => '<label style="margin:0">Level ' + k + '<input id="cp' + k + '" inputmode="decimal" value="' + (P[k] != null ? P[k] : '') + '" placeholder="0"></label>').join('') + '</div>' +
         '<p style="font-size:1.1rem;margin:12px 0" id="cTot"></p>' +
         '<label>Cords</label><div class="methods">' + [['', 'Not yet'], ['purchase', 'Wants to buy'], ['given', 'Cords given']].map(([k, l]) => '<button type="button" class="chip' + ((m.cords || '') === k ? ' on' : '') + '" data-cs="' + k + '">' + l + '</button>').join('') + '</div>' +
