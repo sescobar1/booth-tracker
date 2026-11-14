@@ -138,7 +138,7 @@
 
     // Paid for this semester? Purple = paid ahead past this semester.
     function stateOf(m) {
-      if (!m.active) return { key: 'grad', label: m.graduated ? 'Graduated ' + m.graduated : 'Removed', owed: 0 };
+      if (!m.active) return { key: 'grad', label: m.graduated ? 'Graduated ' + m.graduated : m.left_term ? 'Left ' + m.left_term : 'Left program', owed: 0 };
       if (m.paid_through > cur()) return { key: 'ahead', label: 'Paid until ' + until(m.paid_through), owed: 0 };
       if (m.paid_through === cur()) return { key: 'paid', label: 'Paid', owed: 0 };
       return { key: 'unpaid', label: 'Unpaid', owed: Number(settings.amount) || 0 };
@@ -168,7 +168,7 @@
       if (!confirm('Start ' + termName(to) + '?\n\n• ' + keep.length + ' students paid ahead stay on the list and move up a level.\n• ' + drop.length + ' others come off the list. Add them back when they pay.\n• ' + grads.length + ' Level 4 students graduate.')) return;
       const now = new Date().toISOString();
       if (grads.length && fail(await sb.from('dues_members').update({ active: false, graduated: termName(from), updated_at: now }).in('id', grads.map(m => m.id)))) return;
-      if (drop.length && fail(await sb.from('dues_members').update({ active: false, graduated: '', updated_at: now }).in('id', drop.map(m => m.id)))) return;
+      if (drop.length && fail(await sb.from('dues_members').update({ active: false, graduated: '', left_term: '', updated_at: now }).in('id', drop.map(m => m.id)))) return;
       for (const l of [3, 2, 1, 0]) {
         const ids = keep.filter(m => m.lvl === l).map(m => m.id);
         if (ids.length && fail(await sb.from('dues_members').update({ lvl: l + 1, level: 'Level ' + (l + 1), updated_at: now }).in('id', ids))) return;
@@ -199,20 +199,21 @@
       const termPays = payments.filter(p => p.paid_on >= termStart(cur()) && termOfDate(p.paid_on) === cur());
       const collected = termPays.reduce((t, p) => t + Number(p.amount), 0);
       const q = find.toLowerCase();
-      const pool = filter === 'grad' ? members.filter(m => !m.active).map(m => ({ m, s: stateOf(m) })) : st;
-      const shown = pool.filter(x => filter === 'all' || filter === 'grad' || (filter === 'officers' ? !!x.m.role : filter === 'unpaid' ? x.s.key === 'unpaid' : x.s.key !== 'unpaid'))
-        .filter(x => lvlFilter === 'all' || filter === 'grad' || x.m.lvl === Number(lvlFilter))
+      const past = filter === 'grad' || filter === 'left';
+      const pool = past ? members.filter(m => !m.active && (filter === 'grad' ? !!m.graduated : !m.graduated)).map(m => ({ m, s: stateOf(m) })) : st;
+      const shown = pool.filter(x => filter === 'all' || past || (filter === 'officers' ? !!x.m.role : filter === 'unpaid' ? x.s.key === 'unpaid' : x.s.key !== 'unpaid'))
+        .filter(x => lvlFilter === 'all' || past || x.m.lvl === Number(lvlFilter))
         .filter(x => !q || (x.m.name + ' ' + x.m.email + ' ' + x.m.notes + ' ' + x.m.role).toLowerCase().includes(q));
-      const groups = filter === 'grad' ? [['Past students', shown]] : LEVELS.map(l => [lvlName(l), shown.filter(x => x.m.lvl === l)]).filter(g => g[1].length);
+      const groups = filter === 'grad' ? [...new Set(shown.map(x => x.m.graduated))].sort((a, b) => termRank(b) - termRank(a)).map(t => ['Graduated ' + t, shown.filter(x => x.m.graduated === t)]) : filter === 'left' ? [...new Set(shown.map(x => x.m.left_term || ''))].sort((a, b) => termRank(b) - termRank(a)).map(t => [t ? 'Left ' + t : 'Taken off the list (not paid at semester start)', shown.filter(x => (x.m.left_term || '') === t)]) : LEVELS.map(l => [lvlName(l), shown.filter(x => x.m.lvl === l)]).filter(g => g[1].length);
       $('view').innerHTML = modeTabs() + (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
-        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', 'Past students']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
-        (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
+        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', '🎓 Graduated'], ['left', '🚪 Left program']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
+        (past ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
         '<p class="helper"><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
-        (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
-          return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+        (groups.length ? groups.map(([title, xs]) => { const all = (past ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
+          return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (past ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
             xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + s.key + '">' + esc(m.name) + '</span></b>' + (m.role ? '<small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small>' : '') + (m.notes ? '<small>' + esc(m.notes) + '</small>' : '') + '</div>' +
               (m.active ? '<button type="button" class="quick" data-ahead="' + m.id + '" style="color:var(--purple)">⏩</button>' : '') + (s.key === 'unpaid' ? '<button type="button" class="quick" data-quick="' + m.id + '">✓ Paid</button>' : '') + '<span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>').join('') + '</div>'; }).join('')
           : '<div class="card"><p class="helper">' + (members.length ? 'No students match.' : 'No students yet. Tap ＋ to add one.') + '</p></div>');
@@ -223,7 +224,7 @@
       document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payPicker(b.dataset.quick, false));
       document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => payPicker(b.dataset.ahead, true));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('rosBtn').onclick = rosterUpload; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -612,6 +613,147 @@
           close(); draw(); toast('Recorded ' + n + ' Cash App payments ✓');
         };
       };
+    }
+
+    // ---- upload a roster: sort everyone into levels; anyone missing goes to "Left the program" ----
+    const loadScript = src => new Promise((res, rej) => { if (document.querySelector('script[src="' + src + '"]')) return res(); const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    function levelFrom(text) {
+      const t = String(text).trim().toLowerCase();
+      if (/^lower\s*div/.test(t)) return -1;
+      const m = t.match(/^level\s*[-:]?\s*(zero|[0-4]|iv|i{1,3})\b/);
+      if (!m) return null;
+      return { zero: 0, i: 1, ii: 2, iii: 3, iv: 4 }[m[1]] ?? Number(m[1]);
+    }
+    function cleanName(raw) {
+      let s = String(raw || '').replace(/\s+/g, ' ').trim().replace(/^\d+[.)]\s*/, '');
+      const cut = s.search(/\s+-?\s*(paid\b|pd\b|sp\s*\d|spring\s*\d|fall\s*\d|fl\s*\d|f\d\d\b|\[|\(r-|\(lpn\)|\(rotc\))/i);
+      const note = cut > 0 ? s.slice(cut).trim() : '';
+      if (cut > 0) s = s.slice(0, cut).trim();
+      s = s.replace(/\s+,/g, ',').replace(/,\s*/, ', ');
+      if (!/[a-z]{2}/i.test(s) || s.length > 60 || levelFrom(s) !== null || /^(name|student|fall|spring|summer|total|level)\b/i.test(s) || /\d/.test(s)) return null;
+      if (!s.includes(',') && s.split(' ').length < 2) return null;
+      return { name: s, note };
+    }
+    // Rows from a spreadsheet: a header row with "Level 0", "Level 1"… over each column, or "Name" and "Level" columns.
+    function namesFromGrid(grid) {
+      const out = [];
+      let cols = {};
+      const hdr = grid.findIndex(r => r.some(c => /^name$/i.test(String(c).trim())) && r.some(c => /^level$/i.test(String(c).trim())));
+      if (hdr >= 0) {
+        const ni = grid[hdr].findIndex(c => /^name$/i.test(String(c).trim())), li = grid[hdr].findIndex(c => /^level$/i.test(String(c).trim()));
+        grid.slice(hdr + 1).forEach(r => { const n = cleanName(r[ni]), l = levelFrom('level ' + String(r[li]).replace(/level/i, '').trim()) ?? levelFrom(r[li]); if (n && l !== null) out.push({ ...n, lvl: l }); });
+        return out;
+      }
+      grid.forEach(r => {
+        const heads = r.map(levelFrom);
+        if (heads.filter(x => x !== null).length >= 2) { cols = {}; heads.forEach((l, i) => { if (l !== null) cols[i] = l; }); return; }
+        r.forEach((c, i) => {
+          if (!(i in cols)) return;
+          const l = levelFrom(c); if (l !== null) { cols[i] = l; return; }
+          const n = cleanName(c); if (n) out.push({ ...n, lvl: cols[i] });
+        });
+      });
+      return out;
+    }
+    // Lines from a Word file or pasted text: a "Level …" heading, then names under it.
+    function namesFromLines(lines) {
+      const out = []; let lvl = null;
+      lines.forEach(line => {
+        const l = levelFrom(line); if (l !== null) { lvl = l; return; }
+        if (lvl === null) return;
+        String(line).split(/\t+/).forEach(part => { const n = cleanName(part); if (n) out.push({ ...n, lvl }); });
+      });
+      return out;
+    }
+    async function readRoster(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (ext === 'docx') {
+        await loadScript('vendor/jszip.min.js');
+        const zip = await JSZip.loadAsync(await file.arrayBuffer()), xml = new DOMParser().parseFromString(await zip.file('word/document.xml').async('string'), 'application/xml');
+        const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+        const lines = [...xml.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join('').trim()).filter(Boolean);
+        return [{ title: file.name, names: namesFromLines(lines) }];
+      }
+      await loadScript('vendor/xlsx.full.min.js');
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      return wb.SheetNames.map(n => ({ title: n, names: namesFromGrid(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: false })) })).filter(s => s.names.length);
+    }
+    const nkey = s => words(String(s).replace(/\(.*?\)/g, ' ')).join(' ');
+    function matchStudent(name, pool) {
+      const exact = pool.filter(m => nkey(m.name) === nkey(name));
+      if (exact.length === 1) return exact[0];
+      const [l, f = ''] = name.split(','), lw = nkey(l), fw = words(f)[0] || '';
+      const c = pool.filter(m => { const [ml, mf = ''] = m.name.split(','); const mfw = words(mf.replace(/\(.*?\)/g, ' '))[0] || '', alt = words((m.name.match(/\((.*?)\)/g) || []).join(' ')); return (nkey(ml) === lw || alt.includes(lw)) && fw && mfw && (mfw.slice(0, 3) === fw.slice(0, 3) || alt.includes(fw)); });
+      return c.length === 1 ? c[0] : null;
+    }
+    function rosterUpload() {
+      let target = cur(), sheets = null, si = 0;
+      const head = () => '<h2>👥 Upload this semester\'s student list</h2><p class="helper">Use your Excel list (a "Level 0", "Level 1"… heading over each column), a Word list with a "Level" heading over each group, or a CSV with Name and Level columns. Nothing changes until you check the results and tap Save.</p>' +
+        '<label>This list is for</label><div class="methods">' + [cur(), cur() + 1].map(k => '<button type="button" class="chip' + (k === target ? ' on' : '') + '" data-rt="' + k + '">' + termName(k) + (k === cur() ? ' (now)' : ' — start new semester') + '</button>').join('') + '</div>' +
+        '<label>Student list<input type="file" id="rFile" accept=".xlsx,.xls,.csv,.docx"></label><label>…or paste it<textarea id="rPaste" rows="4" placeholder="Level 0&#10;Smith, Jane&#10;Doe, John&#10;Level 1&#10;…"></textarea></label><button type="button" class="btn ghost small" id="rGo">Use pasted list</button>' +
+        '<p class="helper" id="rMsg"></p><div id="rOut"></div><div class="actions"><button type="button" class="btn ghost" id="rCancel">Cancel</button></div>';
+      open(head());
+      const wire = () => {
+        $('rCancel').onclick = close;
+        document.querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { target = Number(b.dataset.rt); document.querySelectorAll('[data-rt]').forEach(x => x.classList.toggle('on', x === b)); if (sheets) review(); });
+        $('rFile').onchange = async e => {
+          const f = e.target.files[0]; if (!f) return; $('rMsg').textContent = 'Reading ' + f.name + '…';
+          try { sheets = await readRoster(f); } catch (err) { $('rMsg').textContent = 'Couldn\'t read that file. Try saving it as .xlsx or .docx.'; return; }
+          if (!sheets.length) { $('rMsg').textContent = 'No students found. Each group needs a "Level 0", "Level 1"… heading.'; return; }
+          si = sheets.reduce((b, s, i) => s.names.length > sheets[b].names.length ? i : b, 0); review();
+        };
+        $('rGo').onclick = () => { const names = namesFromLines($('rPaste').value.split(/\r?\n/)); if (!names.length) { $('rMsg').textContent = 'No students found. Put "Level 0", "Level 1"… on its own line above each group.'; return; } sheets = [{ title: 'Pasted list', names }]; si = 0; review(); };
+      };
+      function review() {
+        const list = [], seen = new Set();
+        sheets[si].names.forEach(n => { const k = nkey(n.name); if (!seen.has(k)) { seen.add(k); list.push(n); } });
+        const used = new Set(), rows = list.map(n => { const m = matchStudent(n.name, members.filter(x => !used.has(x.id))); if (m) used.add(m.id); return { ...n, m }; });
+        const stay = rows.filter(r => r.m && r.m.active), back = rows.filter(r => r.m && !r.m.active), fresh = rows.filter(r => !r.m);
+        const moved = stay.filter(r => r.m.lvl !== r.lvl), gone = members.filter(m => m.active && !used.has(m.id));
+        const newSem = target > cur(), grads = newSem ? gone.filter(m => m.lvl === 4) : [], left = gone.filter(m => !grads.includes(m));
+        const byLvl = xs => LEVELS.map(l => [l, xs.filter(x => (x.lvl ?? x.m?.lvl) === l)]).filter(g => g[1].length);
+        const sec = (title, n, body, open) => '<details class="card"' + (open ? ' open' : '') + '><summary><b>' + title + '</b> · ' + n + '</summary>' + body + '</details>';
+        const counts = LEVELS.map(l => [l, rows.filter(r => r.lvl === l).length]).filter(x => x[1]);
+        $('rMsg').innerHTML = (sheets.length > 1 ? 'Sheet: ' + sheets.map((s, i) => '<button type="button" class="chip' + (i === si ? ' on' : '') + '" data-rs="' + i + '">' + esc(s.title) + ' (' + s.names.length + ')</button>').join(' ') + '<br>' : '') +
+          '<b>' + rows.length + '</b> students on the list: ' + counts.map(([l, n]) => (l < 0 ? 'Lower div. ' : 'L' + l + ' ') + n).join(' · ');
+        $('rOut').innerHTML =
+          sec('➕ New students', fresh.length, fresh.map((r, i) => '<div class="pay" style="flex-wrap:wrap"><span><b>' + esc(r.name) + '</b> · ' + esc(lvlName(r.lvl)) + '</span><select data-rn="' + i + '" style="max-width:100%"><option value="">Add as a new student</option>' + members.filter(m => !used.has(m.id)).sort((a, b) => a.name.localeCompare(b.name)).map(m => '<option value="' + m.id + '">Same person as ' + esc(m.name) + (m.active ? '' : ' (past)') + '</option>').join('') + '</select></div>').join('') || '<p class="helper">None</p>', fresh.length) +
+          sec('🔁 Level changes', moved.length, moved.map(r => '<div class="pay"><span>' + esc(r.m.name) + '</span><span>' + esc(lvlName(r.m.lvl)) + ' → <b>' + esc(lvlName(r.lvl)) + '</b></span></div>').join('') || '<p class="helper">None</p>', moved.length && moved.length < 40) +
+          (back.length ? sec('↩️ Coming back', back.length, back.map(r => '<div class="pay"><span>' + esc(r.m.name) + '</span><span>' + esc(lvlName(r.lvl)) + '</span></div>').join(''), true) : '') +
+          (grads.length ? sec('🎓 Graduated (Level 4, not on the list)', grads.length, grads.map(m => '<div class="pay"><span>' + esc(m.name) + '</span></div>').join(''), false) : '') +
+          sec('🚪 Left the program (not on the list)', left.length, byLvl(left).map(([l, xs]) => '<p class="helper" style="margin:8px 0 2px"><b>' + esc(lvlName(l)) + '</b></p>' + xs.map(m => '<label style="display:flex;gap:8px;align-items:center;margin:4px 0;color:var(--ink);font-weight:400"><input type="checkbox" data-rl="' + m.id + '" checked style="width:auto">' + esc(m.name) + '</label>').join('')).join('') + (left.length ? '<p class="helper">Uncheck anyone who is still in the program but missing from the list.</p>' : '<p class="helper">None</p>'), left.length && left.length < 40) +
+          '<p class="helper">' + stay.filter(r => r.m.lvl === r.lvl).length + ' students stay at the same level.' + (newSem ? ' Saving also starts ' + termName(target) + ': this semester\'s officers are saved to history, and only students paid ahead show as paid.' : '') + '</p>' +
+          '<div class="actions"><button type="button" class="btn" id="rSave">Save</button></div>';
+        document.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => { si = Number(b.dataset.rs); review(); });
+        $('rSave').onclick = async () => {
+          $('rSave').disabled = true; $('rSave').textContent = 'Saving…';
+          const now = new Date().toISOString(), from = cur();
+          fresh.forEach((r, i) => { const id = document.querySelector('[data-rn="' + i + '"]').value; if (id) { r.m = members.find(m => m.id === id); r.back = !r.m.active; } });
+          const keepIds = new Set(rows.filter(r => r.m).map(r => r.m.id));
+          const leaving = left.filter(m => !keepIds.has(m.id) && document.querySelector('[data-rl="' + m.id + '"]')?.checked);
+          if (newSem) {
+            for (const m of members.filter(m => m.active && m.role)) {
+              const h = (m.officer_history || []).filter(x => x.term !== termName(from)).concat(m.role.split(' · ').map(role => ({ term: termName(from), role })));
+              if (fail(await sb.from('dues_members').update({ officer_history: h }).eq('id', m.id))) return; m.officer_history = h;
+            }
+          }
+          // levels for everyone on the list (grouped so it's a few saves, not hundreds)
+          for (const l of LEVELS) {
+            const ids = rows.filter(r => r.m && r.lvl === l && (r.m.lvl !== l || !r.m.active)).map(r => r.m.id);
+            if (ids.length && fail(await sb.from('dues_members').update({ lvl: l, level: lvlName(l), active: true, graduated: '', left_term: '', updated_at: now }).in('id', ids))) return;
+            rows.filter(r => r.m && r.lvl === l).forEach(r => Object.assign(r.m, { lvl: l, level: lvlName(l), active: true, graduated: '', left_term: '' }));
+          }
+          const adds = rows.filter(r => !r.m).map(r => ({ owner: user.id, name: r.name, lvl: r.lvl, level: lvlName(r.lvl), notes: r.note ? 'From list: ' + r.note : '' }));
+          if (adds.length) { const r = await sb.from('dues_members').insert(adds).select(); if (fail(r)) return; members = members.concat(r.data); }
+          if (grads.length && !grads.some(m => keepIds.has(m.id))) { if (fail(await sb.from('dues_members').update({ active: false, graduated: termName(from), updated_at: now }).in('id', grads.map(m => m.id)))) return; grads.forEach(m => Object.assign(m, { active: false, graduated: termName(from) })); }
+          if (leaving.length) { if (fail(await sb.from('dues_members').update({ active: false, graduated: '', left_term: termName(target), updated_at: now }).in('id', leaving.map(m => m.id)))) return; leaving.forEach(m => Object.assign(m, { active: false, graduated: '', left_term: termName(target) })); }
+          if (newSem) { if (fail(await sb.from('dues_settings').update({ term_key: target, term: termName(target), due_date: null, updated_at: now }).eq('owner', user.id))) return; settings.term_key = target; settings.due_date = null; }
+          members.sort((a, b) => a.name.localeCompare(b.name));
+          banner = '👥 ' + termName(cur()) + ' list loaded: ' + rows.length + ' students · ' + adds.length + ' new · ' + moved.length + ' changed level' + (grads.length ? ' · ' + grads.length + ' graduated' : '') + ' · ' + leaving.length + ' moved to Left the program.';
+          close(); filter = 'all'; mode = 'dues'; draw(); scrollTo(0, 0);
+        };
+      }
+      wire();
     }
 
     // ---- one student ----
