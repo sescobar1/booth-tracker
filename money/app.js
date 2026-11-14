@@ -165,7 +165,7 @@ function viewLeaders() {
   const R = leaderRanges(), [label, from, to] = R[leadPeriod], L = leaderData(from, to);
   const medal = i => ['🥇', '🥈', '🥉'][i] || '<span class="lrank">' + (i + 1) + '</span>';
   const max = L.rows.length ? L.rows[0].v : 1;
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#leaders" class="on">🏆 Top spending</a></div>' +
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#review">🔍 Review</a><a href="#leaders" class="on">🏆 Top spending</a></div>' +
     '<div class="segs leadsegs">' + Object.entries(R).map(([k, r]) => '<button type="button" class="seg' + (k === leadPeriod ? ' on' : '') + '" data-lp="' + k + '">' + r[0] + '</button>').join('') + '</div>' +
     '<div class="stat-row">' + Object.entries(R).map(([k, r]) => { const x = leaderData(r[1], r[2]); return '<div class="stat' + (k === leadPeriod ? ' on' : '') + '" data-lp="' + k + '"><span>' + r[0] + '</span><b class="expense">' + money(x.total) + '</b></div>'; }).join('') + '</div>' +
     '<div class="card pad"><h2>🏆 ' + esc(label) + ' · ' + money(L.total) + ' spent</h2><p class="helper">' + esc(fmtDate(from)) + (from !== to ? ' – ' + esc(fmtDate(to)) : '') + ' · ' + L.count + ' purchase' + (L.count === 1 ? '' : 's') + ' · transfers left out · tap a category to see its entries</p>' +
@@ -186,9 +186,9 @@ function viewLeaders() {
 function route() {
   if (location.hash.startsWith('#add')) { quickAdd(); return; }
   const [tab, arg] = (location.hash.slice(1) || 'register').split('/');
-  const tabOf = { leaders: 'register', reports: 'register', import: 'more', accounts: 'more', siri: 'more', inbox: 'register', calendar: 'register', rules: 'more', budgets: 'more' };
+  const tabOf = { leaders: 'register', reports: 'register', import: 'more', accounts: 'more', siri: 'more', inbox: 'register', calendar: 'register', review: 'register', rules: 'more', budgets: 'more' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar, leaders: viewLeaders };
+  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar, review: viewReview, leaders: viewLeaders };
   (views[tab] || viewRegister)(arg);
 }
 window.render = () => { const y = window.scrollY; firstSort(); runRecurring(); if (pendingAdd) { finishQuickAdd(); return; } if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
@@ -251,7 +251,7 @@ function viewRegister() {
     (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out ' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + ' · in ' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</span>' +
       (shown.length ? '<button type="button" class="ghost small" id="selToggle">' + (selMode ? 'Done selecting' : '☑ Select to delete') + '</button>' : '') + '<button type="button" class="linkish" id="regClear">Clear search</button></div>' : '') + '</div>' +
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
-    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#leaders">🏆 Top spending</a></div>' +
+    '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#review">🔍 Review</a><a href="#leaders">🏆 Top spending</a></div>' +
     (searching ? '' : '<div class="balance-card"><div class="acc">' + accOpts + '</div>' +
     '<div class="baltog"><button type="button" data-bv="bank" class="' + (balView === 'bank' ? 'on' : '') + '">🏦 Bank</button><button type="button" data-bv="register" class="' + (balView === 'register' ? 'on' : '') + '">📒 Register</button></div>' +
     (balView === 'bank'
@@ -928,7 +928,7 @@ function viewCalendar() {
       (inc ? '<span class="calamt income">+' + Math.round(inc).toLocaleString() + '</span>' : '') + (out ? '<span class="calamt expense">−' + Math.round(out).toLocaleString() + '</span>' : '') + '</button>';
   }
   const list = Object.keys(items).sort().map(d => '<div class="day" id="d' + d + '">' + esc(fmtDate(d, true)) + '</div>' + items[d].map(x => '<div class="mini-row" ' + (x.rec ? 'data-crec="' + x.rec + '"' : 'data-ctx="' + x.tx + '"') + ' style="cursor:pointer"><span>' + (x.rec ? '🔁 ' : '') + esc(x.name) + (x.done ? ' <span class="chip">✓ cleared</span>' : '') + '</span><b class="' + x.type + '">' + signedAmt(x.type, x.amt) + '</b></div>').join('')).join('');
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar" class="on">📅 Calendar</a><a href="#leaders">🏆 Top spending</a></div>' +
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar" class="on">📅 Calendar</a><a href="#review">🔍 Review</a><a href="#leaders">🏆 Top spending</a></div>' +
     '<div class="cal-head"><button type="button" class="ghost small" id="calPrev">‹</button><h2>' + esc(monthName(calMonth)) + '</h2><button type="button" class="ghost small" id="calNext">›</button></div>' +
     '<p class="helper">Bills <b class="expense">' + money(totOut) + '</b> · Deposits <b class="income">' + money(totIn) + '</b></p>' +
     '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-w">' + x + '</div>').join('') + cells + '</div>' +
@@ -940,6 +940,74 @@ function viewCalendar() {
   $('view').querySelectorAll('[data-day]').forEach(b => b.onclick = () => { const el = $('d' + b.dataset.day); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); else editTx(null, 'expense', { date: b.dataset.day }); });
   $('view').querySelectorAll('[data-crec]').forEach(b => b.onclick = () => editRecurring(b.dataset.crec));
   $('view').querySelectorAll('[data-ctx]').forEach(b => b.onclick = () => editTx(b.dataset.ctx));
+}
+
+// ---------- Review calendar ----------
+// Every entry by day, so she can see what she typed next to what the bank shows and pair the two.
+// Colors: green = yours and on the bank, orange = yours but not on the bank yet, blue = only from the bank.
+let revMonth = '', revDay = '', revPick = new Set();
+const revKind = t => t.source === 'Bank' ? 'bank' : t.cleared && t.bankAmount != null && t.bankAmount !== '' ? 'ok' : t.cleared ? 'clr' : 'mine';
+const REV_LABEL = { ok: '✓ matched', mine: 'not on bank yet', bank: 'from bank only', clr: '✓ cleared' };
+// The bank's description often says the day of the purchase ("… 10-06-26 12:28 PM …"); posting is usually a day or two later.
+const boughtOn = t => { const m = String(t.note || '').match(/\b(\d\d)-(\d\d)-(\d\d)\b/); return m ? '20' + m[3] + '-' + m[1] + '-' + m[2] : ''; };
+function viewReview() {
+  const acc = activeAccount(); if (!acc) { location.hash = 'register'; return; }
+  if (!revMonth) revMonth = today().slice(0, 7);
+  const [y, m] = revMonth.split('-').map(Number), first = new Date(y, m - 1, 1), n = lastDay(y, m);
+  const mine = data.tx.filter(t => t.accountId === acc.id);
+  const byDay = {};
+  mine.filter(t => t.date.startsWith(revMonth)).forEach(t => { (byDay[t.date] = byDay[t.date] || []).push(t); });
+  const count = k => Object.values(byDay).flat().filter(t => revKind(t) === k).length;
+  let cells = '';
+  for (let i = 0; i < first.getDay(); i++) cells += '<div class="cal-d empty"></div>';
+  for (let d = 1; d <= n; d++) {
+    const iso = revMonth + '-' + pad(d), xs = byDay[iso] || [];
+    const dots = ['mine', 'bank', 'ok'].map(k => { const c = xs.filter(t => revKind(t) === k).length; return c ? '<span class="rdot ' + k + '">' + c + '</span>' : ''; }).join('');
+    cells += '<button type="button" class="cal-d' + (iso === today() ? ' today' : '') + (xs.length ? ' has' : '') + (iso === revDay ? ' sel' : '') + '" data-rday="' + iso + '"><span class="n">' + d + '</span><span class="rdots">' + dots + '</span></button>';
+  }
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#review" class="on">🔍 Review</a><a href="#leaders">🏆 Top spending</a></div>' +
+    '<div class="cal-head"><button type="button" class="ghost small" id="revPrev">‹</button><h2>' + esc(monthName(revMonth)) + '</h2><button type="button" class="ghost small" id="revNext">›</button></div>' +
+    '<p class="helper rlegend"><span class="rdot mine">' + count('mine') + '</span> yours, not on bank <span class="rdot bank">' + count('bank') + '</span> from bank only <span class="rdot ok">' + count('ok') + '</span> matched</p>' +
+    '<div class="cal">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-w">' + x + '</div>').join('') + cells + '</div>' +
+    '<div id="revPanel"></div>';
+  $('revPrev').onclick = () => { revMonth = isoDay(new Date(y, m - 2, 1)).slice(0, 7); revDay = ''; revPick.clear(); viewReview(); };
+  $('revNext').onclick = () => { revMonth = isoDay(new Date(y, m, 1)).slice(0, 7); revDay = ''; revPick.clear(); viewReview(); };
+  $('view').querySelectorAll('[data-rday]').forEach(b => b.onclick = () => { revDay = b.dataset.rday; revPick.clear(); viewReview(); });
+  if (revDay) drawReviewDay(acc);
+}
+function drawReviewDay(acc) {
+  // The day she tapped plus the day before and after: she often writes it the day before it posts, and weekend charges post Monday.
+  const t0 = new Date(revDay + 'T12:00'), days = [-1, 0, 1].map(k => isoDay(new Date(t0.getTime() + k * 864e5)));
+  if (t0.getDay() === 1) days.unshift(isoDay(new Date(t0.getTime() - 3 * 864e5)), isoDay(new Date(t0.getTime() - 2 * 864e5)));
+  const list = data.tx.filter(t => t.accountId === acc.id && days.includes(t.date));
+  const row = t => { const k = revKind(t), b = boughtOn(t);
+    return '<label class="rrow ' + k + '"><input type="checkbox" data-rpick="' + t.id + '"' + (revPick.has(t.id) ? ' checked' : '') + '>' +
+      '<span class="rmain"><b>' + esc(t.payee || '(no name)') + '</b><span class="sub">' + (k === 'bank' ? '🏦 ' : '✍️ ') + REV_LABEL[k] + (b && b !== t.date ? ' · bought ' + esc(fmtDate(b)) : '') +
+      (t.bankAmount != null && t.bankAmount !== '' && Math.abs(Number(t.bankAmount) - Number(t.amount)) >= 0.005 ? ' · bank ' + money(t.bankAmount) : '') + '</span></span>' +
+      '<b class="' + t.type + '">' + signedAmt(t.type, t.amount) + '</b><button type="button" class="ghost small" data-redit="' + t.id + '">Edit</button></label>'; };
+  const html = days.map(d => { const xs = list.filter(t => t.date === d).sort(byTime);
+    return '<div class="day' + (d === revDay ? ' rsel' : '') + '">' + esc(fmtDate(d, true)) + (d === revDay ? '' : ' <span class="sub">(nearby)</span>') + '</div>' +
+      (xs.length ? xs.map(row).join('') : '<p class="helper">Nothing.</p>'); }).join('');
+  $('revPanel').innerHTML = '<div class="card pad"><h2>' + esc(fmtDate(revDay, true)) + '</h2>' +
+    '<p class="helper">✍️ = you typed it, 🏦 = from the bank. To pair, tick one of yours and the bank charge(s) it goes with, then tap <b>Pair</b>. Your entry keeps its name and category and takes the bank amount; the bank line is removed so nothing counts twice.</p>' +
+    html + '<div class="row-actions"><button type="button" id="revPair">Pair ticked entries</button><button type="button" class="ghost" id="revAdd">+ Add entry for this day</button></div><p class="helper" id="revMsg"></p></div>';
+  $('revPanel').querySelectorAll('[data-rpick]').forEach(c => c.onchange = () => { c.checked ? revPick.add(c.dataset.rpick) : revPick.delete(c.dataset.rpick); });
+  $('revPanel').querySelectorAll('[data-redit]').forEach(b => b.onclick = e => { e.preventDefault(); editTx(b.dataset.redit); });
+  $('revAdd').onclick = () => editTx(null, 'expense', { date: revDay });
+  $('revPair').onclick = () => {
+    const picked = data.tx.filter(t => revPick.has(t.id)), yours = picked.filter(t => t.source !== 'Bank'), bank = picked.filter(t => t.source === 'Bank');
+    const msg = s => { $('revMsg').textContent = s; };
+    if (yours.length !== 1 || !bank.length) { msg('Tick exactly one of your entries (✍️) and at least one bank line (🏦).'); return; }
+    if (bank.some(b => b.type !== yours[0].type)) { msg('Those go different directions (money in vs money out), so they can\'t be the same thing.'); return; }
+    const t = yours[0], total = Math.round(bank.reduce((s, b) => s + bankAmt(b), 0) * 100) / 100;
+    t.cleared = true; t.bankAmount = total; t.amount = myRound(total, t.type);
+    if (!t.note && bank.length === 1) t.note = bank[0].note;
+    const gone = new Set(bank.map(b => b.id));
+    data.tx = data.tx.filter(x => !gone.has(x.id));
+    revPick.clear(); window.save();
+    toast('Paired: ' + t.payee + ' ' + money(t.amount) + ' (bank ' + money(total) + ').');
+    viewReview();
+  };
 }
 
 // ---------- This month vs last month ----------
@@ -1128,7 +1196,7 @@ function viewReports() {
   const chartItems = rep.group === 'month' ? [] : top.concat(rest ? [['Everything else', rest, 0]] : []);
   const glabel = rep.group === 'payee' ? 'payee' : rep.group === 'month' ? 'month' : rep.group === 'tag' ? 'tag' : 'category';
   const usedTags = [...new Set(data.tx.flatMap(tagsOf))].sort();
-  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#leaders">🏆 Top spending</a></div>' +
+  $('view').innerHTML = '<div class="toptabs"><a href="#register">📒 Register</a><a href="#reports" class="on">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#review">🔍 Review</a><a href="#leaders">🏆 Top spending</a></div>' +
     '<div class="rep-opts"><label>Time<select id="rpPeriod">' + [['month', 'This month'], ['last', 'Last month'], ['3m', 'Last 3 months'], ['ytd', 'This year'], ['lastyear', 'Last year'], ['custom', 'Pick dates…']].map(([k, l]) => '<option value="' + k + '"' + (rep.period === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
     '<label>Show<select id="rpKind"><option value="expense"' + (rep.kind === 'expense' ? ' selected' : '') + '>Spending</option><option value="income"' + (rep.kind === 'income' ? ' selected' : '') + '>Income</option></select></label>' +
     '<label>Group by<select id="rpGroup">' + [['category', 'Category'], ['payee', 'Payee'], ['month', 'Month'], ['tag', 'Tag']].map(([k, l]) => '<option value="' + k + '"' + (rep.group === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label></div>' +

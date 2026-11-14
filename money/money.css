@@ -191,3 +191,16 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .lbig { margin-top: 10px; }
 .lent { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: .95rem; }
 @media (max-width: 480px) { .stat-row:has(.stat[data-lp]) { grid-template-columns: repeat(2, 1fr); } }
+
+/* Review calendar */
+.rdots { display: flex; flex-wrap: wrap; gap: 2px; }
+.rdot { display: inline-block; min-width: 17px; padding: 0 4px; border-radius: 99px; font-size: .66rem; font-weight: 700; line-height: 16px; text-align: center; color: #fff; }
+.rdot.mine { background: #d9822b; } .rdot.bank { background: #2f6fb3; } .rdot.ok { background: #2e8b57; }
+.rlegend .rdot { margin: 0 3px 0 8px; } .rlegend .rdot:first-child { margin-left: 0; }
+.cal-d.sel { outline: 3px solid var(--navy); }
+.rrow { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
+.rrow.mine { border-left-color: #d9822b; } .rrow.bank { border-left-color: #2f6fb3; } .rrow.ok, .rrow.clr { border-left-color: #2e8b57; }
+.rrow input { width: 22px; height: 22px; flex: none; }
+.rrow .rmain { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.rrow > b { white-space: nowrap; }
+.day.rsel { color: var(--navy); }
