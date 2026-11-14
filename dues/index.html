@@ -67,6 +67,9 @@
     .quick { border: 1px solid var(--line); background: var(--card); color: var(--green); border-radius: 8px; padding: 4px 8px; font-size: .8rem; font-weight: 700; }
     
     [hidden] { display: none !important; }
+    .nm { padding: 1px 6px; border-radius: 5px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .nm.paid { background: #fff200; color: #1d2b33; }
+    .nm.ahead { background: #d9c8f5; color: #2a1a4a; }
     .quick { padding: 8px 12px; font-size: .88rem; }
   </style>
 </head>
@@ -182,7 +185,7 @@
         '<p class="helper"><b>✓ Paid</b> records ' + money(settings.amount || 5) + ' by Cash App for this semester. <b style="color:var(--purple)">⏩</b> is for paying more than one semester. For cash or a receipt #, tap the name.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
         (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
           return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
-            xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
+            xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b><span class="nm ' + s.key + '">' + esc(m.name) + '</span></b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
               (m.active ? '<button type="button" class="quick" data-ahead="' + m.id + '" style="color:var(--purple)">⏩</button>' : '') + (s.key === 'unpaid' ? '<button type="button" class="quick" data-quick="' + m.id + '">✓ Paid</button>' : '') + '<span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>').join('') + '</div>'; }).join('')
           : '<div class="card"><p class="helper">' + (members.length ? 'No students match.' : 'No students yet. Tap ＋ to add one.') + '</p></div>');
       document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
