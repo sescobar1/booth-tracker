@@ -173,6 +173,11 @@
         const ids = keep.filter(m => m.lvl === l).map(m => m.id);
         if (ids.length && fail(await sb.from('dues_members').update({ lvl: l + 1, level: 'Level ' + (l + 1), updated_at: now }).in('id', ids))) return;
       }
+      for (const m of act.filter(m => m.role)) {
+        const h = (m.officer_history || []).filter(x => x.term !== termName(from)).concat(m.role.split(' · ').map(role => ({ term: termName(from), role })));
+        if (fail(await sb.from('dues_members').update({ officer_history: h }).eq('id', m.id))) return;
+        m.officer_history = h;
+      }
       if (fail(await sb.from('dues_settings').update({ term_key: to, term: termName(to), due_date: null, updated_at: now }).eq('owner', user.id))) return;
       grads.forEach(m => { m.active = false; m.graduated = termName(from); });
       drop.forEach(m => { m.active = false; m.graduated = ''; });
@@ -183,10 +188,11 @@
     }
 
     // ---- main screen ----
-    function modeTabs() { return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' + [['dues', '💵 Dues'], ['cords', '🎓 Cords']].map(([k, l]) => '<button type="button" class="btn' + (mode === k ? '' : ' ghost') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>'; }
+    function modeTabs() { return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">' + [['dues', '💵 Dues'], ['cords', '🎓 Cords'], ['officers', '⭐ Officers']].map(([k, l]) => '<button type="button" class="btn' + (mode === k ? '' : ' ghost') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>'; }
     function wireModes() { document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); scrollTo(0, 0); }); }
     function draw() {
       if (mode === 'cords') return drawCords();
+      if (mode === 'officers') return drawOfficers();
       $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · ' + termName(cur());
       const active = members.filter(m => m.active), st = active.map(m => ({ m, s: stateOf(m) }));
       const nPaid = st.filter(x => x.s.key !== 'unpaid').length, nOwe = active.length - nPaid;
@@ -201,7 +207,7 @@
       $('view').innerHTML = modeTabs() + (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', 'Past students']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
         '<p class="helper"><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
@@ -217,7 +223,7 @@
       document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payPicker(b.dataset.quick, false));
       document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => payPicker(b.dataset.ahead, true));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('bulkBtn').onclick = bulkAdd; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -367,7 +373,7 @@
       const next = st.filter(x => x.k === classes[0]), nextFree = next.filter(x => x.t >= FREE || x.c.key === 'given').length;
       $('view').innerHTML = modeTabs() +
         '<div class="stats"><div class="stat"><span>' + esc(className(classes[0])) + ' with free cords</span><b style="color:var(--green)">' + nextFree + '</b><small class="helper" style="display:block;margin:0">of ' + next.length + '</small></div><div class="stat"><span>Everyone at 5+ points</span><b>' + st.filter(x => x.t >= FREE).length + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + '</small></div><div class="stat"><span>Free cords</span><b>' + FREE + ' pts</b><small class="helper" style="display:block;margin:0">total, Level 0–4</small></div></div>' +
-        '<div class="actions"><button type="button" class="btn" id="cPdf">📄 Upload points PDF</button><button type="button" class="btn ghost" id="cCsv">⬇ Cords list</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="cPdf">📄 Upload points PDF</button><button type="button" class="btn ghost" id="cGrad">🎓 Graduation list</button><button type="button" class="btn ghost" id="cCsv">⬇ Cords list</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['free', 'Free cords'], ['need', 'Needs points'], ['given', 'Cords given']].map(([k, l]) => '<button type="button" class="chip' + (cFilter === k ? ' on' : '') + '" data-cf="' + k + '">' + l + '</button>').join('') + '</div>' +
         '<div class="tabs">' + [['all', 'All classes']].concat(classes.map(k => [String(k), className(k).replace('Class of ', '')])).map(([k, l]) => '<button type="button" class="chip' + (String(classFilter) === k ? ' on' : '') + '" data-cl="' + k + '">' + esc(l) + '</button>').join('') + '</div>' +
         '<p class="helper">Tap a student to type points by hand, or upload a PDF of a semester\'s points for one class.</p><input type="search" id="find" placeholder="🔍 Search a name" value="' + esc(find) + '">' +
@@ -381,6 +387,7 @@
       document.querySelectorAll('[data-cl]').forEach(b => b.onclick = () => { classFilter = b.dataset.cl; draw(); });
       document.querySelectorAll('[data-c]').forEach(r => r.onclick = () => cordsEditor(r.dataset.c));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
+      $('cGrad').onclick = gradList;
       $('cPdf').onclick = () => pointsUpload(classFilter !== 'all' ? Number(classFilter) : classes[0]);
       $('cCsv').onclick = () => {
         const rows = st.filter(x => classFilter === 'all' || x.k === Number(classFilter)).sort((a, b) => (a.k || 1e9) - (b.k || 1e9) || a.m.name.localeCompare(b.m.name));
@@ -489,11 +496,129 @@
       };
     }
 
+    // ---- officers ----
+    const ROLE_ORDER = ['president', 'vice president', 'secretary', 'treasurer', 'level 0', 'level 1', 'level 2', 'level 3', 'level 4', 'fundraising', 'curriculum', 'welfare', 'recognition'];
+    const roleRank = r => { const s = String(r).toLowerCase(), i = ROLE_ORDER.findIndex(x => s.includes(x)); return i < 0 ? 99 : i; };
+    const ROLE_IDEAS = ['President', 'Vice President', 'Secretary', 'Treasurer', 'Level 0 Representative', 'Level 1 Representative', 'Level 2 Representative', 'Level 3 Representative', 'Level 4 Representative', 'Fundraising Rep. – T-Shirts', 'Fundraising Rep. – Snack Room', 'Curriculum Committee Rep.', 'Welfare Committee Rep.', 'Recognition Committee Co-Chair', 'Recognition Committee'];
+    const termRank = t => { const m = String(t).match(/(Spring|Fall)\s+(\d{4})/); return m ? Number(m[2]) * 2 + (m[1] === 'Fall' ? 1 : 0) : 0; };
+    function drawOfficers() {
+      $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · Officers';
+      const now = members.filter(m => m.active && m.role).sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.name.localeCompare(b.name));
+      const hist = {};
+      members.forEach(m => (m.officer_history || []).forEach(h => { (hist[h.term] = hist[h.term] || []).push({ m, role: h.role }); }));
+      const terms = Object.keys(hist).sort((a, b) => termRank(b) - termRank(a));
+      const contact = m => (m.phone ? '<a class="btn ghost small" href="tel:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">📞</a><a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">💬</a>' : '') + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '">✉</a>' : '');
+      $('view').innerHTML = modeTabs() +
+        '<div class="actions" style="margin-top:0"><button type="button" class="btn" id="oAdd">➕ Add an officer</button><button type="button" class="btn ghost" id="oCsv">⬇ Officer list</button><button type="button" class="btn ghost" id="oMail"' + (now.some(m => m.email) ? '' : ' disabled') + '>✉ Copy officer emails</button></div>' +
+        '<div class="lvlhead"><h3>' + termName(cur()) + ' officers</h3><small>' + now.length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+        (now.length ? now.map(m => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small style="color:var(--navy);font-weight:600">⭐ ' + esc(m.role) + '</small><small>' + esc([lvlName(m.lvl), m.phone, m.email].filter(Boolean).join(' · ')) + '</small></div><span style="display:flex;gap:4px">' + contact(m) + '</span></div>').join('') : '<p class="helper">No officers yet. Tap ➕ Add an officer.</p>') + '</div>' +
+        '<p class="helper">When you tap 🔄 Start next semester, this semester\'s officers are saved below automatically. Their roles stay on until you change them.</p>' +
+        terms.map(t => '<div class="lvlhead"><h3>' + esc(t) + ' officers</h3><small>' + hist[t].length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+          hist[t].sort((a, b) => roleRank(a.role) - roleRank(b.role)).map(({ m, role }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b><small>' + esc(role) + (m.active ? '' : ' · ' + (m.graduated ? 'graduated ' + esc(m.graduated) : 'past student')) + '</small></div></div>').join('') + '</div>').join('');
+      wireModes();
+      document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('a')) showMember(r.dataset.m); });
+      $('oAdd').onclick = addOfficer;
+      $('oMail').onclick = () => copy(now.map(m => m.email).filter(Boolean).join(', '), 'Officer emails copied ✓');
+      $('oCsv').onclick = () => {
+        const lines = [[(settings.org || 'SNA') + ' officers'], ['Semester', 'Role', 'Name', 'Level', 'Phone', 'Email']]
+          .concat(now.map(m => [termName(cur()), m.role, m.name, lvlName(m.lvl), m.phone, m.email]))
+          .concat(...terms.map(t => hist[t].map(({ m, role }) => [t, role, m.name, m.active ? lvlName(m.lvl) : 'Past student', m.phone, m.email])));
+        sendFile('SNA officers.csv', lines.map(csvLine).join('\n'));
+      };
+    }
+    function addOfficer() {
+      const act = members.filter(m => m.active).sort((a, b) => a.name.localeCompare(b.name));
+      open('<h2>➕ Add an officer</h2><label>Student<select id="aWho"><option value="">Pick a student…</option>' + act.map(m => '<option value="' + m.id + '">' + esc(m.name) + ' · ' + esc(lvlName(m.lvl)) + (m.role ? ' (' + esc(m.role) + ')' : '') + '</option>').join('') + '</select></label>' +
+        '<label>Role<input id="aRole" list="roleIdeas" placeholder="President"></label><datalist id="roleIdeas">' + ROLE_IDEAS.map(r => '<option value="' + esc(r) + '">').join('') + '</datalist>' +
+        '<div class="grid2"><label>Phone<input id="aPh" type="tel"></label><label>Email<input id="aEm" type="email"></label></div><p class="helper">If they already have a role, the new one is added after it.</p>' +
+        '<div class="actions"><button type="button" class="btn" id="aSave">Save</button><button type="button" class="btn ghost" id="aCancel">Cancel</button></div>');
+      $('aWho').onchange = () => { const m = members.find(x => x.id === $('aWho').value); if (m) { $('aPh').value = m.phone || ''; $('aEm').value = m.email || ''; } };
+      $('aCancel').onclick = close;
+      $('aSave').onclick = async () => {
+        const m = members.find(x => x.id === $('aWho').value), role = $('aRole').value.trim();
+        if (!m || !role) { toast('Pick a student and type a role.'); return; }
+        const row = { role: m.role ? m.role + ' · ' + role : role, phone: $('aPh').value.trim(), email: $('aEm').value.trim(), updated_at: new Date().toISOString() };
+        if (fail(await sb.from('dues_members').update(row).eq('id', m.id))) return;
+        Object.assign(m, row); close(); draw(); toast(firstName(m.name) + ' is now ' + role);
+      };
+    }
+
+    // ---- graduation cords list (printable) ----
+    function gradList() {
+      const classes = [...new Set(members.filter(m => m.active && m.lvl >= 0).map(classKey))].sort((a, b) => a - b);
+      open('<h2>🎓 Graduation cords list</h2><p class="helper">Pick the graduating class.</p><div class="methods">' + classes.map(k => '<button type="button" class="chip" data-gk="' + k + '">' + esc(className(k)) + '</button>').join('') + '</div><div class="actions"><button type="button" class="btn ghost" id="gCancel">Cancel</button></div>');
+      $('gCancel').onclick = close;
+      document.querySelectorAll('[data-gk]').forEach(b => b.onclick = () => {
+        const k = Number(b.dataset.gk), xs = members.filter(m => m.active && classKey(m) === k).sort((a, b) => a.name.localeCompare(b.name));
+        const groups = [['Free cords — earned 5+ points', xs.filter(m => m.cords !== 'given' && ptsTotal(m) >= FREE)], ['Buying cords', xs.filter(m => m.cords === 'purchase' && ptsTotal(m) < FREE)], ['Cords already given', xs.filter(m => m.cords === 'given')], ['Not earned yet', xs.filter(m => !m.cords && ptsTotal(m) < FREE)]];
+        const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(className(k)) + ' cords</title><style>body{font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#1d2b33;margin:24px;max-width:760px}h1{font-size:1.4rem;margin:0}h2{font-size:1.05rem;margin:22px 0 6px;border-bottom:2px solid #24536f;padding-bottom:3px}table{width:100%;border-collapse:collapse}td,th{padding:5px 6px;border-bottom:1px solid #ddd;text-align:left}td.n,th.n{text-align:right}.sub{color:#666}button{font:inherit;padding:8px 14px;border-radius:8px;border:0;background:#24536f;color:#fff;margin-top:12px}@media print{button{display:none}body{margin:0}}</style></head><body>' +
+          '<h1>' + esc(settings.org || 'SNA') + ' · ' + esc(className(k)) + ' graduation cords</h1><p class="sub">' + xs.length + ' students · free cords at ' + FREE + ' points · printed ' + new Date().toLocaleDateString() + '</p><button onclick="print()">🖨 Print or save as PDF</button>' +
+          groups.map(([t, g]) => '<h2>' + t + ' (' + g.length + ')</h2>' + (g.length ? '<table><tr><th>Name</th><th>Officer role</th><th class="n">Points</th>' + (t.startsWith('Not') ? '<th class="n">Still needs</th>' : '') + '</tr>' + g.map(m => '<tr><td>' + esc(m.name) + '</td><td>' + esc(m.role || '') + '</td><td class="n">' + ptsTotal(m) + '</td>' + (t.startsWith('Not') ? '<td class="n">' + Math.round((FREE - ptsTotal(m)) * 100) / 100 + '</td>' : '') + '</tr>').join('') + '</table>' : '<p class="sub">None</p>')).join('') + '</body></html>';
+        const w = window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank');
+        if (!w) toast('Allow pop-ups to open the list.');
+        close();
+      });
+    }
+
+    // ---- Cash App import ----
+    function parseCsv(text) {
+      const rows = []; let row = [], cell = '', q = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+        else if (c === '"') q = true; else if (c === ',') { row.push(cell); cell = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; } else cell += c;
+      }
+      if (cell || row.length) { row.push(cell); rows.push(row); }
+      const head = (rows.shift() || []).map(h => h.replace(/^﻿/, '').trim());
+      return rows.filter(r => r.length > 1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] || ''])));
+    }
+    function cashImport() {
+      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. The app picks out this semester\'s payments with "dues" in the note, skips any already recorded, and shows you every match before saving.</p>' +
+        '<label>Cash App CSV<input type="file" id="ciFile" accept=".csv,text/csv"></label><p class="helper" id="ciMsg"></p><div id="ciOut"></div><div class="actions"><button type="button" class="btn ghost" id="ciCancel">Cancel</button></div>');
+      $('ciCancel').onclick = close;
+      $('ciFile').onchange = async e => {
+        const f = e.target.files[0]; if (!f) return;
+        let rows; try { rows = parseCsv(await f.text()); } catch (err) { $('ciMsg').textContent = 'Couldn\'t read that file.'; return; }
+        if (!rows.length || !('Notes' in rows[0])) { $('ciMsg').textContent = 'That doesn\'t look like a Cash App export. It should have Date, Amount, Notes and Name of sender/receiver columns.'; return; }
+        const amt = s => Number(String(s).replace(/[$,]/g, '')) || 0, each = Number(settings.amount) || 5, start = termStart(cur());
+        const seen = new Set(payments.map(p => String(p.receipt)));
+        const dues = rows.filter(r => /\bdue/i.test(r.Notes) && (r.Status || 'COMPLETE') === 'COMPLETE' && amt(r.Amount) > 0 && r.Date.slice(0, 10) >= start);
+        const fresh = dues.filter(r => !seen.has(r['Transaction ID']));
+        const everyone = members.filter(m => m.active), extra = members.filter(m => !m.active);
+        const found = fresh.map(r => {
+          const a = amt(r.Amount), snack = /snack|poptart|chip|drink|food/i.test(r.Notes);
+          const n = Math.max(1, snack ? Math.floor(a / each) : Math.round(a / each));
+          const m = guessStudent(r.Notes, everyone) || guessStudent(r['Name of sender/receiver'], everyone) || guessStudent(r.Notes + ' ' + r['Name of sender/receiver'], extra);
+          return { r, a, n, m, snack };
+        }).sort((x, y) => x.r.Date.localeCompare(y.r.Date));
+        $('ciMsg').innerHTML = '<b>' + dues.length + '</b> dues payments in ' + termName(cur()) + ' · <b>' + (dues.length - fresh.length) + '</b> already recorded · <b>' + fresh.length + '</b> new.';
+        if (!found.length) { $('ciOut').innerHTML = '<p class="helper">Nothing new to add. You\'re up to date ✓</p>'; return; }
+        const opt = sel => '<option value="">— skip —</option>' + everyone.concat(extra).sort((a, b) => a.name.localeCompare(b.name)).map(m => '<option value="' + m.id + '"' + (sel && sel.id === m.id ? ' selected' : '') + '>' + esc(m.name) + (m.active ? '' : ' (past)') + '</option>').join('');
+        $('ciOut').innerHTML = '<div class="card">' + found.map((x, i) => '<div class="pay" style="flex-wrap:wrap"><small class="helper" style="width:100%;margin:0">' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + money(x.a) + ' from ' + esc(x.r['Name of sender/receiver']) + ' · “' + esc(x.r.Notes) + '”</small><select data-cs="' + i + '" style="flex:1;min-width:0">' + opt(x.m) + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">semesters<input data-cn="' + i + '" inputmode="numeric" value="' + x.n + '" style="width:52px"></label>' + (x.snack ? '<small style="width:100%;color:var(--amber)">Includes snacks — only ' + money(each * x.n) + ' counted as dues</small>' : '') + '</div>').join('') + '</div>' +
+          '<div class="actions"><button type="button" class="btn" id="ciSave">Save ' + found.length + ' payments</button></div>';
+        $('ciSave').onclick = async () => {
+          $('ciSave').disabled = true; let n = 0;
+          for (let i = 0; i < found.length; i++) {
+            const x = found[i], m = members.find(y => y.id === document.querySelector('[data-cs="' + i + '"]').value), sems = Math.max(1, Number(document.querySelector('[data-cn="' + i + '"]').value) || 1);
+            if (!m) continue;
+            const from = Math.max(cur(), m.paid_through + 1), thru = from + sems - 1;
+            const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: m.id, amount: Math.min(x.a, each * sems), paid_on: x.r.Date.slice(0, 10), method: 'Cash App', receipt: x.r['Transaction ID'], note: 'Cash App: ' + x.r.Notes, through_term: thru }).select().single();
+            if (fail(r)) break;
+            const upd = { paid_through: Math.max(m.paid_through, thru), updated_at: new Date().toISOString() };
+            if (!m.active) Object.assign(upd, { active: true, graduated: '' });
+            if (fail(await sb.from('dues_members').update(upd).eq('id', m.id))) break;
+            payments.push(r.data); Object.assign(m, upd); n++;
+          }
+          close(); draw(); toast('Recorded ' + n + ' Cash App payments ✓');
+        };
+      };
+    }
+
     // ---- one student ----
     function showMember(id) {
       const m = members.find(x => x.id === id); if (!m) return;
       const s = stateOf(m), mine = payments.filter(p => p.member_id === id), link = statusBase + m.token;
-      open('<div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h2 style="margin:0">' + esc(m.name) + '</h2><p class="helper" style="margin:2px 0">' + esc(lvlName(m.lvl)) + '</p>' + (m.role ? '<p style="margin:2px 0;color:var(--navy);font-weight:700">⭐ ' + esc(m.role) + '</p>' : '') + '</div><span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>' +
+      open('<div style="display:flex;justify-content:space-between;gap:10px;align-items:start"><div><h2 style="margin:0">' + esc(m.name) + '</h2><p class="helper" style="margin:2px 0">' + esc(lvlName(m.lvl)) + '</p>' + (m.role ? '<p style="margin:2px 0;color:var(--navy);font-weight:700">⭐ ' + esc(m.role) + '</p>' : '') + ((m.officer_history || []).length ? '<p class="helper" style="margin:2px 0">Past: ' + esc(m.officer_history.map(h => h.role + ' (' + h.term + ')').join(' · ')) + '</p>' : '') + '</div><span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>' +
         (m.notes ? '<p class="helper">📝 ' + esc(m.notes) + '</p>' : '') +
         (m.phone || m.email ? '<div class="actions" style="margin-top:6px">' + (m.phone ? '<a class="btn ghost small" href="tel:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">📞 ' + esc(m.phone) + '</a><a class="btn ghost small" href="sms:' + esc(m.phone.replace(/[^\d+]/g, '')) + '">💬 Text</a>' : '') + (m.email ? '<a class="btn ghost small" href="mailto:' + esc(m.email) + '">✉ ' + esc(m.email) + '</a>' : '') + '</div>' : '') +
         (() => { const t = paidTermsOf(m); return '<div class="card"><h2>Dues history</h2>' + (t.length ? '<div class="methods">' + t.map(k => '<span class="tag ' + (k > cur() ? 'ahead' : 'paid') + '">' + termName(k) + ' ✓</span>').join('') + '</div>' : '<p class="helper" style="margin:0">No paid semesters on record.</p>') + '</div>'; })() +
