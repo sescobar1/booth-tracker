@@ -22,7 +22,7 @@
     main { max-width: 820px; margin: 0 auto; padding: 14px 14px 110px; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; }
     h2 { font-size: 1rem; margin: 0 0 8px; }
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
     .stat span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 700; }
     .stat b { font-size: 1.25rem; }
@@ -65,7 +65,7 @@
     .toast { display: flex; align-items: center; position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
     .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%; border: 0; background: #24536f; color: #fff; font-size: 1.8rem; box-shadow: 0 6px 18px #0003; }
     .quick { border: 1px solid var(--line); background: var(--card); color: var(--green); border-radius: 8px; padding: 4px 8px; font-size: .8rem; font-weight: 700; }
-    @media (max-width: 560px) { .stats { grid-template-columns: 1fr 1fr; } }
+    
     [hidden] { display: none !important; }
     .quick { padding: 8px 12px; font-size: .88rem; }
   </style>
@@ -96,6 +96,10 @@
     const termName = k => !(k > 0) ? '—' : (k % 2 ? 'Fall ' : 'Spring ') + Math.floor(k / 2);
     const termStart = k => Math.floor(k / 2) + (k % 2 ? '-08-01' : '-01-01');
     const LEVELS = [0, 1, 2, 3, 4, -1];
+    // "Paid until" labels: spring ends in May, fall ends in December. Choices run through Dec 2030.
+    const until = k => (k % 2 ? 'Dec ' : 'May ') + String(Math.floor(k / 2)).slice(2);
+    const LAST = 2030 * 2 + 1;
+    const range = (a, b) => { const r = []; for (let k = a; k <= b; k++) r.push(k); return r; };
     const lvlName = l => l < 0 ? 'Lower division' : 'Level ' + l;
     const METHODS = ['Cash', 'Venmo', 'Cash App', 'Zelle', 'Check', 'Card', 'Other'];
     const statusBase = location.href.split('#')[0].replace(/[^/]*$/, '') + 'status.html?t=';
@@ -113,7 +117,7 @@
     // Paid for this semester? Purple = paid ahead past this semester.
     function stateOf(m) {
       if (!m.active) return { key: 'grad', label: m.graduated ? 'Graduated ' + m.graduated : 'Removed', owed: 0 };
-      if (m.paid_through > cur()) return { key: 'ahead', label: 'Paid thru ' + termName(m.paid_through), owed: 0 };
+      if (m.paid_through > cur()) return { key: 'ahead', label: 'Paid until ' + until(m.paid_through), owed: 0 };
       if (m.paid_through === cur()) return { key: 'paid', label: 'Paid', owed: 0 };
       return { key: 'unpaid', label: 'Unpaid', owed: Number(settings.amount) || 0 };
     }
@@ -130,32 +134,30 @@
       if (!s.data) await sb.from('dues_settings').upsert({ owner: user.id, ...settings });
       if (!settings.term_key) settings.term_key = termOfDate(today());
       members = m.data || []; payments = p.data || [];
-      await newSemesterCheck();
+      if (termOfDate(today()) > cur()) banner = 'It\'s a new semester. When you\'re ready, tap 🔄 Start ' + termName(cur() + 1) + ' to clear the list.';
       draw();
       if (!(Number(settings.amount) > 0)) editSettings(true);
     }
 
-    // ---- new semester: everyone moves up a level, Level 4 graduates ----
-    async function moveUp(fromTerm) {
-      const grads = members.filter(m => m.active && m.lvl === 4), ups = members.filter(m => m.active && m.lvl >= 0 && m.lvl < 4);
-      if (grads.length && fail(await sb.from('dues_members').update({ active: false, graduated: termName(fromTerm), updated_at: new Date().toISOString() }).in('id', grads.map(m => m.id)))) return null;
+    // ---- start the next semester: only students paid ahead stay (and move up a level) ----
+    async function startNext() {
+      const from = cur(), to = from + 1, act = members.filter(m => m.active);
+      const grads = act.filter(m => m.lvl === 4), keep = act.filter(m => m.lvl !== 4 && m.paid_through >= to), drop = act.filter(m => m.lvl !== 4 && m.paid_through < to);
+      if (!confirm('Start ' + termName(to) + '?\n\n• ' + keep.length + ' students paid ahead stay on the list and move up a level.\n• ' + drop.length + ' others come off the list. Add them back when they pay.\n• ' + grads.length + ' Level 4 students graduate.')) return;
+      const now = new Date().toISOString();
+      if (grads.length && fail(await sb.from('dues_members').update({ active: false, graduated: termName(from), updated_at: now }).in('id', grads.map(m => m.id)))) return;
+      if (drop.length && fail(await sb.from('dues_members').update({ active: false, graduated: '', updated_at: now }).in('id', drop.map(m => m.id)))) return;
       for (const l of [3, 2, 1, 0]) {
-        const ids = ups.filter(m => m.lvl === l).map(m => m.id);
-        if (ids.length && fail(await sb.from('dues_members').update({ lvl: l + 1, level: 'Level ' + (l + 1), updated_at: new Date().toISOString() }).in('id', ids))) return null;
+        const ids = keep.filter(m => m.lvl === l).map(m => m.id);
+        if (ids.length && fail(await sb.from('dues_members').update({ lvl: l + 1, level: 'Level ' + (l + 1), updated_at: now }).in('id', ids))) return;
       }
-      grads.forEach(m => { m.active = false; m.graduated = termName(fromTerm); });
-      ups.forEach(m => { m.lvl += 1; m.level = 'Level ' + m.lvl; });
-      return { up: ups.length, grad: grads.length };
-    }
-    async function newSemesterCheck() {
-      const now = termOfDate(today());
-      let moved = 0, grads = 0;
-      while (settings.term_key < now) {
-        const from = settings.term_key, r = await moveUp(from); if (!r) return;
-        settings.term_key = from + 1; moved += r.up; grads += r.grad;
-        if (fail(await sb.from('dues_settings').update({ term_key: settings.term_key, term: termName(settings.term_key), updated_at: new Date().toISOString() }).eq('owner', user.id))) return;
-      }
-      if (moved || grads) banner = '🎓 ' + termName(settings.term_key) + ' started: ' + moved + ' students moved up a level and ' + grads + ' Level 4 student' + (grads === 1 ? '' : 's') + ' graduated. Everyone who isn\'t paid ahead now shows as unpaid for this semester.';
+      if (fail(await sb.from('dues_settings').update({ term_key: to, term: termName(to), due_date: null, updated_at: now }).eq('owner', user.id))) return;
+      grads.forEach(m => { m.active = false; m.graduated = termName(from); });
+      drop.forEach(m => { m.active = false; m.graduated = ''; });
+      keep.forEach(m => { if (m.lvl >= 0) { m.lvl += 1; m.level = 'Level ' + m.lvl; } });
+      settings.term_key = to; settings.due_date = null; filter = 'all';
+      banner = '🔄 ' + termName(to) + ' started. ' + keep.length + ' paid-ahead students moved up a level. Add the rest as they pay with 👥 Add students.';
+      draw();
     }
 
     // ---- main screen ----
@@ -170,25 +172,26 @@
       const shown = pool.filter(x => filter === 'all' || filter === 'grad' || (filter === 'unpaid' ? x.s.key === 'unpaid' : x.s.key !== 'unpaid'))
         .filter(x => lvlFilter === 'all' || filter === 'grad' || x.m.lvl === Number(lvlFilter))
         .filter(x => !q || (x.m.name + ' ' + x.m.email + ' ' + x.m.notes).toLowerCase().includes(q));
-      const groups = filter === 'grad' ? [['Graduated / removed', shown]] : LEVELS.map(l => [lvlName(l), shown.filter(x => x.m.lvl === l)]).filter(g => g[1].length);
+      const groups = filter === 'grad' ? [['Past students', shown]] : LEVELS.map(l => [lvlName(l), shown.filter(x => x.m.lvl === l)]).filter(g => g[1].length);
       $('view').innerHTML = (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
-        '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + ' / ' + active.length + '</b></div><div class="stat"><span>Still owe</span><b style="color:var(--red)">' + nOwe + '</b>' + (settings.amount > 0 ? '<small class="helper" style="display:block;margin:0">' + money(nOwe * settings.amount) + '</small>' : '') + '</div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">' + (settings.due_date ? 'due ' + esc(fmtDate(settings.due_date)) : 'per semester') + '</small></div></div>' +
+        '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn ghost" id="bulkBtn">👥 Add students</button><button type="button" class="btn ghost" id="csvBtn">⬇ Download</button></div>' +
-        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['grad', 'Graduated']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="bulkBtn">👥 Add students</button><button type="button" class="btn ghost" id="csvBtn">⬇ Download</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['grad', 'Past students']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (filter === 'grad' ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
-        '<p class="helper">Tap <b>✓ Paid</b> to record ' + money(settings.amount || 5) + ' by Cash App today. For cash, paying ahead or a receipt #, tap the student\'s name instead.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
+        '<p class="helper"><b>✓ Paid</b> records ' + money(settings.amount || 5) + ' by Cash App for this semester. <b style="color:var(--purple)">⏩</b> is for paying more than one semester. For cash or a receipt #, tap the name.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
         (groups.length ? groups.map(([title, xs]) => { const all = (filter === 'grad' ? xs : st.filter(x => lvlName(x.m.lvl) === title)), paid = all.filter(x => x.s.key !== 'unpaid').length;
           return '<div class="lvlhead"><h3>' + esc(title) + '</h3><small>' + (filter === 'grad' ? xs.length + ' students' : paid + ' of ' + all.length + ' paid') + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
             xs.map(({ m, s }) => '<div class="row" data-m="' + m.id + '"><div class="who"><b>' + esc(m.name) + '</b>' + (m.notes || m.email ? '<small>' + esc([m.notes, m.email].filter(Boolean).join(' · ')) + '</small>' : '') + '</div>' +
-              (s.key === 'unpaid' ? '<button type="button" class="quick" data-quick="' + m.id + '">✓ Paid</button>' : '') + '<span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>').join('') + '</div>'; }).join('')
+              (m.active ? '<button type="button" class="quick" data-ahead="' + m.id + '" style="color:var(--purple)">⏩</button>' : '') + (s.key === 'unpaid' ? '<button type="button" class="quick" data-quick="' + m.id + '">✓ Paid</button>' : '') + '<span class="tag ' + s.key + '">' + esc(s.label) + '</span></div>').join('') + '</div>'; }).join('')
           : '<div class="card"><p class="helper">' + (members.length ? 'No students match.' : 'No students yet. Tap ＋ to add one.') + '</p></div>');
       document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
       document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvlFilter = b.dataset.l; draw(); });
-      document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('[data-quick]')) showMember(r.dataset.m); });
+      document.querySelectorAll('[data-m]').forEach(r => r.onclick = e => { if (!e.target.closest('[data-quick],[data-ahead]')) showMember(r.dataset.m); });
       document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => { b.disabled = true; quickPay(b.dataset.quick); });
+      document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => aheadPicker(b.dataset.ahead));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('bulkBtn').onclick = bulkAdd; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -197,9 +200,9 @@
         '<label>Organization name<input id="sOrg" value="' + esc(settings.org) + '"></label>' +
         '<div class="grid2"><label>Dues per semester<input id="sAmt" inputmode="decimal" value="' + (Number(settings.amount) || '') + '" placeholder="25"></label><label>Due date this semester<input id="sDue" type="date" value="' + esc(settings.due_date || '') + '"></label></div>' +
         '<label>How students can pay (shown on their status page)<textarea id="sPay" rows="3" placeholder="Venmo @ATU-SNA, Cash App $ATUSNA, or cash to any officer">' + esc(settings.pay_info) + '</textarea></label>' +
-        '<p class="helper">Current semester: <b>' + termName(cur()) + '</b>. In January and August everyone moves up a level on their own, and Level 4 students graduate.</p>' +
+        '<p class="helper">Current semester: <b>' + termName(cur()) + '</b>. Use 🔄 Start ' + termName(cur() + 1) + ' on the main screen when the new semester begins.</p>' +
         '<div class="actions"><button type="button" class="btn" id="sSave">Save</button>' + (first ? '' : '<button type="button" class="btn ghost" id="sCancel">Cancel</button>') + '</div>' +
-        (first ? '' : '<div class="card"><h2>Move up early</h2><p class="helper">Only if you need to start ' + termName(cur() + 1) + ' before ' + (cur() % 2 ? 'January' : 'August') + '. Everyone moves up one level and Level 4 graduates.</p><button type="button" class="btn ghost small" id="sUp">Start ' + termName(cur() + 1) + ' now</button></div><div class="actions"><button type="button" class="btn ghost small" id="sOut">Sign out</button></div>'));
+        (first ? '' : '<div class="actions"><button type="button" class="btn ghost small" id="sOut">Sign out</button></div>'));
       $('sSave').onclick = async () => {
         const next = { org: $('sOrg').value.trim() || 'Student Nurses Association', amount: Number($('sAmt').value) || 0, due_date: $('sDue').value || null, pay_info: $('sPay').value.trim(), updated_at: new Date().toISOString() };
         if (fail(await sb.from('dues_settings').update(next).eq('owner', user.id))) return;
@@ -207,18 +210,11 @@
       };
       if ($('sCancel')) $('sCancel').onclick = close;
       if ($('sOut')) $('sOut').onclick = async () => { await sb.auth.signOut(); location.reload(); };
-      if ($('sUp')) $('sUp').onclick = async () => {
-        if (!confirm('Start ' + termName(cur() + 1) + ' now? Everyone moves up a level and Level 4 students graduate.')) return;
-        const from = cur(), r = await moveUp(from); if (!r) return;
-        settings.term_key = from + 1;
-        if (fail(await sb.from('dues_settings').update({ term_key: settings.term_key, term: termName(settings.term_key), due_date: null }).eq('owner', user.id))) return;
-        settings.due_date = null; banner = '🎓 ' + termName(cur()) + ' started: ' + r.up + ' moved up and ' + r.grad + ' graduated.'; close(); draw();
-      };
     }
 
     // ---- add / edit a student ----
     const lvlSelect = (id, v) => '<select id="' + id + '">' + LEVELS.map(l => '<option value="' + l + '"' + (l === v ? ' selected' : '') + '>' + lvlName(l) + '</option>').join('') + '</select>';
-    const thruSelect = (id, v) => '<select id="' + id + '"><option value="0"' + (v < cur() ? ' selected' : '') + '>Not paid this semester</option>' + [0, 1, 2, 3, 4, 5].map(k => cur() + k).concat(v > cur() + 5 ? [v] : []).map(k => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>Paid through ' + termName(k) + '</option>').join('') + '</select>';
+    const thruSelect = (id, v) => '<select id="' + id + '"><option value="0"' + (v < cur() ? ' selected' : '') + '>Not paid this semester</option>' + range(cur(), Math.max(LAST, v)).map(k => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>Paid until ' + until(k) + (k === cur() ? ' (this semester)' : '') + '</option>').join('') + '</select>';
     function editMember(m) {
       const isNew = !m; m = m || { name: '', email: '', phone: '', lvl: lvlFilter !== 'all' ? Number(lvlFilter) : 0, paid_through: 0, notes: '' };
       open('<h2>' + (isNew ? 'Add a student' : 'Edit student') + '</h2>' +
@@ -233,6 +229,11 @@
         const lvl = Number($('mLvl').value);
         const row = { name: $('mName').value.trim(), lvl, level: lvlName(lvl), paid_through: Number($('mThru').value), email: $('mEmail').value.trim(), phone: $('mPhone').value.trim(), notes: $('mNotes').value.trim(), updated_at: new Date().toISOString() };
         if (!row.name) { toast('Type the student\'s name.'); return; }
+        const past = isNew && members.find(x => !x.active && x.name.toLowerCase() === row.name.toLowerCase());
+        if (past) {
+          if (fail(await sb.from('dues_members').update({ ...row, active: true, graduated: '' }).eq('id', past.id))) return;
+          Object.assign(past, row, { active: true, graduated: '' }); close(); draw(); toast('Welcome back, ' + firstName(row.name)); return;
+        }
         if (isNew) {
           const r = await sb.from('dues_members').insert({ owner: user.id, ...row }).select().single(); if (fail(r)) return;
           members.push(r.data); members.sort((a, b) => a.name.localeCompare(b.name)); close(); draw(); toast('Added ' + row.name);
@@ -249,14 +250,20 @@
         '<div class="actions"><button type="button" class="btn" id="bSave">Add students</button><button type="button" class="btn ghost" id="bCancel">Cancel</button></div>');
       $('bCancel').onclick = close;
       $('bSave').onclick = async () => {
-        const have = new Set(members.map(m => m.name.toLowerCase())), lvl = Number($('bLvl').value), thru = Number($('bThru').value);
+        const have = new Set(members.filter(m => m.active).map(m => m.name.toLowerCase())), lvl = Number($('bLvl').value), thru = Number($('bThru').value);
         const rows = $('bList').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
           const email = (l.match(/[^\s,;]+@[^\s,;]+/) || [''])[0];
           return { owner: user.id, name: l.replace(email, '').replace(/[\t;]+/g, ' ').replace(/,\s*$/, '').replace(/\s+/g, ' ').trim(), email, lvl, level: lvlName(lvl), paid_through: thru };
         }).filter(r => r.name && !have.has(r.name.toLowerCase()) && (have.add(r.name.toLowerCase()), true));
         if (!rows.length) { toast('No new names to add.'); return; }
-        const r = await sb.from('dues_members').insert(rows).select(); if (fail(r)) return;
-        members = members.concat(r.data).sort((a, b) => a.name.localeCompare(b.name)); close(); draw(); toast('Added ' + r.data.length + ' students ✓');
+        const back = [], fresh = [];
+        rows.forEach(r => { const old = members.find(m => !m.active && m.name.toLowerCase() === r.name.toLowerCase()); old ? back.push([old, r]) : fresh.push(r); });
+        for (const [old, r] of back) {
+          const upd = { lvl, level: lvlName(lvl), paid_through: Math.max(thru, old.paid_through), active: true, graduated: '' }; if (r.email) upd.email = r.email;
+          if (fail(await sb.from('dues_members').update(upd).eq('id', old.id))) return; Object.assign(old, upd);
+        }
+        if (fresh.length) { const r = await sb.from('dues_members').insert(fresh).select(); if (fail(r)) return; members = members.concat(r.data).sort((a, b) => a.name.localeCompare(b.name)); }
+        close(); draw(); toast('Added ' + rows.length + ' students ✓');
       };
     }
 
@@ -264,8 +271,8 @@
     function payForm(id) {
       const m = members.find(x => x.id === id); if (!m) return;
       const start = Math.max(cur(), m.paid_through + 1);
-      open('<h2>Payment from ' + esc(m.name) + '</h2><p class="helper">' + esc(lvlName(m.lvl)) + ' · ' + (m.paid_through >= cur() ? 'paid through ' + termName(m.paid_through) : 'not paid for ' + termName(cur())) + '</p>' +
-        '<label>Covers</label><div class="methods" id="pSem">' + [1, 2, 3, 4].map(n => '<button type="button" class="chip' + (n === 1 ? ' on' : '') + '" data-n="' + n + '">' + (n === 1 ? termName(start) : n + ' semesters (thru ' + termName(start + n - 1) + ')') + '</button>').join('') + '</div>' +
+      open('<h2>Payment from ' + esc(m.name) + '</h2><p class="helper">' + esc(lvlName(m.lvl)) + ' · ' + (m.paid_through >= cur() ? 'paid until ' + until(m.paid_through) : 'not paid for ' + termName(cur())) + '</p>' +
+        '<label>Paid until</label><div class="methods" id="pSem">' + range(start, Math.max(LAST, start)).map(k => '<button type="button" class="chip' + (k === start ? ' on' : '') + '" data-n="' + (k - start + 1) + '">' + until(k) + '</button>').join('') + '</div>' +
         '<div class="grid2"><label>Amount<input id="pAmt" inputmode="decimal" value="' + (settings.amount > 0 ? settings.amount : '') + '"></label><label>Date<input id="pDate" type="date" value="' + today() + '"></label></div>' +
         '<label>Paid with</label><div class="methods">' + METHODS.map(x => '<button type="button" class="chip" data-meth="' + x + '">' + x + '</button>').join('') + '</div>' +
         '<div class="grid2"><label>Receipt #<input id="pRec" placeholder="1042"></label><label>Note<input id="pNote"></label></div>' +
@@ -280,19 +287,28 @@
         const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: $('pDate').value || today(), method: meth, receipt: $('pRec').value.trim(), note: $('pNote').value.trim(), through_term: thru }).select().single();
         if (fail(r)) return;
         if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) return;
-        payments.push(r.data); m.paid_through = thru; close(); draw(); toast('✓ ' + m.name + ' paid through ' + termName(thru));
+        payments.push(r.data); m.paid_through = thru; close(); draw(); toast('✓ ' + firstName(m.name) + ' paid until ' + until(thru));
       };
     }
 
     // ---- one tap: dues amount, Cash App, today, this semester ----
-    async function quickPay(id) {
+    function aheadPicker(id) {
       const m = members.find(x => x.id === id); if (!m) return;
-      const before = m.paid_through, thru = Math.max(cur(), m.paid_through + 1), amount = Number(settings.amount) || 5;
+      const start = Math.max(cur(), m.paid_through + 1), each = Number(settings.amount) || 5;
+      open('<h2>' + esc(firstName(m.name)) + ' paid until…</h2><p class="helper">' + esc(m.name) + ' · Cash App · ' + money(each) + ' a semester' + (m.paid_through >= cur() ? ' · already paid until ' + until(m.paid_through) : '') + '</p>' +
+        '<div class="methods" style="gap:8px">' + range(start, Math.max(LAST, start)).map(k => '<button type="button" class="chip" style="padding:10px 14px;font-size:1rem" data-until="' + k + '">' + until(k) + '<br><small>' + money(each * (k - start + 1)) + '</small></button>').join('') + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="aCancel">Cancel</button></div>');
+      $('aCancel').onclick = close;
+      document.querySelectorAll('[data-until]').forEach(b => b.onclick = () => { close(); quickPay(id, Number(b.dataset.until)); });
+    }
+    async function quickPay(id, upTo) {
+      const m = members.find(x => x.id === id); if (!m) return;
+      const before = m.paid_through, start = Math.max(cur(), m.paid_through + 1), thru = upTo || start, amount = (Number(settings.amount) || 5) * (thru - start + 1);
       const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: today(), method: 'Cash App', receipt: '', note: '', through_term: thru }).select().single();
       if (fail(r)) { draw(); return; }
       if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) { draw(); return; }
       payments.push(r.data); m.paid_through = thru; draw();
-      toast('✓ ' + firstName(m.name) + ' paid ' + money(amount) + ' Cash App', async () => {
+      toast('✓ ' + firstName(m.name) + ' paid ' + money(amount) + (thru > cur() ? ' · until ' + until(thru) : '') + ' Cash App', async () => {
         if (fail(await sb.from('dues_payments').delete().eq('id', r.data.id))) return;
         if (fail(await sb.from('dues_members').update({ paid_through: before }).eq('id', id))) return;
         payments = payments.filter(p => p.id !== r.data.id); m.paid_through = before; draw(); toast('Undone');
