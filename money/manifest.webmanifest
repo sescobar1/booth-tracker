@@ -7,6 +7,12 @@
   "display": "standalone",
   "background_color": "#f4f6f3",
   "theme_color": "#1d5c46",
+  "shortcuts": [
+    { "name": "Gas", "url": "./#quick/Gas" },
+    { "name": "Walmart", "url": "./#quick/Walmart" },
+    { "name": "Sonic", "url": "./#quick/Sonic" },
+    { "name": "Vinted", "url": "./#quick/Vinted" }
+  ],
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },

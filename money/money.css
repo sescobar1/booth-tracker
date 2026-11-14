@@ -204,3 +204,13 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 .rrow .rmain { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .rrow > b { white-space: nowrap; }
 .day.rsel { color: var(--navy); }
+
+/* Quick pad */
+.qpad h2 { margin-bottom: 0; }
+.qamt { font-size: 2.6rem; font-weight: 800; text-align: center; padding: 10px 0 6px; color: var(--ink); letter-spacing: .5px; }
+.qkeys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
+.qkeys button { min-height: 58px; font-size: 1.5rem; font-weight: 700; border-radius: 12px; background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.qkeys button:active { background: var(--line); }
+.qsave { flex: 1; min-height: 52px; font-size: 1.1rem; }
+.qsave:disabled { opacity: .45; }
+.chipbtn.fav { min-height: 40px; font-size: .92rem; }

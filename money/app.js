@@ -185,13 +185,14 @@ function viewLeaders() {
 // ---------- routing ----------
 function route() {
   if (location.hash.startsWith('#add')) { quickAdd(); return; }
+  if (location.hash.startsWith('#quick/')) { const p = decodeURIComponent(location.hash.slice(7)); history.replaceState(null, '', location.pathname + '#register'); viewRegister(); if (activeAccount()) quickPad(p); else pendingQuick = p; return; }
   const [tab, arg] = (location.hash.slice(1) || 'register').split('/');
-  const tabOf = { leaders: 'register', reports: 'register', import: 'more', accounts: 'more', siri: 'more', inbox: 'register', calendar: 'register', review: 'register', rules: 'more', budgets: 'more' };
+  const tabOf = { leaders: 'register', reports: 'register', import: 'more', accounts: 'more', siri: 'more', homebuttons: 'more', inbox: 'register', calendar: 'register', review: 'register', rules: 'more', budgets: 'more' };
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tabOf[tab] || tab)));
-  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar, review: viewReview, leaders: viewLeaders };
+  const views = { register: viewRegister, reports: viewReports, bank: viewBank, taxes: viewTaxes, more: viewMore, import: viewImport, recurring: viewRecurring, siri: viewSiri, inbox: viewInbox, rules: viewRules, budgets: viewBudgets, calendar: viewCalendar, review: viewReview, homebuttons: viewHomeButtons, leaders: viewLeaders };
   (views[tab] || viewRegister)(arg);
 }
-window.render = () => { const y = window.scrollY; firstSort(); runRecurring(); if (pendingAdd) { finishQuickAdd(); return; } if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
+window.render = () => { const y = window.scrollY; firstSort(); runRecurring(); if (pendingAdd) { finishQuickAdd(); return; } if (pendingQuick && activeAccount()) { const p = pendingQuick; pendingQuick = null; route(); quickPad(p); return; } if (!(location.hash.startsWith('#bank') && bankState)) route(); window.scrollTo(0, y); };
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
 $('fab').onclick = () => $('topAdd').click();
 $('topAdd').onclick = () => {
@@ -246,6 +247,7 @@ function viewRegister() {
   const monthIn = regMonth ? b.list.filter(t => t.date.startsWith(regMonth)) : [];
   const needCat = b.list.filter(t => !t.category).length;
   $('view').innerHTML = (lastDeleted ? '<div class="undo-bar">🗑 Deleted ' + lastDeleted.length + ' ' + (lastDeleted.length === 1 ? 'entry' : 'entries') + '<button type="button" class="ghost small" id="undoDel">↩ Undo</button><button type="button" class="linkish" id="undoX">OK</button></div>' : '') +
+    (searching ? '' : favRow()) +
     '<div class="searchbar"><input id="regFind" type="search" placeholder="🔍 Search payee, amount, category, #tag" value="' + esc(regSearch) + '">' +
     '<div class="segs" id="regType"><button type="button" class="seg' + (!regType ? ' on' : '') + '" data-rt="">All</button><button type="button" class="seg' + (regType === 'expense' ? ' on' : '') + '" data-rt="expense">− Expenses</button><button type="button" class="seg' + (regType === 'income' ? ' on' : '') + '" data-rt="income">+ Income</button></div>' +
     (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out ' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + ' · in ' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</span>' +
@@ -261,7 +263,6 @@ function viewRegister() {
         '<div class="bal-row"><span>Bank: <b>' + money(b.cleared) + '</b></span><span>Pending: <b>' + money(b.pending) + '</b></span>' + (Math.abs(b.cushion) >= 0.005 ? '<span>Rounding cushion: <b>' + money(-b.cushion) + '</b></span>' : '') + '</div></div>') +
     safeToSpend(acc, b.balance) + budgetCard(acc) + comingUp(acc, b.balance) +
     (needCat ? '<a class="card pad inbox-link" href="#inbox">🗂 <b>' + needCat + '</b> ' + (needCat === 1 ? 'entry needs' : 'entries need') + ' a category <span class="sub">Sort them →</span></a>' : '') +
-    favRow() +
     '<div class="row-actions quick"><button type="button" id="addExp">− Expense</button><button type="button" class="income-btn" id="addInc">+ Income</button></div>') +
     '<div class="filters">' +
     '<select id="regMonth"><option value="">All months</option>' + months.map(m => '<option value="' + m + '"' + (m === regMonth ? ' selected' : '') + '>' + esc(monthName(m)) + '</option>').join('') + '</select>' +
@@ -274,7 +275,7 @@ function viewRegister() {
   if ($('accPick')) $('accPick').onchange = e => { currentAccount = e.target.value; viewRegister(); };
   $('view').querySelectorAll('[data-uprec]').forEach(x => x.onclick = () => editRecurring(x.dataset.uprec));
   $('view').querySelectorAll('[data-newrec]').forEach(x => x.onclick = () => editRecurring(null, x.dataset.newrec));
-  $('view').querySelectorAll('[data-fav]').forEach(x => x.onclick = () => editTx(null, 'expense', { payee: x.dataset.fav }));
+  $('view').querySelectorAll('[data-fav]').forEach(x => x.onclick = () => quickPad(x.dataset.fav));
   $('view').querySelectorAll('[data-budcat]').forEach(x => x.onclick = () => { regCat = x.dataset.budcat; regMonth = today().slice(0, 7); viewRegister(); });
   if ($('addExp')) $('addExp').onclick = () => editTx(null, 'expense');
   if ($('addInc')) $('addInc').onclick = () => editTx(null, 'income');
@@ -716,9 +717,11 @@ function editRecurring(id, type) {
 
 // ---------- Favorites (one-tap quick add) ----------
 // Her pinned list if she made one, otherwise the payees she enters most by hand (last 4 months).
+const DEFAULT_FAVS = ['Gas', 'Walmart', 'Sonic', "McDonald's", 'Vinted', 'The Corner Hangout', 'Price Break', "Y'allternative Market"];
 function favorites() {
   const pinned = (data.settings.favorites || []).filter(Boolean);
-  if (pinned.length) return pinned.slice(0, 8);
+  if (pinned.length) return pinned.slice(0, 10);
+  return DEFAULT_FAVS;
   const since = isoDay(new Date(Date.now() - 120 * 864e5)), count = {}, name = {};
   data.tx.filter(t => t.type === 'expense' && t.date >= since && t.payee && !String(t.id).startsWith('rec_')).forEach(t => {
     const k = looseName(t.payee); count[k] = (count[k] || 0) + (t.source === 'Bank' ? 1 : 3); if (!name[k] || t.source !== 'Bank') name[k] = t.payee;
@@ -728,7 +731,66 @@ function favorites() {
 function favRow() {
   const f = favorites();
   if (!f.length) return '';
-  return '<div class="favs"><span class="favl">⚡ Quick add</span>' + f.map(p => '<button type="button" class="chipbtn" data-fav="' + esc(p) + '">' + esc(p) + '</button>').join('') + '</div>';
+  return '<div class="favs"><span class="favl">⚡ Quick add</span>' + f.map(p => '<button type="button" class="chipbtn fav" data-fav="' + esc(p) + '">' + favIcon(p) + esc(p) + '</button>').join('') + '</div>';
+}
+
+// ---------- Quick pad: place → amount → Save ----------
+// Big keypad for adding on the go. Date is today, the category fills in from the place, and
+// "same as last time" buttons save a repeat amount in one tap. More options opens the full form.
+const favIcon = p => { const k = looseName(p);
+  return /^gas|phillips|doublebee/.test(k) ? '⛽ ' : /walmart|kroger|aldi/.test(k) ? '🛒 ' : /sonic|mcdonald|hangout|pizza|taco|domino|donut/.test(k) ? '🍔 ' : /vinted|ebay|poshmar/.test(k) ? '👗 ' : /pricebreak|yallternative|marva/.test(k) ? '🧺 ' : /walgreens/.test(k) ? '💊 ' : ''; };
+function lastAmounts(payee) {
+  const k = looseName(payee), seen = [];
+  data.tx.filter(t => t.type === 'expense' && looseName(t.payee) === k).sort(byTime).reverse().forEach(t => { const a = Number(t.amount); if (a > 0 && !seen.includes(a) && seen.length < 3) seen.push(a); });
+  return seen;
+}
+function quickPad(payee, type) {
+  const acc = activeAccount();
+  if (!acc) { toast('Add an account first (More → Accounts).'); return; }
+  type = type || 'expense';
+  let v = '';
+  const recent = lastAmounts(payee);
+  openModal('<div class="qpad"><h2>' + favIcon(payee) + esc(payee) + '</h2><p class="helper">Today · ' + esc(autoCategory(payee, '', type) || 'no category yet') + '</p>' +
+    '<div class="qamt" id="qAmt">$0</div>' +
+    (recent.length ? '<p class="lbl">Same as last time</p><div class="catchips">' + recent.map(a => '<button type="button" class="chipbtn" data-qsame="' + a + '">' + money(a) + '</button>').join('') + '</div>' : '') +
+    '<div class="qkeys">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map(k => '<button type="button" data-qk="' + k + '">' + k + '</button>').join('') + '</div>' +
+    '<div class="row-actions"><button type="button" id="qSave" class="qsave">Save</button><button type="button" class="ghost" id="qMore">More options</button><button type="button" class="ghost" id="qCancel">Cancel</button></div></div>');
+  const show = () => { $('qAmt').textContent = '$' + (v || '0'); $('qSave').disabled = !(toNum(v) > 0); };
+  document.querySelectorAll('[data-qk]').forEach(b => b.onclick = () => {
+    const k = b.dataset.qk;
+    if (k === '⌫') v = v.slice(0, -1);
+    else if (k === '.') { if (!v.includes('.')) v = (v || '0') + '.'; }
+    else if (!/\.\d\d$/.test(v) && v.replace('.', '').length < 7) v = (v === '0' ? '' : v) + k;
+    show();
+  });
+  const save = amt => {
+    const mem = payeeMemory()[payee.toLowerCase()] || {};
+    const t = { id: uid(), accountId: acc.id, date: today(), time: new Date().toTimeString().slice(0, 5), payee, amount: Math.round(amt * 100) / 100, type, category: autoCategory(payee, '', type) || mem.category || '', note: '', checkNum: '', cleared: false, taxCat: mem.taxCat || '', receipt: '', source: 'Added' };
+    data.tx.push(t); window.save(); closeModal(); route();
+    toast('✓ ' + payee + ' ' + money(t.amount) + ' added. Tap it to change anything.');
+  };
+  $('qSave').onclick = () => { if (toNum(v) > 0) save(toNum(v)); };
+  document.querySelectorAll('[data-qsame]').forEach(b => b.onclick = () => save(Number(b.dataset.qsame)));
+  $('qMore').onclick = () => { const amt = v; closeModal(); editTx(null, type, { payee }); $('tPayee').value = payee; if (amt) $('tAmt').value = toNum(amt).toFixed(2); };
+  $('qCancel').onclick = closeModal;
+  show();
+}
+// ---------- Home screen buttons ----------
+function viewHomeButtons() {
+  const base = location.origin + location.pathname;
+  const link = p => base + '#quick/' + encodeURIComponent(p);
+  $('view').innerHTML = '<a class="back" href="#more">‹ More</a><h1>📱 Home screen buttons</h1>' +
+    '<p class="helper">Put a button like <b>⛽ Gas</b> on your iPhone home screen. Tapping it opens Money straight to the number pad for that place.</p>' +
+    '<div class="card pad"><h2>Make one (about a minute each)</h2><ol class="steps">' +
+    '<li>Tap <b>Copy</b> next to a place below.</li>' +
+    '<li>Open <b>Shortcuts</b> → tap <b>+</b> → search <b>Open URLs</b> and tap it.</li>' +
+    '<li>Tap <i>URL</i>, paste, then tap <b>Done</b>.</li>' +
+    '<li>Tap the shortcut\'s name at the top → <b>Rename</b> (for example “Gas”), then tap the icon to pick a color and symbol.</li>' +
+    '<li>Tap the <b>share</b> button (or the ⌄ by the name) → <b>Add to Home Screen</b> → <b>Add</b>.</li></ol></div>' +
+    '<div class="card pad">' + favorites().map((p, i) => '<div class="mini-row"><span>' + favIcon(p) + esc(p) + '</span><button type="button" class="ghost small" data-hcopy="' + i + '">Copy</button></div>').join('') + '</div>' +
+    '<p class="helper">On Android, press and hold the Money icon to see these places.</p>';
+  const favs = favorites();
+  document.querySelectorAll('[data-hcopy]').forEach(b => b.onclick = async () => { const u = link(favs[Number(b.dataset.hcopy)]); try { await navigator.clipboard.writeText(u); b.textContent = 'Copied ✓'; } catch (e) { prompt('Copy this link:', u); } });
 }
 
 // ---------- Tags ----------
@@ -1046,7 +1108,7 @@ function compareCard(acc) {
 
 // ---------- Siri (iPhone Shortcuts) ----------
 // A Shortcut opens …/money/#add?type=expense&amt=12.50&payee=Sonic and the entry is saved right away.
-let pendingAdd = null;
+let pendingAdd = null, pendingQuick = null;
 function quickAdd() {
   const q = new URLSearchParams(location.hash.replace(/^#add\??/, ''));
   pendingAdd = { type: /^(in|dep|pay)/i.test(q.get('type') || '') ? 'income' : 'expense', amt: toNum(q.get('amt') || q.get('amount')), payee: (q.get('payee') || q.get('where') || '').trim(), category: (q.get('cat') || q.get('category') || '').trim(), note: (q.get('note') || '').trim() };
@@ -1726,6 +1788,7 @@ function viewMore() {
     '<label>Tags (one per line)<textarea id="mTags" rows="4">' + esc(tagList().join('\n')) + '</textarea></label></div>' +
     '<div class="card pad"><h2>🔁 Recurring bills &amp; income</h2><p class="helper">' + (recList().length ? recList().length + ' set up, added on their day each month.' : 'Set up bills that repeat (added on the 1st).') + '</p><a class="button ghost" href="#recurring">Recurring</a></div>' +
     '<div class="card pad"><h2>🎙 Siri</h2><p class="helper">Say “Hey Siri, add expense” and tell it the amount and where.</p><a class="button ghost" href="#siri">Set up Siri</a></div>' +
+    '<div class="card pad"><h2>📱 Home screen buttons</h2><p class="helper">One-tap buttons like ⛽ Gas on your phone that open straight to the number pad.</p><a class="button ghost" href="#homebuttons">Set them up</a></div>' +
     '<div class="card pad"><h2>🪙 Rounding</h2><label>When the bank fills in an amount<select id="mRound"><option value="up5"' + ((data.settings.rounding || 'up5') === 'up5' ? ' selected' : '') + '>Round bills up to the dollar if over 5¢; deposits down</option><option value="none"' + (data.settings.rounding === 'none' ? ' selected' : '') + '>Use the exact amount</option></select></label></div>' +
     '<div class="card pad"><h2>⬆ Import</h2><p class="helper">Bring in your CheckBook app export.</p><a class="button ghost" href="#import">Import CheckBook file</a></div>' +
     '<div class="card pad"><h2>🏷 Categories</h2><p class="helper">New entries are sorted by name automatically. Change one entry\'s category and the app offers to change the rest with that name, and remembers it.</p><div class="row-actions"><button type="button" class="ghost small" id="mSort">✨ Sort entries without a category (' + data.tx.filter(t => !t.category).length + ')</button></div><p class="helper">One per line:</p><textarea id="mCats" rows="6">' + esc(data.settings.categories.join('\n')) + '</textarea>' +
