@@ -968,7 +968,10 @@
     }
 
     // ---- 🍪 Snack closet money ----
-    const termOfEntry = d => termOfDate(d);
+    // A closed semester keeps everything up to the day it was closed; anything after rolls into the next semester.
+    const snClosed = () => settings.snack_closed || {};
+    const termOfEntry = d => { let k = termOfDate(d); const c = snClosed(); while (c[k] && d > c[k].closed_on) k++; return k; };
+    const openTerm = () => { let k = termOfEntry(today()); while (snClosed()[k]) k++; return k; };
     const ITEMS = [['Chips', /chip|dorito|cheeto|takis|pringle|veggie straw/i], ['Soda', /soda|coke|dr\.? ?pepper|sprite|pop\b|can drink|canned drink/i], ['Alani / energy', /alani|energy|celsius|red ?bull|monster/i], ['Pop-Tarts', /pop ?tart|pot tart/i], ['Water', /water/i], ['Cup of noodles / mac', /noodle|ramen|\bmac\b/i], ['Muffins', /muffin/i], ['Cookies / Oreos', /cookie|oreo|nutter/i], ['Cheez-Its / crackers', /cheez|cheese it|crackers?|goldfish/i], ['Breakfast / granola bars', /breakfast|granola|nutri|\bbars?\b/i], ['Popcorn', /pop ?corn/i], ['Little Debbie / honey buns', /debbie|honey ?bun|oatmeal pie|snack cake/i], ['Rice Krispies', /rice cri|krispi/i], ['Pretzels', /pretzel/i]];
     function snackStats(xs) {
       const sales = xs.filter(x => x.kind === 'sale'), cash = xs.filter(x => x.kind === 'cash'), buys = xs.filter(x => x.kind === 'expense');
@@ -980,8 +983,9 @@
     function drawSnacks() {
       $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · Snack closet';
       if (snacks === null) { $('view').innerHTML = '<p class="helper">Loading snack money…</p>'; wireModes(); loadSnacks().then(() => { if (mode === 'snacks') draw(); }); return; }
-      const terms = [...new Set(snacks.map(x => termOfEntry(x.entry_date)).concat([cur()]))].sort((a, b) => b - a);
-      if (snTerm === null || !terms.includes(snTerm)) snTerm = cur();
+      const terms = [...new Set(snacks.map(x => termOfEntry(x.entry_date)).concat([openTerm()]))].sort((a, b) => b - a);
+      if (snTerm === null || !terms.includes(snTerm)) snTerm = openTerm();
+      const closedInfo = snClosed()[snTerm];
       const xs = snacks.filter(x => termOfEntry(x.entry_date) === snTerm), st = snackStats(xs), ys = xs.filter(x => x.kind !== 'sale');
       const prev = snackStats(snacks.filter(x => termOfEntry(x.entry_date) === snTerm - 1));
       const color = v => v >= 0 ? 'var(--green)' : 'var(--red)';
@@ -1008,14 +1012,15 @@
       $('view').innerHTML =
         '<div class="tabs" style="margin-top:0">' + terms.map(k => '<button type="button" class="chip' + (k === snTerm ? ' on' : '') + '" data-snt="' + k + '">' + termName(k) + '</button>').join('') + '</div>' +
         '<div class="stats"><div class="stat"><span>Money in</span><b style="color:var(--green)">' + money(st.inn) + '</b><small class="helper" style="display:block;margin:0">Cash App ' + money(st.saleAmt) + ' · cash ' + money(st.cashAmt) + '</small></div><div class="stat"><span>Spent on snacks</span><b style="color:var(--red)">' + money(st.out) + '</b><small class="helper" style="display:block;margin:0">' + st.buys.length + ' purchases</small></div><div class="stat"><span>' + (st.profit >= 0 ? 'Profit' : 'Behind') + '</span><b style="color:' + color(st.profit) + '">' + money(Math.abs(st.profit)) + '</b><small class="helper" style="display:block;margin:0">' + termName(snTerm) + '</small></div></div>' +
-        '<div class="actions"><button type="button" class="btn" id="snCash">💵 Add cash</button><button type="button" class="btn" id="snBuy">🛒 Add snack purchase</button><button type="button" class="btn ghost" id="snCa">📥 Cash App import</button><button type="button" class="btn ghost" id="snCsv">⬇ Download</button></div>' +
+        (closedInfo ? '<p class="helper" style="margin:4px 0 0">🔒 ' + termName(snTerm) + ' was closed on ' + esc(fmtDate(closedInfo.closed_on)) + '. Anything dated after that counts toward ' + termName(snTerm + 1) + '. <button type="button" class="btn ghost small" id="snReopen">Reopen</button></p>' : '') +
+        '<div class="actions"><button type="button" class="btn" id="snCash">💵 Add cash</button><button type="button" class="btn" id="snBuy">🛒 Add snack purchase</button><button type="button" class="btn ghost" id="snCa">📥 Cash App import</button><button type="button" class="btn ghost" id="snCsv">⬇ Download</button>' + (!closedInfo && snTerm === openTerm() ? '<button type="button" class="btn ghost" id="snClose">🏁 End of semester</button>' : '') + '</div>' +
         '<div class="card"><h2>📊 Snack closet evaluation · ' + termName(snTerm) + '</h2>' + (notes.length ? '<ul style="margin:6px 0 0;padding-left:20px">' + notes.map(n => '<li style="margin:4px 0">' + n + '</li>').join('') + '</ul>' : '<p class="helper">No snack money recorded for this semester yet.</p>') + '</div>' +
         itemsCard() +
         (mData.length ? '<div class="card"><h2>By month</h2><div style="display:flex;gap:14px;align-items:flex-end;height:150px;padding-top:8px">' + mData.map(m => '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end"><div style="display:flex;gap:3px;align-items:flex-end;height:110px;width:100%;justify-content:center"><div title="In ' + money(m.inn) + '" style="width:40%;max-width:26px;background:var(--green);border-radius:4px 4px 0 0;height:' + Math.max(2, m.inn / max * 100) + '%"></div><div title="Spent ' + money(m.out) + '" style="width:40%;max-width:26px;background:var(--red);opacity:.75;border-radius:4px 4px 0 0;height:' + Math.max(m.out ? 2 : 0, m.out / max * 100) + '%"></div></div><small class="helper" style="margin:0">' + monthName(m.mo) + '</small></div>').join('') + '</div><p class="helper" style="margin:6px 0 0"><span style="color:var(--green)">■</span> money in · <span style="color:var(--red)">■</span> spent</p>' +
           '<div style="margin-top:8px">' + mData.map(m => '<div class="pay"><span>' + new Date(m.mo + '-15T12:00').toLocaleDateString([], { month: 'long', year: 'numeric' }) + '</span><span>in ' + money(m.inn) + ' · spent ' + money(m.out) + ' · <b style="color:' + color(m.inn - m.out) + '">' + (m.inn - m.out >= 0 ? '+' : '−') + money(Math.abs(m.inn - m.out)) + '</b></span></div>').join('') + '</div></div>' : '') +
         (top.length ? '<div class="card"><h2>🏆 Snack leaderboard · ' + termName(snTerm) + '</h2>' + top.map(([n, a], i) => '<div class="pay"><span>' + (['🥇', '🥈', '🥉'][i] || (i + 1) + '.') + ' ' + esc(n) + '</span><b>' + money(a) + '</b></div>').join('') + '</div>' : '') +
 
-        '<div class="card"><h2>Every semester</h2>' + terms.slice().reverse().map(k => { const s = snackStats(snacks.filter(x => termOfEntry(x.entry_date) === k)); return '<div class="pay"><span>' + termName(k) + '</span><span>in ' + money(s.inn) + ' · spent ' + money(s.out) + ' · <b style="color:' + color(s.profit) + '">' + (s.profit >= 0 ? '+' : '−') + money(Math.abs(s.profit)) + '</b></span></div>'; }).join('') + '</div>' +
+        '<div class="card"><h2>Every semester</h2>' + terms.slice().reverse().map(k => { const s = snackStats(snacks.filter(x => termOfEntry(x.entry_date) === k)); return '<div class="pay"><span>' + termName(k) + (snClosed()[k] ? ' <small class="helper">🔒 closed ' + esc(fmtDate(snClosed()[k].closed_on)) + '</small>' : (k === openTerm() ? ' <small class="helper">· open</small>' : '')) + '</span><span>in ' + money(s.inn) + ' · spent ' + money(s.out) + ' · <b style="color:' + color(s.profit) + '">' + (s.profit >= 0 ? '+' : '−') + money(Math.abs(s.profit)) + '</b></span></div>'; }).join('') + '</div>' +
         '<div class="lvlhead"><h3>Restocks &amp; cash · ' + termName(snTerm) + '</h3><small>' + ys.length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
           (ys.length ? ys.slice(0, snAll ? 2000 : 40).map(x => '<div class="pay"><span>' + (x.kind === 'sale' ? '🍪' : x.kind === 'cash' ? '💵' : '🛒') + ' ' + esc(fmtDate(x.entry_date)) + ' · ' + esc(x.who || (x.kind === 'cash' ? 'Cash deposit' : x.kind === 'expense' ? 'Snack purchase' : '')) + (x.note ? '<br><small class="helper">' + esc(x.note) + '</small>' : '') + '</span><span style="display:flex;gap:6px;align-items:center"><b style="color:' + (x.kind === 'expense' ? 'var(--red)' : 'var(--green)') + '">' + (x.kind === 'expense' ? '−' : '+') + money(x.amount) + '</b><button type="button" class="btn ghost small" data-sndel="' + x.id + '" aria-label="Delete">✕</button></span></div>').join('') + (ys.length > 40 && !snAll ? '<div class="actions"><button type="button" class="btn ghost small" id="snMore">Show all ' + ys.length + '</button></div>' : '') : '<p class="helper">No restocks or cash yet.</p>') + '</div><p class="helper">Individual snack payments aren\'t kept — only each student\'s monthly total, for the totals and the leaderboard.</p>';
       wireModes();
@@ -1030,9 +1035,31 @@
       $('snCash').onclick = () => snackForm('cash');
       $('snBuy').onclick = () => snackForm('expense');
       $('snCa').onclick = cashImport;
+      if ($('snClose')) $('snClose').onclick = () => closeSnackTerm(snTerm, st);
+      if ($('snReopen')) $('snReopen').onclick = async () => {
+        if (!confirm('Reopen ' + termName(snTerm) + '? Entries after ' + fmtDate(closedInfo.closed_on) + ' will move back into it.')) return;
+        const c = Object.assign({}, snClosed()); delete c[snTerm];
+        if (fail(await sb.from('dues_settings').update({ snack_closed: c }).eq('owner', user.id))) return;
+        settings.snack_closed = c; draw(); toast(termName(snTerm) + ' reopened');
+      };
       $('snCsv').onclick = () => {
         const lines = [['Date', 'Type', 'Amount', 'From / store', 'Note', 'Cash App ID']].concat(snacks.slice().sort((a, b) => a.entry_date.localeCompare(b.entry_date)).map(x => [x.entry_date, x.kind === 'sale' ? 'Cash App sale' : x.kind === 'cash' ? 'Cash deposit' : 'Snack purchase', (x.kind === 'expense' ? -1 : 1) * Number(x.amount), x.who, x.note, x.receipt]));
         sendFile('SNA snack closet money.csv', lines.map(csvLine).join('\n'));
+      };
+    }
+    function closeSnackTerm(k, st) {
+      open('<h2>🏁 End ' + termName(k) + '</h2><p class="helper">This saves ' + termName(k) + '\'s snack totals to <b>Every semester</b> and starts ' + termName(k + 1) + ' at $0. Nothing is deleted — you can still look back at ' + termName(k) + ', and you can reopen it if you close it by mistake.</p>' +
+        '<div class="pay"><span>Money in</span><b style="color:var(--green)">' + money(st.inn) + '</b></div><div class="pay"><span>Spent on snacks</span><b style="color:var(--red)">' + money(st.out) + '</b></div><div class="pay"><span>' + (st.profit >= 0 ? 'Profit' : 'Behind') + '</span><b>' + money(Math.abs(st.profit)) + '</b></div>' +
+        '<label>Close as of<input type="date" id="scD" value="' + today() + '"></label><p class="helper">Cash App payments and purchases dated after this day count toward ' + termName(k + 1) + '.</p>' +
+        '<div class="actions"><button type="button" class="btn" id="scGo">Close ' + termName(k) + '</button><button type="button" class="btn ghost" id="scX">Cancel</button></div>');
+      $('scX').onclick = close;
+      $('scGo').onclick = async () => {
+        const d = $('scD').value || today();
+        const t = snackStats(snacks.filter(x => termOfEntry(x.entry_date) === k && x.entry_date <= d));
+        const c = Object.assign({}, snClosed(), { [k]: { closed_on: d, money_in: t.inn, cash_app: t.saleAmt, cash: t.cashAmt, spent: t.out, net: t.profit } });
+        if (fail(await sb.from('dues_settings').update({ snack_closed: c }).eq('owner', user.id))) return;
+        settings.snack_closed = c; snTerm = openTerm(); close(); draw();
+        toast(termName(k) + ' closed: ' + (t.profit >= 0 ? '+' : '−') + money(Math.abs(t.profit)));
       };
     }
     function snackForm(kind) {
