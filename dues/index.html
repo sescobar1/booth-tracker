@@ -64,7 +64,7 @@
     .pay:first-child { border-top: 0; }
     .linkbox { font-size: .82rem; word-break: break-word; background: var(--card); border: 1px dashed var(--line); padding: 8px; border-radius: 8px; white-space: pre-wrap; }
     .toast { display: flex; align-items: center; position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; z-index: 20; font-size: .92rem; max-width: 90vw; }
-    nav#nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+    nav#nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
     nav#nav button { border: 0; background: none; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 700; padding: 8px 0 10px; display: grid; justify-items: center; gap: 1px; cursor: pointer; }
     nav#nav button span { font-size: 1.35rem; line-height: 1.2; filter: grayscale(1); opacity: .6; }
     nav#nav button.on { color: var(--navy); }
@@ -197,7 +197,7 @@
     function modeTabs() { return ''; }
     function drawNav() {
       let nav = $('nav'); if (!nav) { nav = document.createElement('nav'); nav.id = 'nav'; document.body.appendChild(nav); }
-      nav.innerHTML = [['dues', '💵', 'Dues'], ['cords', '🎓', 'Cords'], ['officers', '⭐', 'Officers'], ['election', '🗳', 'Election']].map(([k, ic, l]) => '<button type="button" class="' + (mode === k ? 'on' : '') + '" data-mode="' + k + '"><span>' + ic + '</span>' + l + '</button>').join('');
+      nav.innerHTML = [['dues', '💵', 'Dues'], ['cords', '🎓', 'Cords'], ['officers', '⭐', 'Officers'], ['election', '🗳', 'Election'], ['snacks', '🍪', 'Snacks']].map(([k, ic, l]) => '<button type="button" class="' + (mode === k ? 'on' : '') + '" data-mode="' + k + '"><span>' + ic + '</span>' + l + '</button>').join('');
       nav.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; draw(); scrollTo(0, 0); });
       $('fab').hidden = mode !== 'dues';
     }
@@ -206,6 +206,7 @@
       if (mode === 'cords') return drawCords();
       if (mode === 'officers') return drawOfficers();
       if (mode === 'election') return drawElection();
+      if (mode === 'snacks') return drawSnacks();
       $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · ' + termName(cur());
       const active = members.filter(m => m.active), st = active.map(m => ({ m, s: stateOf(m) }));
       const nPaid = st.filter(x => x.s.key !== 'unpaid').length, nOwe = active.length - nPaid;
@@ -749,33 +750,79 @@
       const head = (rows.shift() || []).map(h => h.replace(/^﻿/, '').trim());
       return rows.filter(r => r.length > 1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] || ''])));
     }
+    // ---- Cash App: sort each payment into dues, snacks, or neither ----
+    const SNACK_RE = /sna?c?k|snac|snak|snax|sacks|smack|chip|drink|food|alani|water|soda|candy|closet|pop ?tart|pot tart|cookie|celsius|gum|ramen|noodle|red ?bull|monster|cracker|granola|juice|coffee|cheez|goldfish|treat|\bbars?\b|lunch|breakfast|snickers|reese|oreo|dorito|cheeto|pretzel|nuts|fruit|bubly|gatorade|coke|dr\.? ?pepper|sprite|energy|popcorn|debbie|rice cri|krispie|honeybun|honey bun|muffin|takis|nutter|chex|\bmac\b|cheese/i;
+    const NOT_SNACK_RE = /cpr|\bbls\b|cord|shirt|stti|refund|scholar|banner|paint|recogn|pizza|domino|slice the price|gift card|badge|personalized|contingen|contengen|angel|sheet|postage|mail/i;
+    const STORE_RE = /sam'?s|samsclub|wal|wm super|kroger|walgreens|dollar/i;
+    const caAmt = s => Number(String(s).replace(/[$,]/g, '')) || 0;
+    const isDuesNote = n => /\bdue|member|\bfee\b/i.test(n) || (/\bsna\b|\blevel\s*[0-4i]/i.test(n) && !SNACK_RE.test(n));
+    function sortCashApp(r) {
+      const a = caAmt(r.Amount), n = String(r.Notes || '').trim(), t = r['Transaction Type'], who = String(r['Name of sender/receiver'] || '').trim();
+      if ((r.Status || 'COMPLETE') !== 'COMPLETE' || t === 'Account Notifications') return null;
+      if (a > 0 && t === 'P2P') {
+        if (/^shaana escobar$/i.test(who)) return 'self';
+        if (NOT_SNACK_RE.test(n)) return 'other';
+        if (isDuesNote(n)) return 'dues';
+        if (SNACK_RE.test(n) || /^\$[\d.,]+ payment from/i.test(n) || !n || a <= 3) return 'sale';
+        return 'other';
+      }
+      if (a < 0) {
+        if (NOT_SNACK_RE.test(n)) return 'other';
+        if (t === 'P2P' && SNACK_RE.test(n)) return 'expense';
+        if (t === 'Cash Card' && STORE_RE.test(n)) return 'card';
+        return 'other';
+      }
+      return null;
+    }
+    let snacks = null, snTerm = null, snAll = false;
+    async function loadSnacks() {
+      const out = []; let from = 0;
+      for (;;) { const r = await sb.from('snack_entries').select('*').order('entry_date', { ascending: false }).range(from, from + 999); if (r.error) { toast(r.error.message); break; } out.push(...r.data); if (r.data.length < 1000) break; from += 1000; }
+      snacks = out;
+    }
     function cashImport() {
-      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. The app picks out this semester\'s dues payments (notes like "dues", "SNA" or "Level 2" — not snacks), skips any already recorded, and shows you every match before saving.</p>' +
+      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. One upload does both:<br>• <b>Dues</b> (notes like "dues", "SNA" or "Level 2") go to students.<br>• <b>Snacks</b> (snack sales, and your snack-buying reimbursements and card purchases) go to the 🍪 Snacks tab.<br>Anything already recorded is skipped, and you check everything before it saves.</p>' +
         '<label>Cash App CSV<input type="file" id="ciFile" accept=".csv,text/csv"></label><p class="helper" id="ciMsg"></p><div id="ciOut"></div><div class="actions"><button type="button" class="btn ghost" id="ciCancel">Cancel</button></div>');
       $('ciCancel').onclick = close;
       $('ciFile').onchange = async e => {
         const f = e.target.files[0]; if (!f) return;
         let rows; try { rows = parseCsv(await f.text()); } catch (err) { $('ciMsg').textContent = 'Couldn\'t read that file.'; return; }
         if (!rows.length || !('Notes' in rows[0])) { $('ciMsg').textContent = 'That doesn\'t look like a Cash App export. It should have Date, Amount, Notes and Name of sender/receiver columns.'; return; }
-        const amt = s => Number(String(s).replace(/[$,]/g, '')) || 0, each = Number(settings.amount) || 5, start = termStart(cur());
+        $('ciMsg').textContent = 'Sorting…';
+        if (snacks === null) await loadSnacks();
+        const each = Number(settings.amount) || 5, start = termStart(cur());
         const seen = new Set(payments.map(p => String(p.receipt)));
-        const isDues = n => /\bdue|member|\bfee\b/i.test(n) || (/\bsna\b|\blevel\s*[0-4i]/i.test(n) && !/snack|snac|chip|drink|food|candy|closet|shirt|cord|cpr|poptart|water|soda|room/i.test(n));
-        const dues = rows.filter(r => isDues(r.Notes) && (r.Status || 'COMPLETE') === 'COMPLETE' && amt(r.Amount) > 0 && r.Date.slice(0, 10) >= start);
-        const fresh = dues.filter(r => !seen.has(r['Transaction ID']));
+        const snSeen = new Set(snacks.map(s => s.receipt).filter(Boolean)), snKey = new Set(snacks.map(s => s.entry_date + '|' + Number(s.amount).toFixed(2) + '|' + s.kind));
+        const recent = rows.filter(r => r.Date.slice(0, 10) >= start).map(r => ({ r, k: sortCashApp(r) })).filter(x => x.k);
+        // dues
+        const dues = recent.filter(x => x.k === 'dues').map(x => x.r), fresh = dues.filter(r => !seen.has(r['Transaction ID']));
         const everyone = members.filter(m => m.active), extra = members.filter(m => !m.active);
         const found = fresh.map(r => {
-          const a = amt(r.Amount), snack = /snack|poptart|chip|drink|food/i.test(r.Notes);
+          const a = caAmt(r.Amount), snack = SNACK_RE.test(r.Notes);
           const n = Math.max(1, snack ? Math.floor(a / each) : Math.round(a / each));
           const m = guessStudent(r.Notes, everyone) || guessStudent(r['Name of sender/receiver'], everyone) || guessStudent(r.Notes + ' ' + r['Name of sender/receiver'], extra);
           return { r, a, n, m, snack };
         }).sort((x, y) => x.r.Date.localeCompare(y.r.Date));
-        $('ciMsg').innerHTML = '<b>' + dues.length + '</b> dues payments in ' + termName(cur()) + ' · <b>' + (dues.length - fresh.length) + '</b> already recorded · <b>' + fresh.length + '</b> new.';
-        if (!found.length) { $('ciOut').innerHTML = '<p class="helper">Nothing new to add. You\'re up to date ✓</p>'; return; }
+        // snacks
+        const snRows = recent.filter(x => ['sale', 'expense', 'card'].includes(x.k)).map(x => {
+          const a = Math.abs(caAmt(x.r.Amount)), kind = x.k === 'sale' ? 'sale' : 'expense', d = x.r.Date.slice(0, 10);
+          return { r: x.r, kind, a, d, card: x.k === 'card', dup: snSeen.has(x.r['Transaction ID']) || (x.k === 'card' && snKey.has(d + '|' + a.toFixed(2) + '|expense')) };
+        });
+        const snNew = snRows.filter(x => !x.dup), sales = snNew.filter(x => x.kind === 'sale'), buys = snNew.filter(x => x.kind === 'expense');
+        const others = recent.filter(x => x.k === 'other'), selfs = recent.filter(x => x.k === 'self');
+        const sum = xs => xs.reduce((t, x) => t + x.a, 0);
+        $('ciMsg').innerHTML = termName(cur()) + ' so far: <b>' + fresh.length + '</b> new dues payments · <b>' + sales.length + '</b> new snack sales (' + money(sum(sales)) + ') · <b>' + buys.length + '</b> new snack purchases (' + money(sum(buys)) + '). Already recorded items are skipped.';
         const opt = sel => '<option value="">— skip —</option>' + everyone.concat(extra).sort((a, b) => a.name.localeCompare(b.name)).map(m => '<option value="' + m.id + '"' + (sel && sel.id === m.id ? ' selected' : '') + '>' + esc(m.name) + (m.active ? '' : ' (past)') + '</option>').join('');
-        $('ciOut').innerHTML = '<div class="card">' + found.map((x, i) => '<div class="pay" style="flex-wrap:wrap"><small class="helper" style="width:100%;margin:0">' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + money(x.a) + ' from ' + esc(x.r['Name of sender/receiver']) + ' · “' + esc(x.r.Notes) + '”</small><select data-cs="' + i + '" style="flex:1;min-width:0">' + opt(x.m) + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">semesters<input data-cn="' + i + '" inputmode="numeric" value="' + x.n + '" style="width:52px"></label>' + (x.snack ? '<small style="width:100%;color:var(--amber)">Includes snacks — only ' + money(each * x.n) + ' counted as dues</small>' : '') + '</div>').join('') + '</div>' +
-          '<div class="actions"><button type="button" class="btn" id="ciSave">Save ' + found.length + ' payments</button></div>';
+        const line = x => '<label style="display:flex;gap:8px;align-items:flex-start;margin:5px 0;color:var(--ink);font-weight:400;font-size:.9rem"><input type="checkbox" data-sn="' + snNew.indexOf(x) + '" checked style="width:auto;margin-top:3px"><span style="flex:1">' + esc(fmtDate(x.d)) + ' · ' + esc(x.r['Name of sender/receiver'] || 'Cash Card') + ' · “' + esc(x.r.Notes) + '”' + (x.card ? ' <small style="color:var(--amber)">store card purchase — uncheck if it wasn\'t snacks</small>' : '') + '</span><b>' + money(x.a) + '</b></label>';
+        $('ciOut').innerHTML =
+          '<details class="card"' + (found.length ? ' open' : '') + '><summary><b>💵 Dues</b> · ' + found.length + ' new</summary>' + (found.length ? found.map((x, i) => '<div class="pay" style="flex-wrap:wrap"><small class="helper" style="width:100%;margin:0">' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + money(x.a) + ' from ' + esc(x.r['Name of sender/receiver']) + ' · “' + esc(x.r.Notes) + '”</small><select data-cs="' + i + '" style="flex:1;min-width:0">' + opt(x.m) + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">semesters<input data-cn="' + i + '" inputmode="numeric" value="' + x.n + '" style="width:52px"></label>' + (x.snack ? '<small style="width:100%;color:var(--amber)">Includes snacks — only ' + money(each * x.n) + ' counted as dues</small>' : '') + '</div>').join('') : '<p class="helper">Nothing new.</p>') + '</details>' +
+          '<details class="card"><summary><b>🍪 Snack sales</b> · ' + sales.length + ' new · ' + money(sum(sales)) + '</summary>' + (sales.map(line).join('') || '<p class="helper">Nothing new.</p>') + '</details>' +
+          '<details class="card"' + (buys.length ? ' open' : '') + '><summary><b>🛒 Snack purchases</b> · ' + buys.length + ' new · ' + money(sum(buys)) + '</summary>' + (buys.map(line).join('') || '<p class="helper">Nothing new.</p>') + '</details>' +
+          '<details class="card"><summary>Not counted · ' + (others.length + selfs.length) + '</summary><p class="helper">CPR, cords, T-shirts, pizza cards and other money aren\'t dues or snacks. Money you send to the Cash App yourself isn\'t counted either. Add cash you collected with 💵 Add cash on the Snacks tab.</p>' + others.concat(selfs).map(x => '<div class="pay"><span>' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + esc(x.r['Name of sender/receiver'] || x.r['Transaction Type']) + ' · “' + esc(x.r.Notes) + '”</span><span>' + money(caAmt(x.r.Amount)) + '</span></div>').join('') + '</details>' +
+          ((found.length || snNew.length) ? '<div class="actions"><button type="button" class="btn" id="ciSave">Save</button></div>' : '<p class="helper">Nothing new to add. You\'re up to date ✓</p>');
+        if (!$('ciSave')) return;
         $('ciSave').onclick = async () => {
-          $('ciSave').disabled = true; let n = 0;
+          $('ciSave').disabled = true; $('ciSave').textContent = 'Saving…'; let n = 0;
           for (let i = 0; i < found.length; i++) {
             const x = found[i], m = members.find(y => y.id === document.querySelector('[data-cs="' + i + '"]').value), sems = Math.max(1, Number(document.querySelector('[data-cn="' + i + '"]').value) || 1);
             if (!m) continue;
@@ -787,8 +834,98 @@
             if (fail(await sb.from('dues_members').update(upd).eq('id', m.id))) break;
             payments.push(r.data); Object.assign(m, upd); n++;
           }
-          close(); draw(); toast('Recorded ' + n + ' Cash App payments ✓');
+          const pick = snNew.filter((x, i) => document.querySelector('[data-sn="' + i + '"]')?.checked).map(x => ({ owner: user.id, kind: x.kind, entry_date: x.d, amount: x.a, note: String(x.r.Notes || '').slice(0, 200) + (x.card ? ' (Cash Card)' : ''), who: x.card ? '' : String(x.r['Name of sender/receiver'] || '').slice(0, 80), receipt: x.r['Transaction ID'] || '', source: 'cashapp' }));
+          let s = 0;
+          for (let i = 0; i < pick.length; i += 200) { const r = await sb.from('snack_entries').insert(pick.slice(i, i + 200)).select(); if (fail(r)) break; snacks = r.data.concat(snacks); s += r.data.length; }
+          close(); draw(); toast('Saved ' + n + ' dues payments and ' + s + ' snack entries ✓');
         };
+      };
+    }
+
+    // ---- 🍪 Snack closet money ----
+    const termOfEntry = d => termOfDate(d);
+    const ITEMS = [['Chips', /chip|dorito|cheeto|takis|pringle|veggie straw/i], ['Soda', /soda|coke|dr\.? ?pepper|sprite|pop\b|can drink|canned drink/i], ['Alani / energy', /alani|energy|celsius|red ?bull|monster/i], ['Pop-Tarts', /pop ?tart|pot tart/i], ['Water', /water/i], ['Cup of noodles / mac', /noodle|ramen|\bmac\b/i], ['Muffins', /muffin/i], ['Cookies / Oreos', /cookie|oreo|nutter/i], ['Cheez-Its / crackers', /cheez|cheese it|crackers?|goldfish/i], ['Breakfast / granola bars', /breakfast|granola|nutri|\bbars?\b/i], ['Popcorn', /pop ?corn/i], ['Little Debbie / honey buns', /debbie|honey ?bun|oatmeal pie|snack cake/i], ['Rice Krispies', /rice cri|krispi/i], ['Pretzels', /pretzel/i]];
+    function snackStats(xs) {
+      const sales = xs.filter(x => x.kind === 'sale'), cash = xs.filter(x => x.kind === 'cash'), buys = xs.filter(x => x.kind === 'expense');
+      const S = a => Math.round(a.reduce((t, x) => t + Number(x.amount), 0) * 100) / 100;
+      const inn = S(sales) + S(cash), out = S(buys);
+      return { sales, cash, buys, saleAmt: S(sales), cashAmt: S(cash), inn, out, profit: Math.round((inn - out) * 100) / 100 };
+    }
+    function drawSnacks() {
+      $('sub').textContent = (settings.org || 'Student Nurses Association') + ' · Snack closet';
+      if (snacks === null) { $('view').innerHTML = '<p class="helper">Loading snack money…</p>'; wireModes(); loadSnacks().then(() => { if (mode === 'snacks') draw(); }); return; }
+      const terms = [...new Set(snacks.map(x => termOfEntry(x.entry_date)).concat([cur()]))].sort((a, b) => b - a);
+      if (snTerm === null || !terms.includes(snTerm)) snTerm = cur();
+      const xs = snacks.filter(x => termOfEntry(x.entry_date) === snTerm), st = snackStats(xs);
+      const prev = snackStats(snacks.filter(x => termOfEntry(x.entry_date) === snTerm - 1));
+      const color = v => v >= 0 ? 'var(--green)' : 'var(--red)';
+      // monthly bars
+      const months = [...new Set(xs.map(x => x.entry_date.slice(0, 7)))].sort();
+      const mData = months.map(mo => { const s = snackStats(xs.filter(x => x.entry_date.slice(0, 7) === mo)); return { mo, inn: s.inn, out: s.out }; });
+      const max = Math.max(1, ...mData.map(m => Math.max(m.inn, m.out)));
+      const monthName = mo => new Date(mo + '-15T12:00').toLocaleDateString([], { month: 'short' });
+      // evaluation facts
+      const weeks = new Set(st.sales.map(x => { const d = new Date(x.entry_date + 'T12:00'); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0, 10); })).size;
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], byDay = days.map(() => 0);
+      st.sales.forEach(x => { byDay[new Date(x.entry_date + 'T12:00').getDay()] += Number(x.amount); });
+      const bestDay = byDay.indexOf(Math.max(...byDay));
+      const small = st.sales.filter(x => Number(x.amount) <= 12), avg = small.length ? small.reduce((t, x) => t + Number(x.amount), 0) / small.length : 0;
+      const items = ITEMS.map(([n, re]) => [n, st.sales.filter(x => re.test(x.note)).length]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      const buyers = {}; st.sales.forEach(x => { if (x.who) buyers[x.who] = (buyers[x.who] || 0) + Number(x.amount); });
+      const top = Object.entries(buyers).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const restocks = st.buys.slice().sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+      const gap = restocks.length > 1 ? Math.round((new Date(restocks[restocks.length - 1].entry_date) - new Date(restocks[0].entry_date)) / 864e5 / (restocks.length - 1)) : 0;
+      const back = st.out ? st.inn / st.out : 0;
+      const notes = [];
+      if (st.out || st.inn) notes.push(st.profit >= 0 ? 'The closet is <b style="color:var(--green)">making money</b>: ' + money(st.profit) + ' ahead this semester.' : 'The closet is <b style="color:var(--red)">' + money(-st.profit) + ' behind</b> this semester: more was spent on snacks than came back in.');
+      if (st.out) notes.push('Every $1 spent on snacks brought back <b>' + money(back) + '</b>.' + (back < 1 ? ' To break even, sales need to be about ' + Math.round((1 / Math.max(back, 0.01) - 1) * 100) + '% higher, or restocks smaller.' : ''));
+      if (!st.cash.length && st.sales.length) notes.push('<b>No cash deposits are logged this semester.</b> If students pay cash, add it with 💵 Add cash — otherwise the closet looks worse than it is.');
+      if (prev.inn || prev.out) notes.push('Compared with ' + termName(snTerm - 1) + ': money in ' + (st.inn >= prev.inn ? 'up' : 'down') + ' ' + money(Math.abs(st.inn - prev.inn)) + ', spending ' + (st.out >= prev.out ? 'up' : 'down') + ' ' + money(Math.abs(st.out - prev.out)) + '.');
+      if (st.sales.length) notes.push('Students paid by Cash App <b>' + st.sales.length + '</b> times' + (weeks ? ' — about ' + Math.round(st.sales.length / weeks) + ' a week, ' + money(st.saleAmt / weeks) + ' a week' : '') + '. A typical purchase is ' + money(avg) + '. ' + days[bestDay] + ' is the busiest day.');
+      if (restocks.length) notes.push('Restocked ' + restocks.length + ' times' + (gap ? ', about every ' + gap + ' days' : '') + ', averaging ' + money(st.out / restocks.length) + ' each.');
+      $('view').innerHTML =
+        '<div class="tabs" style="margin-top:0">' + terms.map(k => '<button type="button" class="chip' + (k === snTerm ? ' on' : '') + '" data-snt="' + k + '">' + termName(k) + '</button>').join('') + '</div>' +
+        '<div class="stats"><div class="stat"><span>Money in</span><b style="color:var(--green)">' + money(st.inn) + '</b><small class="helper" style="display:block;margin:0">Cash App ' + money(st.saleAmt) + ' · cash ' + money(st.cashAmt) + '</small></div><div class="stat"><span>Spent on snacks</span><b style="color:var(--red)">' + money(st.out) + '</b><small class="helper" style="display:block;margin:0">' + st.buys.length + ' purchases</small></div><div class="stat"><span>' + (st.profit >= 0 ? 'Profit' : 'Behind') + '</span><b style="color:' + color(st.profit) + '">' + money(Math.abs(st.profit)) + '</b><small class="helper" style="display:block;margin:0">' + termName(snTerm) + '</small></div></div>' +
+        '<div class="actions"><button type="button" class="btn" id="snCash">💵 Add cash</button><button type="button" class="btn" id="snBuy">🛒 Add snack purchase</button><button type="button" class="btn ghost" id="snCa">📥 Cash App import</button><button type="button" class="btn ghost" id="snCsv">⬇ Download</button></div>' +
+        '<div class="card"><h2>📊 Snack closet evaluation · ' + termName(snTerm) + '</h2>' + (notes.length ? '<ul style="margin:6px 0 0;padding-left:20px">' + notes.map(n => '<li style="margin:4px 0">' + n + '</li>').join('') + '</ul>' : '<p class="helper">No snack money recorded for this semester yet.</p>') + '</div>' +
+        (mData.length ? '<div class="card"><h2>By month</h2><div style="display:flex;gap:14px;align-items:flex-end;height:150px;padding-top:8px">' + mData.map(m => '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end"><div style="display:flex;gap:3px;align-items:flex-end;height:110px;width:100%;justify-content:center"><div title="In ' + money(m.inn) + '" style="width:40%;max-width:26px;background:var(--green);border-radius:4px 4px 0 0;height:' + Math.max(2, m.inn / max * 100) + '%"></div><div title="Spent ' + money(m.out) + '" style="width:40%;max-width:26px;background:var(--red);opacity:.75;border-radius:4px 4px 0 0;height:' + Math.max(m.out ? 2 : 0, m.out / max * 100) + '%"></div></div><small class="helper" style="margin:0">' + monthName(m.mo) + '</small></div>').join('') + '</div><p class="helper" style="margin:6px 0 0"><span style="color:var(--green)">■</span> money in · <span style="color:var(--red)">■</span> spent</p>' +
+          '<div style="margin-top:8px">' + mData.map(m => '<div class="pay"><span>' + new Date(m.mo + '-15T12:00').toLocaleDateString([], { month: 'long', year: 'numeric' }) + '</span><span>in ' + money(m.inn) + ' · spent ' + money(m.out) + ' · <b style="color:' + color(m.inn - m.out) + '">' + (m.inn - m.out >= 0 ? '+' : '−') + money(Math.abs(m.inn - m.out)) + '</b></span></div>').join('') + '</div></div>' : '') +
+        (items.length || top.length ? '<div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:14px"><div><h2>Most-mentioned items</h2>' + items.map(([n, c]) => '<div class="pay"><span>' + esc(n) + '</span><b>' + c + '</b></div>').join('') + '<p class="helper" style="margin:4px 0 0">From Cash App notes</p></div><div><h2>Top buyers</h2>' + top.map(([n, a]) => '<div class="pay"><span>' + esc(n) + '</span><b>' + money(a) + '</b></div>').join('') + '</div></div>' : '') +
+        '<div class="card"><h2>Every semester</h2>' + terms.slice().reverse().map(k => { const s = snackStats(snacks.filter(x => termOfEntry(x.entry_date) === k)); return '<div class="pay"><span>' + termName(k) + '</span><span>in ' + money(s.inn) + ' · spent ' + money(s.out) + ' · <b style="color:' + color(s.profit) + '">' + (s.profit >= 0 ? '+' : '−') + money(Math.abs(s.profit)) + '</b></span></div>'; }).join('') + '</div>' +
+        '<div class="lvlhead"><h3>Entries · ' + termName(snTerm) + '</h3><small>' + xs.length + '</small></div><div class="card" style="padding:4px 12px;margin-top:0">' +
+          (xs.length ? xs.slice(0, snAll ? 2000 : 40).map(x => '<div class="pay"><span>' + (x.kind === 'sale' ? '🍪' : x.kind === 'cash' ? '💵' : '🛒') + ' ' + esc(fmtDate(x.entry_date)) + ' · ' + esc(x.who || (x.kind === 'cash' ? 'Cash' : x.kind === 'expense' ? 'Snack purchase' : '')) + (x.note ? '<br><small class="helper">' + esc(x.note) + '</small>' : '') + '</span><span style="display:flex;gap:6px;align-items:center"><b style="color:' + (x.kind === 'expense' ? 'var(--red)' : 'var(--green)') + '">' + (x.kind === 'expense' ? '−' : '+') + money(x.amount) + '</b><button type="button" class="btn ghost small" data-sndel="' + x.id + '" aria-label="Delete">✕</button></span></div>').join('') + (xs.length > 40 && !snAll ? '<div class="actions"><button type="button" class="btn ghost small" id="snMore">Show all ' + xs.length + '</button></div>' : '') : '<p class="helper">Nothing yet.</p>') + '</div>';
+      wireModes();
+      document.querySelectorAll('[data-snt]').forEach(b => b.onclick = () => { snTerm = Number(b.dataset.snt); snAll = false; draw(); });
+      if ($('snMore')) $('snMore').onclick = () => { snAll = true; draw(); };
+      document.querySelectorAll('[data-sndel]').forEach(b => b.onclick = async () => {
+        if (!confirm('Delete this entry?')) return;
+        if (fail(await sb.from('snack_entries').delete().eq('id', b.dataset.sndel))) return;
+        snacks = snacks.filter(x => x.id !== b.dataset.sndel); draw();
+      });
+      $('snCash').onclick = () => snackForm('cash');
+      $('snBuy').onclick = () => snackForm('expense');
+      $('snCa').onclick = cashImport;
+      $('snCsv').onclick = () => {
+        const lines = [['Date', 'Type', 'Amount', 'From / store', 'Note', 'Cash App ID']].concat(snacks.slice().sort((a, b) => a.entry_date.localeCompare(b.entry_date)).map(x => [x.entry_date, x.kind === 'sale' ? 'Cash App sale' : x.kind === 'cash' ? 'Cash deposit' : 'Snack purchase', (x.kind === 'expense' ? -1 : 1) * Number(x.amount), x.who, x.note, x.receipt]));
+        sendFile('SNA snack closet money.csv', lines.map(csvLine).join('\n'));
+      };
+    }
+    function snackForm(kind) {
+      const cash = kind === 'cash';
+      open('<h2>' + (cash ? '💵 Add cash' : '🛒 Add a snack purchase') + '</h2><p class="helper">' + (cash ? 'Cash from the snack closet that you collected or deposited.' : 'Money spent restocking the snack closet (Sam\'s, Walmart…). Cash App reimbursements to you come in automatically with the Cash App import.') + '</p>' +
+        '<div class="grid2"><label>Amount<input id="snA" inputmode="decimal" placeholder="0.00"></label><label>Date<input id="snD" type="date" value="' + today() + '"></label></div>' +
+        (cash ? '' : '<label>Store</label><div class="methods">' + ['Sam\'s Club', 'Walmart', 'Kroger', 'Other'].map(s => '<button type="button" class="chip" data-st="' + esc(s) + '">' + esc(s) + '</button>').join('') + '</div>') +
+        '<label>Note<input id="snN" placeholder="' + (cash ? 'Cash box count' : 'Drinks, chips, Alanis…') + '"></label>' +
+        '<div class="actions"><button type="button" class="btn" id="snS">Save</button><button type="button" class="btn ghost" id="snX">Cancel</button></div>');
+      let store = '';
+      document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { store = b.dataset.st; document.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === b)); });
+      $('snX').onclick = close;
+      setTimeout(() => { if ($('snA')) $('snA').focus(); }, 50);
+      $('snS').onclick = async () => {
+        const a = Number($('snA').value); if (!(a > 0)) { toast('Type the amount.'); return; }
+        const r = await sb.from('snack_entries').insert({ owner: user.id, kind, entry_date: $('snD').value || today(), amount: a, note: $('snN').value.trim(), who: cash ? 'Cash' : store, source: 'manual' }).select().single();
+        if (fail(r)) return;
+        snacks.unshift(r.data); snacks.sort((x, y) => y.entry_date.localeCompare(x.entry_date)); snTerm = termOfEntry(r.data.entry_date); close(); draw(); toast((cash ? 'Cash ' : 'Purchase ') + money(a) + ' saved ✓');
       };
     }
 
