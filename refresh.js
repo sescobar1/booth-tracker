@@ -34,4 +34,34 @@
     } catch (e) {}
     location.reload();
   });
+
+  // Auto-update: when you come back to the app, check whether its files changed on the site. If they did, reload
+  // (or, if a popup is open or you're typing, show a small "Tap to update" button so nothing you're doing is lost).
+  const files = () => [...document.querySelectorAll('script[src], link[rel="stylesheet"][href]')].map(n => n.src || n.href).filter(u => u.startsWith(location.origin));
+  const stamp = async u => { try { const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }); return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified') || '') : null; } catch (e) { return null; } };
+  const seen = {}; let checking = false, lastCheck = 0;
+  const snap = async () => { for (const u of files()) seen[u] = await stamp(u); };
+  const busyNow = () => document.querySelector('dialog[open], .modal:not([hidden]), .overlay:not([hidden])') || (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
+  const offer = () => {
+    if (document.getElementById('updBtn')) return;
+    const b = document.createElement('button'); b.id = 'updBtn'; b.type = 'button'; b.textContent = '↻ New version — tap to update';
+    b.style.cssText = 'position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;padding:10px 16px;border-radius:999px;border:0;background:#2b2522;color:#fff;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);cursor:pointer';
+    b.onclick = () => location.reload(); document.body.appendChild(b);
+  };
+  const check = async () => {
+    if (checking || !navigator.onLine || Date.now() - lastCheck < 60000) return; checking = true; lastCheck = Date.now();
+    try {
+      let changed = false;
+      for (const u of files()) { const now = await stamp(u); if (now && seen[u] && now !== seen[u]) changed = true; if (now && !seen[u]) seen[u] = now; }
+      if (changed) {
+        try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 2500))]); } catch (e) {}
+        if (busyNow()) offer(); else location.reload();
+      }
+    } finally { checking = false; }
+  };
+  const start = () => setTimeout(snap, 1500);
+  document.readyState === 'complete' ? start() : addEventListener('load', start);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+  addEventListener('focus', check);
+  setInterval(() => { if (document.visibilityState === 'visible') check(); }, 15 * 60000);
 })();

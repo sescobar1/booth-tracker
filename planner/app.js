@@ -1919,16 +1919,18 @@ async function loadSnaRequests() {
   if (error) { box.innerHTML = '<p class="helper">Couldn’t load requests: ' + esc(error.message) + '</p>'; return; }
   const open = rows.filter(r => !r.handled), done = rows.filter(r => r.handled);
   const sn = snaData(), card = r => '<div class="sreq' + (r.handled ? ' done' : '') + '"><div class="mini-row"><span><b>' + esc(r.name || 'Someone') + '</b> <small class="sub">' + esc(fmtDate(r.created_at.slice(0, 10), 'rel')) + ' ' + new Date(r.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '</small></span>' +
-    (r.handled ? '<small class="sub">✓ added</small>' : '<span><button type="button" class="small" data-radd="' + r.id + '">＋ Add to order</button><button type="button" class="ghost small" data-rdone="' + r.id + '">Done</button></span>') + '</div>' +
+    (r.handled ? '<small class="sub">✓ added</small>' : '<span><button type="button" class="small" data-radd="' + r.id + '">＋ Add &amp; shop</button><button type="button" class="ghost small" data-rdone="' + r.id + '">Done</button></span>') + '</div>' +
     pickupHtml(r) +
     '<p class="sreql">' + r.lines.map(l => esc(l.name) + (l.qty > 1 ? ' <b>×' + l.qty + '</b>' : '') + (sn.items.some(i => i.id === l.id) ? '' : ' <small>(not on the list anymore)</small>')).join(' · ') + '</p>' + (r.note ? '<p class="sub">💬 ' + esc(r.note) + '</p>' : '') + '</div>';
-  box.innerHTML = (open.length ? (open.length > 1 ? '<div class="row-actions tight"><button type="button" class="ghost small" id="raAll">＋ Add all ' + open.length + ' to the order</button></div>' : '') + open.map(card).join('') : '<p class="helper">No new requests. Tap 📤 Share link to send students the form.</p>') +
+  box.innerHTML = (open.length ? (open.length > 1 ? '<div class="row-actions tight"><button type="button" class="ghost small" id="raAll">＋ Add all ' + open.length + ' &amp; shop</button></div>' : '') + open.map(card).join('') : '<p class="helper">No new requests. Tap 📤 Share link to send students the form.</p>') +
     (done.length ? '<button type="button" class="linkish" id="raShow">' + (snaShowDone ? 'Hide' : 'Show') + ' earlier requests (' + done.length + ')</button>' + (snaShowDone ? done.slice(0, 20).map(card).join('') : '') : '');
   const mark = async ids => { const r = await c.from('sna_requests').update({ handled: true }).in('id', ids); if (r.error) toast('Couldn’t update: ' + r.error.message); };
   const addLines = reqs => { const d = snaData(); let n = 0; reqs.forEach(r => r.lines.forEach(l => { const it = d.items.find(i => i.id === l.id); if (it) { it.order = (it.order || 0) + (l.qty || 1); n += l.qty || 1; } })); snaSave({ items: d.items }); return n; };
-  box.querySelectorAll('[data-radd]').forEach(b => b.onclick = async () => { const r = rows.find(x => x.id === b.dataset.radd); const n = addLines([r]); const pk = usePickup(r); await mark([r.id]); viewSna(); toast('✓ Added ' + n + ' packs from ' + (r.name || 'the request') + (pk ? ' · pickup is on your calendar' : '')); });
+  // Adding a request goes straight into the Sam's walkthrough with the pickup filled in.
+  const shopNow = () => { const lines = snaOrderLines(), date = today(); viewSna(); snaShop(lines, date, () => snaForm(null), () => snaMarkOrdered(snaOrderLines(), date, Object.assign({}, snaData().pickup || {}))); };
+  box.querySelectorAll('[data-radd]').forEach(b => b.onclick = async () => { const r = rows.find(x => x.id === b.dataset.radd); const n = addLines([r]); const pk = usePickup(r); await mark([r.id]); toast('✓ Added ' + n + ' packs from ' + (r.name || 'the request') + (pk ? ' · pickup is on your calendar' : '')); shopNow(); });
   box.querySelectorAll('[data-rdone]').forEach(b => b.onclick = async () => { await mark([b.dataset.rdone]); loadSnaRequests(); });
-  if ($('raAll')) $('raAll').onclick = async () => { const n = addLines(open); open.slice().reverse().forEach(usePickup); await mark(open.map(r => r.id)); viewSna(); toast('✓ Added ' + n + ' packs from ' + open.length + ' requests'); };
+  if ($('raAll')) $('raAll').onclick = async () => { const n = addLines(open); open.slice().reverse().forEach(usePickup); await mark(open.map(r => r.id)); toast('✓ Added ' + n + ' packs from ' + open.length + ' requests'); shopNow(); };
   if ($('raShow')) $('raShow').onclick = () => { snaShowDone = !snaShowDone; loadSnaRequests(); };
 }
 function editSna(id) {
@@ -1952,6 +1954,19 @@ function editSna(id) {
     snaSave({ items: sn.items }); closeModal(); viewSna();
   };
   if (id) $('seDel').onclick = () => { if (!confirm('Delete ' + it.name + '?')) return; snaSave({ items: sn.items.filter(x => x !== it) }); closeModal(); viewSna(); };
+}
+// What's on the current order, in store order (category, then list order).
+function snaOrderLines() {
+  const sn = snaData(), pos = id => sn.items.findIndex(i => i.id === id);
+  return sn.items.filter(i => (i.order || 0) > 0).map(i => ({ id: i.id, name: i.name, size: i.size, aisle: i.aisle, price: i.price || 0, qty: i.order, url: i.url, cat: i.cat }))
+    .sort((a, b) => SNA_CATS.indexOf(a.cat || 'Other') - SNA_CATS.indexOf(b.cat || 'Other') || pos(a.id) - pos(b.id));
+}
+// Save the current order under Orders and clear it for next time.
+function snaMarkOrdered(lines, date, pk) {
+  const sn = snaData(), total = lines.reduce((s, l) => s + l.qty * l.price, 0);
+  const orders = [{ date, pickup: pk && Object.keys(pk).some(k => pk[k]) ? Object.assign({}, pk) : null, lines: lines.map(l => ({ id: l.id, name: l.name, size: l.size, aisle: l.aisle, price: l.price, qty: l.qty, url: l.url, cat: l.cat })), total: Math.round(total * 100) / 100 }].concat(sn.orders).slice(0, 52);
+  sn.items.forEach(i => { i.order = 0; });
+  snaSave({ items: sn.items, orders, pickup: null }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
 }
 // The order form: a clean table to print, email, copy, or save for Excel. "Mark as ordered" keeps it in Orders.
 function snaForm(past) {
@@ -1979,20 +1994,16 @@ function snaForm(past) {
     if (past) { past.pickup = Object.assign({}, pk); snaSave({ orders: sn.orders }); } else snaSave({ pickup: Object.assign({}, snaData().pickup || {}, pk) });
   }));
   $('sfX').onclick = closeModal;
-  $('sfShop').onclick = () => snaShop(lines, date, () => snaForm(past));
+  $('sfShop').onclick = () => snaShop(lines, date, () => snaForm(past), past ? null : () => snaMarkOrdered(lines, date, pk));
   $('sfPrint').onclick = () => { const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = head() + table; $('view').appendChild(d); window.print(); setTimeout(() => d.remove(), 1000); };
   $('sfMail').onclick = () => { location.href = 'mailto:?subject=' + encodeURIComponent('SNA Snack Closet order – ' + fmtDate(date)) + '&body=' + encodeURIComponent(text()); };
   $('sfCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(text()).then(() => toast('Copied. Paste it into an email or Teams.'), () => toast('Could not copy.'));
   $('sfCsv').onclick = () => download('SNA-order-' + date + '.csv', 'Qty,Item,Size,Aisle,Price,Total,Link\n' + lines.map(l => [l.qty, l.name, l.size || '', l.aisle || '', l.price.toFixed(2), (l.qty * l.price).toFixed(2), l.url || ''].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n') + '\n,Total,,,,' + total.toFixed(2) + ',', 'text/csv');
-  if (!past) $('sfDone').onclick = () => {
-    const orders = [{ date, pickup: Object.keys(pk).some(k => pk[k]) ? Object.assign({}, pk) : null, lines: lines.map(l => ({ id: l.id, name: l.name, size: l.size, aisle: l.aisle, price: l.price, qty: l.qty, url: l.url, cat: l.cat })), total: Math.round(total * 100) / 100 }].concat(sn.orders).slice(0, 52);
-    sn.items.forEach(i => { i.order = 0; });
-    snaSave({ items: sn.items, orders, pickup: null }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
-  };
+  if (!past) $('sfDone').onclick = () => snaMarkOrdered(lines, date, pk);
 }
 // Walk through the order one item at a time: open it in the Sam's Club app, add it to the cart, come back for the next.
 // Progress is remembered on this device for this order, so leaving for the Sam's app doesn't lose your place.
-function snaShop(lines, date, back) {
+function snaShop(lines, date, back, onOrdered) {
   const key = 'snaShop-' + date, list = lines.filter(l => l.qty > 0);
   let got = {}; try { got = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
   const keep = () => { try { localStorage.setItem(key, JSON.stringify(got)); } catch (e) {} };
@@ -2001,9 +2012,11 @@ function snaShop(lines, date, back) {
     const done = list.filter(l => got[l.id]).length;
     if (!list.length) { openModal('<h2>🛒 Shop in Sam’s app</h2><p class="helper">Nothing on the order yet. Add items first.</p><div class="row-actions"><button type="button" id="shBack">Back</button></div>'); $('shBack').onclick = back; return; }
     if (done === list.length || at >= list.length) {
-      openModal('<h2>🛒 All set!</h2><p class="sub">All ' + list.length + ' items are in your Sam’s cart. Finish checkout in the Sam’s app and pick a pickup time.</p>' +
-        '<div class="row-actions"><button type="button" id="shBack">Back to the order</button><button type="button" class="ghost" id="shRe">Start over</button></div>');
-      $('shBack').onclick = back; $('shRe').onclick = () => { got = {}; keep(); at = 0; draw(); }; return;
+      openModal('<h2>🛒 All set!</h2><p class="sub">' + (list.length === 1 ? 'Your item is' : 'All ' + list.length + ' items are') + ' in your Sam’s cart. Finish checkout in the Sam’s app and pick a pickup time.</p>' +
+        '<div class="row-actions">' + (onOrdered ? '<button type="button" id="shOrd">✓ Mark as ordered</button>' : '') + '<button type="button" class="' + (onOrdered ? 'ghost' : '') + '" id="shBack">Back to the order</button><button type="button" class="ghost" id="shRe">Start over</button></div>' +
+        (onOrdered ? '<p class="helper">“Mark as ordered” saves it under Orders and clears the order for next time.</p>' : ''));
+      $('shBack').onclick = back;
+      if ($('shOrd')) $('shOrd').onclick = () => { try { localStorage.removeItem(key); } catch (e) {} onOrdered(); }; $('shRe').onclick = () => { got = {}; keep(); at = 0; draw(); }; return;
     }
     const l = list[at];
     openModal('<h2>🛒 Shop in Sam’s app</h2><p class="sub">Item ' + (at + 1) + ' of ' + list.length + ' · ' + done + ' in your cart</p>' +
