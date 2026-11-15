@@ -51,7 +51,9 @@
     const rpc = (fn, body) => fetch(CFG.url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => { if (!r.ok) throw new Error('Something went wrong (' + r.status + ')'); return r.json(); });
     const CATS = ['Bars & breakfast', 'Quick meals', 'Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Candy', 'Drinks', 'Other'];
     let items = [], pick = {}, find = '', me = {};
-    try { me = JSON.parse(localStorage.getItem('snaMe') || '{}'); } catch (e) { me = {}; }
+    // Only the store choice is remembered. Name, email and phone are never saved (and any saved before are cleared),
+    // so the form starts blank for whoever opens it next.
+    try { me = JSON.parse(localStorage.getItem('snaMe') || '{}'); me = { store: me.store || '', storeOther: me.storeOther || '' }; localStorage.setItem('snaMe', JSON.stringify(me)); } catch (e) { me = {}; }
     const todayIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
     const FIELDS = ['who', 'email', 'phone', 'store', 'storeOther', 'pdate', 'ptime', 'note'];
     try { pick = JSON.parse(localStorage.getItem('snaPick-' + token) || '{}'); } catch (e) { pick = {}; }
@@ -102,7 +104,7 @@
             'Items': lines.map(l => l.qty + ' × ' + l.name).join('\n'), 'Note': $('note').value.trim() || '—',
             'Open your Planner': 'https://sescobar1.github.io/booth-tracker/planner/#tasks/sna' }) }).catch(() => {});
         } catch (e) {}
-        try { localStorage.setItem('snaMe', JSON.stringify({ who, email, phone, store: $('store').value, storeOther: $('storeOther').value })); localStorage.removeItem('snaPick-' + token); } catch (e) {}
+        try { localStorage.setItem('snaMe', JSON.stringify({ store: $('store').value, storeOther: $('storeOther').value })); localStorage.removeItem('snaPick-' + token); } catch (e) {}
         pick = {}; bar.hidden = true;
         app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p><p class="sub">Pickup: <b>' + esc(store) + ' Sam’s Club</b>, ' + esc(new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + ' at ' + esc(new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ', under <b>' + esc(who) + '</b>.</p><button type="button" class="send" onclick="location.reload()">Send another</button></div>';
       } catch (e) { alert(e.message); $('send').disabled = false; $('send').textContent = 'Send list'; }
