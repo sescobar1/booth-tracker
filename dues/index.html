@@ -769,7 +769,6 @@
       if (a < 0) {
         if (NOT_SNACK_RE.test(n)) return 'other';
         if (t === 'P2P' && SNACK_RE.test(n)) return 'expense';
-        if (t === 'Cash Card' && STORE_RE.test(n)) return 'card';
         return 'other';
       }
       return null;
@@ -781,7 +780,7 @@
       snacks = out;
     }
     function cashImport() {
-      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. One upload does both:<br>• <b>Dues</b> (notes like "dues", "SNA" or "Level 2") go to students.<br>• <b>Snacks</b> (snack sales, and your snack-buying reimbursements and card purchases) go to the 🍪 Snacks tab.<br>Anything already recorded is skipped, and you check everything before it saves.</p>' +
+      open('<h2>📥 Import from Cash App</h2><p class="helper">In Cash App, go to Activity → Statements → Export CSV, then choose that file here. One upload does both:<br>• <b>Dues</b> (notes like "dues", "SNA" or "Level 2") go to students.<br>• <b>Snacks</b> (snack sales, and Cash App payments to you for buying snacks) go to the 🍪 Snacks tab. Store card purchases are for other supplies and aren\'t counted.<br>Anything already recorded is skipped, and you check everything before it saves.</p>' +
         '<label>Cash App CSV<input type="file" id="ciFile" accept=".csv,text/csv"></label><p class="helper" id="ciMsg"></p><div id="ciOut"></div><div class="actions"><button type="button" class="btn ghost" id="ciCancel">Cancel</button></div>');
       $('ciCancel').onclick = close;
       $('ciFile').onchange = async e => {
@@ -818,7 +817,7 @@
           '<details class="card"' + (found.length ? ' open' : '') + '><summary><b>💵 Dues</b> · ' + found.length + ' new</summary>' + (found.length ? found.map((x, i) => '<div class="pay" style="flex-wrap:wrap"><small class="helper" style="width:100%;margin:0">' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + money(x.a) + ' from ' + esc(x.r['Name of sender/receiver']) + ' · “' + esc(x.r.Notes) + '”</small><select data-cs="' + i + '" style="flex:1;min-width:0">' + opt(x.m) + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">semesters<input data-cn="' + i + '" inputmode="numeric" value="' + x.n + '" style="width:52px"></label>' + (x.snack ? '<small style="width:100%;color:var(--amber)">Includes snacks — only ' + money(each * x.n) + ' counted as dues</small>' : '') + '</div>').join('') : '<p class="helper">Nothing new.</p>') + '</details>' +
           '<div class="card"><b>🍪 Snack sales</b> · ' + sales.length + ' new · ' + money(sum(sales)) + '<p class="helper" style="margin:4px 0 0">Added to the totals and leaderboard; not listed one by one.</p></div>' +
           '<details class="card"' + (buys.length ? ' open' : '') + '><summary><b>🛒 Snack purchases</b> · ' + buys.length + ' new · ' + money(sum(buys)) + '</summary>' + (buys.map(line).join('') || '<p class="helper">Nothing new.</p>') + '</details>' +
-          '<details class="card"><summary>Not counted · ' + (others.length + selfs.length) + '</summary><p class="helper">CPR, cords, T-shirts, pizza cards and other money aren\'t dues or snacks. Money you send to the Cash App yourself isn\'t counted either. Add cash you collected with 💵 Add cash on the Snacks tab.</p>' + others.concat(selfs).map(x => '<div class="pay"><span>' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + esc(x.r['Name of sender/receiver'] || x.r['Transaction Type']) + ' · “' + esc(x.r.Notes) + '”</span><span>' + money(caAmt(x.r.Amount)) + '</span></div>').join('') + '</details>' +
+          '<details class="card"><summary>Not counted · ' + (others.length + selfs.length) + '</summary><p class="helper">CPR, cords, T-shirts, pizza cards, store card purchases (supplies) and other money aren\'t dues or snacks. Money you send to the Cash App yourself isn\'t counted either. Add cash you collected with 💵 Add cash on the Snacks tab.</p>' + others.concat(selfs).map(x => '<div class="pay"><span>' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + esc(x.r['Name of sender/receiver'] || x.r['Transaction Type']) + ' · “' + esc(x.r.Notes) + '”</span><span>' + money(caAmt(x.r.Amount)) + '</span></div>').join('') + '</details>' +
           ((found.length || snNew.length) ? '<div class="actions"><button type="button" class="btn" id="ciSave">Save</button></div>' : '<p class="helper">Nothing new to add. You\'re up to date ✓</p>');
         if (!$('ciSave')) return;
         $('ciSave').onclick = async () => {
