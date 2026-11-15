@@ -3891,6 +3891,7 @@ function viewMore() {
     '<a class="card pad tip" href="#meds"><b>Medicines</b><span class="sub">💊 Medicine & vitamin reminders for everyone →</span></a>' +
     '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
     '<a class="card pad tip" href="#tasks/atu"><b>ATU</b><span class="sub">🎓 ATU tasks, 🗓 semester setup and the 🍿 SNA Snack Closet order →</span></a>' +
+    '<a class="card pad tip" href="#more" id="moreSem"><b>Set up a semester</b><span class="sub">🗓 Academic calendar and all your class meetings at once →</span></a>' +
     '<a class="card pad tip" href="#quick"><b>Quick adds</b><span class="sub">⭐ Add, change or delete your one-tap events →</span></a>' +
     '<a class="card pad tip" href="#gifts"><b>Gifts</b><span class="sub">🎁 Birthdays, anniversaries and gift ideas →</span></a>' +
     '<a class="card pad tip" href="#notes"><b>Notes</b><span class="sub">📝 Sticky notes →</span></a>' +
@@ -3910,6 +3911,7 @@ function viewMore() {
   $('mFolders').onchange = e => { setFolders(lines(e.target.value)); toast('Saved.'); };
   $('mBackup').onclick = () => download('planner-backup-' + today() + '.json', JSON.stringify(data, null, 1), 'application/json');
   if (window.plannerSync) window.plannerSync.renderBox();
+  if ($('moreSem')) $('moreSem').onclick = e => { e.preventDefault(); semesterSetup(); };
 }
 function viewCalendars() {
   const cals = S().calendars;
