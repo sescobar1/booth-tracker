@@ -58,7 +58,7 @@
       const hl = n => { let h = esc(n); words.forEach(w => { if (w.length > 1) h = h.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>'); }); return h; };
       $('list').innerHTML = (words.length && !shown.length ? '<div class="note"><b>Not on the paid list yet.</b><br>If you\'ve paid, give it a few days or check with an SNA officer.' + (Number(d.amount) > 0 ? '<br>Dues are ' + money(d.amount) + ' per semester' : '') + (d.pay_info ? ' — pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '.</div>' : '') +
         LEVELS.map(l => { const xs = shown.filter(x => x.lvl === l); if (!xs.length) return '';
-          return '<h2>' + lvlName(l) + '<small>' + xs.length + ' paid</small></h2><div class="list">' + xs.map(x => '<div class="row"><span>' + hl(x.name) + '</span><span class="ok">PAID ✓</span></div>').join('') + '</div>'; }).join('');
+          return '<h2>' + lvlName(l) + '</h2><div class="list">' + xs.map(x => '<div class="row"><span>' + hl(x.name) + '</span><span class="ok">PAID ✓</span></div>').join('') + '</div>'; }).join('');
     }
     fetch(CFG.url + '/rest/v1/rpc/dues_paid_list', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -66,8 +66,7 @@
         if (!x) { $('view').innerHTML = '<div class="card">This link no longer works. Ask an SNA officer for the new one.</div>'; return; }
         d = x; $('sub').textContent = d.term + ' dues paid list';
         const lvls = LEVELS.filter(l => d.students.some(s => s.lvl === l));
-        $('view').innerHTML = '<div class="card big"><span><b>' + d.students.length + '</b> members paid<br><span class="muted">' + esc(d.term) + (Number(d.amount) > 0 ? ' · ' + money(d.amount) + ' per semester' : '') + '</span></span></div>' +
-          '<input type="search" id="find" placeholder="🔍 Type your name to check" autocomplete="off">' +
+        $('view').innerHTML = '<input type="search" id="find" placeholder="🔍 Type your name to check" autocomplete="off">' +
           '<div class="chips">' + [['all', 'All levels']].concat(lvls.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
           '<div class="note"><b>Dues: ' + (Number(d.amount) > 0 ? money(d.amount) + ' per semester' : 'see an officer') + '</b>' + (d.pay_info ? '<br>Pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '</div>' +
           '<p class="muted">Only students marked paid are listed. Don\'t see your name? You\'re not marked paid yet.</p><div id="list"></div>';
