@@ -1972,13 +1972,14 @@ function snaForm(past) {
     '<div class="grid2"><label>Pickup date<input id="pkDate" type="date" value="' + esc(pk.date || '') + '"></label><label>Time<input id="pkTime" type="time" value="' + esc(pk.time || '') + '"></label></div>' +
     '<label>Sam’s Club store<select id="pkStore">' + storeOpts.map(x => '<option value="' + esc(x) + '"' + (x === (pk.store || '') ? ' selected' : '') + '>' + (x ? esc(x) : '—') + '</option>').join('') + '</select></label></div>';
   $('modalBody').classList.add('wide');
-  openModal('<h2>SNA Snack Closet order</h2><p class="sub">' + esc(fmtDate(date, 'long')) + '</p>' + fields + table + '<div class="row-actions"><button type="button" id="sfPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="sfMail">✉️ Email</button><button type="button" class="ghost" id="sfCopy">Copy</button><button type="button" class="ghost" id="sfCsv">Excel (.csv)</button></div>' +
+  openModal('<h2>SNA Snack Closet order</h2><p class="sub">' + esc(fmtDate(date, 'long')) + '</p>' + fields + table + '<div class="row-actions"><button type="button" id="sfShop">🛒 Shop in Sam’s app</button><button type="button" class="ghost" id="sfPrint">🖨 Print / PDF</button><button type="button" class="ghost" id="sfMail">✉️ Email</button><button type="button" class="ghost" id="sfCopy">Copy</button><button type="button" class="ghost" id="sfCsv">Excel (.csv)</button></div>' +
     (past ? '<div class="row-actions"><button type="button" class="ghost" id="sfX">Close</button></div>' : '<div class="row-actions"><button type="button" id="sfDone">✓ Mark as ordered</button><button type="button" class="ghost" id="sfX">Keep editing</button></div><p class="helper">“Mark as ordered” saves it under Orders and clears the order for next time. When it arrives, tap ✓ Got it.</p>'));
   [['pkName', 'name'], ['pkEmail', 'email'], ['pkDate', 'date'], ['pkTime', 'time'], ['pkStore', 'store']].forEach(([el, k]) => $(el).addEventListener('change', () => {
     pk[k] = $(el).value.trim();
     if (past) { past.pickup = Object.assign({}, pk); snaSave({ orders: sn.orders }); } else snaSave({ pickup: Object.assign({}, snaData().pickup || {}, pk) });
   }));
   $('sfX').onclick = closeModal;
+  $('sfShop').onclick = () => snaShop(lines, date, () => snaForm(past));
   $('sfPrint').onclick = () => { const d = document.createElement('div'); d.className = 'print-only snaprint'; d.innerHTML = head() + table; $('view').appendChild(d); window.print(); setTimeout(() => d.remove(), 1000); };
   $('sfMail').onclick = () => { location.href = 'mailto:?subject=' + encodeURIComponent('SNA Snack Closet order – ' + fmtDate(date)) + '&body=' + encodeURIComponent(text()); };
   $('sfCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(text()).then(() => toast('Copied. Paste it into an email or Teams.'), () => toast('Could not copy.'));
@@ -1988,6 +1989,38 @@ function snaForm(past) {
     sn.items.forEach(i => { i.order = 0; });
     snaSave({ items: sn.items, orders, pickup: null }); closeModal(); viewSna(); toast('✓ Order saved · ' + money(total));
   };
+}
+// Walk through the order one item at a time: open it in the Sam's Club app, add it to the cart, come back for the next.
+// Progress is remembered on this device for this order, so leaving for the Sam's app doesn't lose your place.
+function snaShop(lines, date, back) {
+  const key = 'snaShop-' + date, list = lines.filter(l => l.qty > 0);
+  let got = {}; try { got = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+  const keep = () => { try { localStorage.setItem(key, JSON.stringify(got)); } catch (e) {} };
+  let at = Math.max(0, list.findIndex(l => !got[l.id]));
+  const draw = () => {
+    const done = list.filter(l => got[l.id]).length;
+    if (!list.length) { openModal('<h2>🛒 Shop in Sam’s app</h2><p class="helper">Nothing on the order yet. Add items first.</p><div class="row-actions"><button type="button" id="shBack">Back</button></div>'); $('shBack').onclick = back; return; }
+    if (done === list.length || at >= list.length) {
+      openModal('<h2>🛒 All set!</h2><p class="sub">All ' + list.length + ' items are in your Sam’s cart. Finish checkout in the Sam’s app and pick a pickup time.</p>' +
+        '<div class="row-actions"><button type="button" id="shBack">Back to the order</button><button type="button" class="ghost" id="shRe">Start over</button></div>');
+      $('shBack').onclick = back; $('shRe').onclick = () => { got = {}; keep(); at = 0; draw(); }; return;
+    }
+    const l = list[at];
+    openModal('<h2>🛒 Shop in Sam’s app</h2><p class="sub">Item ' + (at + 1) + ' of ' + list.length + ' · ' + done + ' in your cart</p>' +
+      '<div class="shopbar"><span style="width:' + Math.round(done / list.length * 100) + '%"></span></div>' +
+      '<div class="card pad shopitem"><div class="shopqty">' + l.qty + '</div><div><b>' + esc(l.name) + '</b>' + (l.size ? '<small class="sub" style="display:block">' + esc(l.size) + '</small>' : '') + '<small class="sub" style="display:block">' + (l.qty > 1 ? 'Get ' + l.qty + ' packs' : 'Get 1 pack') + (l.aisle ? ' · aisle ' + esc(l.aisle) : '') + '</small></div></div>' +
+      (l.url ? '<a class="button shopopen" href="' + esc(l.url) + '" target="_blank" rel="noopener">Open in Sam’s app ↗</a>' : '<a class="button shopopen" href="https://www.samsclub.com/s/' + encodeURIComponent(l.name) + '" target="_blank" rel="noopener">Search Sam’s for it ↗</a>') +
+      '<div class="row-actions"><button type="button" id="shGot">✓ In my cart – next</button><button type="button" class="ghost" id="shSkip">Skip</button>' + (at ? '<button type="button" class="ghost" id="shPrev">‹ Back</button>' : '') + '</div>' +
+      '<p class="helper">If it opens in Safari instead of the app, press and hold <b>Open in Sam’s app</b> and choose “Open in Sam’s Club.”</p>' +
+      '<div class="row-actions"><button type="button" class="ghost small" id="shDone">Back to the order</button></div>' +
+      '<details class="shoplist"><summary>All items</summary>' + list.map((x, i) => '<button type="button" class="linkish" data-shgo="' + i + '">' + (got[x.id] ? '✓ ' : '○ ') + x.qty + ' × ' + esc(x.name) + '</button>').join('') + '</details>');
+    $('shGot').onclick = () => { got[l.id] = 1; keep(); at = list.findIndex((x, i) => i > at && !got[x.id]); if (at < 0) at = list.findIndex(x => !got[x.id]); if (at < 0) at = list.length; draw(); };
+    $('shSkip').onclick = () => { at = at + 1 < list.length ? at + 1 : 0; draw(); };
+    if ($('shPrev')) $('shPrev').onclick = () => { at--; draw(); };
+    $('shDone').onclick = back;
+    document.querySelectorAll('[data-shgo]').forEach(b => b.onclick = () => { at = +b.dataset.shgo; delete got[list[at].id]; keep(); draw(); });
+  };
+  draw();
 }
 // ---------- 💊 Medicines & vitamins ----------
 // The list lives in settings.meds; each dose taken is an item (kind 'medlog'). Daily phone alerts are hidden repeating
