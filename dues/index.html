@@ -222,7 +222,7 @@
       $('view').innerHTML = modeTabs() + (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="stuBtn">💚 Student links</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="repBtn">📋 Semester report</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="stuBtn">💚 Student links</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', '🎓 Graduated'], ['left', '🚪 Left program']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (past ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
         '<p class="helper"><span class="nm paid">Yellow</span> = paid this semester · <span class="nm ahead">Purple</span> = paid ahead · no color = not paid.<br><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
@@ -238,7 +238,7 @@
       document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => payPicker(b.dataset.quick, false));
       document.querySelectorAll('[data-ahead]').forEach(b => b.onclick = () => payPicker(b.dataset.ahead, true));
       $('find').oninput = e => { find = e.target.value; const pos = e.target.selectionStart; draw(); $('find').focus(); $('find').setSelectionRange(pos, pos); };
-      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('rosBtn').onclick = rosterUpload; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('stuBtn').onclick = studentLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
+      $('bulkBtn').onclick = bulkAdd; $('ciBtn').onclick = cashImport; $('repBtn').onclick = reportPicker; $('rosBtn').onclick = rosterUpload; $('addBtn').onclick = () => editMember(null); $('paidBtn').onclick = paidList; $('facBtn').onclick = facultyLink; $('stuBtn').onclick = studentLink; $('nextBtn').onclick = startNext; $('csvBtn').onclick = csv;
     }
 
     // ---- settings ----
@@ -857,6 +857,128 @@
       };
     }
 
+    // ---- 🏷 snack price list + 🛒 restock list ----
+    let snItems = null;
+    const CATS = ['Drinks', 'Salty snacks', 'Sweets', 'Meals & bars', 'Other'];
+    async function loadItems() { const r = await sb.from('snack_items').select('*').order('sort').order('name'); snItems = r.error ? [] : r.data; }
+    function itemsCard() {
+      if (snItems === null) { loadItems().then(() => { if (mode === 'snacks') draw(); }); return '<div class="card"><p class="helper">Loading price list…</p></div>'; }
+      const priced = snItems.filter(i => i.price != null).length, need = snItems.filter(i => i.need);
+      return '<div class="card"><h2>🏷 Price list &amp; 🛒 restock list</h2><p class="helper" style="margin:0 0 8px">' + snItems.length + ' items · ' + priced + ' with prices · <b>' + need.length + '</b> on the restock list' + (priced < snItems.length ? '<br>Tap ✏️ Items &amp; prices to fill in prices before printing.' : '') + '</p>' +
+        (need.length ? '<p style="margin:0 0 6px">🛒 ' + esc(need.map(i => i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join(', ')) + '</p>' : '') +
+        '<div class="actions" style="margin-top:6px"><button type="button" class="btn small" id="itEdit">✏️ Items &amp; prices</button><button type="button" class="btn ghost small" id="itPrint">🖨 Price list sign</button><button type="button" class="btn ghost small" id="itShop"' + (need.length ? '' : ' disabled') + '>🛒 Restock list</button></div></div>';
+    }
+    function wireItems() {
+      if (!$('itEdit')) return;
+      $('itEdit').onclick = editItems; $('itPrint').onclick = printPrices; $('itShop').onclick = restockList;
+    }
+    function editItems() {
+      const row = i => '<div class="pay" style="flex-wrap:wrap;gap:6px" data-it="' + i.id + '"><input data-f="name" value="' + esc(i.name) + '" style="flex:1 1 140px;min-width:0"><select data-f="category" style="flex:0 1 120px">' + CATS.map(c => '<option' + (c === i.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">$<input data-f="price" inputmode="decimal" value="' + (i.price != null ? Number(i.price) : '') + '" placeholder="—" style="width:64px"></label><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem;color:var(--ink);font-weight:400"><input type="checkbox" data-f="need"' + (i.need ? ' checked' : '') + ' style="width:auto">🛒 buy</label><input data-f="qty" inputmode="numeric" value="' + (i.qty || 1) + '" title="How many" style="width:48px"><button type="button" class="btn ghost small" data-itdel="' + i.id + '" aria-label="Remove">✕</button></div>';
+      open('<h2>✏️ Snack items &amp; prices</h2><p class="helper">Set what each item costs students. Check 🛒 buy (and how many) for anything you need to restock.</p>' +
+        CATS.map(c => { const xs = snItems.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return xs.length ? '<p class="helper" style="margin:12px 0 2px"><b>' + c + '</b></p>' + xs.map(row).join('') : ''; }).join('') +
+        '<div class="actions"><button type="button" class="btn ghost small" id="itAdd">➕ Add an item</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="itSave">Save</button><button type="button" class="btn ghost" id="itX">Cancel</button></div>');
+      $('itX').onclick = close;
+      $('itAdd').onclick = async () => {
+        const name = prompt('New item name'); if (!name || !name.trim()) return;
+        const r = await sb.from('snack_items').insert({ owner: user.id, name: name.trim(), category: 'Other', sort: 99 }).select().single(); if (fail(r)) return;
+        snItems.push(r.data); editItems();
+      };
+      document.querySelectorAll('[data-itdel]').forEach(b => b.onclick = async () => {
+        if (!confirm('Remove this item?')) return;
+        if (fail(await sb.from('snack_items').delete().eq('id', b.dataset.itdel))) return;
+        snItems = snItems.filter(i => i.id !== b.dataset.itdel); b.closest('[data-it]').remove();
+      });
+      $('itSave').onclick = async () => {
+        $('itSave').disabled = true;
+        for (const el of document.querySelectorAll('[data-it]')) {
+          const i = snItems.find(x => x.id === el.dataset.it); if (!i) continue;
+          const g = f => el.querySelector('[data-f="' + f + '"]'), p = g('price').value.trim();
+          const row = { name: g('name').value.trim() || i.name, category: g('category').value, price: p === '' || isNaN(Number(p)) ? null : Math.round(Number(p) * 100) / 100, need: g('need').checked, qty: Math.max(1, Number(g('qty').value) || 1) };
+          if (row.name !== i.name || row.category !== i.category || row.price !== (i.price == null ? null : Number(i.price)) || row.need !== i.need || row.qty !== i.qty) {
+            if (fail(await sb.from('snack_items').update(row).eq('id', i.id))) return;
+            Object.assign(i, row);
+          }
+        }
+        close(); draw(); toast('Saved ✓');
+      };
+    }
+    const popup = html => { const w = window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank'); if (!w) toast('Allow pop-ups to open it.'); };
+    const PAGE = (title, body, extra) => '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(title) + '</title><style>body{font:15px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1c2a22;margin:0}main{max-width:780px;margin:0 auto;padding:22px}h1{margin:0}h2{font-size:1.1rem;margin:22px 0 6px;color:#046A38;border-bottom:3px solid #FFC72C;padding-bottom:3px}table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid #dfe6e1;text-align:left;vertical-align:top}td.n,th.n{text-align:right;white-space:nowrap}.sub{color:#5f6f66}.hdr{background:#046A38;color:#fff;padding:18px 22px;border-bottom:8px solid #FFC72C}.hdr h1 span{color:#FFC72C}button{font:inherit;padding:9px 16px;border-radius:9px;border:0;background:#046A38;color:#fff;margin:12px 0 0;cursor:pointer}.pos{color:#046A38;font-weight:700}.neg{color:#a43c2c;font-weight:700}' + (extra || '') + '@media print{button{display:none}}</style></head><body>' + body + '</body></html>';
+    function printPrices() {
+      const xs = snItems.filter(i => i.price != null);
+      if (!xs.length) { toast('Add prices first with ✏️ Items & prices.'); return; }
+      popup(PAGE('ATU SNA snack closet prices', '<div class="hdr" style="text-align:center"><h1 style="font-size:2.4rem">ATU <span>SNA</span></h1><div style="font-size:1.3rem;font-weight:700">Snack Closet</div></div><main>' +
+        CATS.map(c => { const g = xs.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return g.length ? '<h2 style="font-size:1.4rem">' + c + '</h2><table>' + g.map(i => '<tr><td style="font-size:1.25rem">' + esc(i.name) + '</td><td class="n" style="font-size:1.25rem;font-weight:800">' + money(i.price) + '</td></tr>').join('') + '</table>' : ''; }).join('') +
+        '<div style="margin-top:26px;background:#fff4d1;border-left:8px solid #FFC72C;border-radius:10px;padding:14px 18px;font-size:1.25rem"><b>Pay with Cash App: $atunursing</b><br>Put what you bought in the note. Cash goes in the box.</div><button onclick="print()">🖨 Print or save as PDF</button></main>', 'td{border-bottom:2px dotted #c9d6cd}'));
+    }
+    function restockList() {
+      const need = snItems.filter(i => i.need);
+      const text = 'SNA snack closet restock list\n' + CATS.map(c => { const g = need.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return g.length ? '\n' + c + '\n' + g.map(i => '☐ ' + i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join('\n') : ''; }).join('\n');
+      open('<h2>🛒 Restock list</h2><div class="linkbox">' + esc(text) + '</div><div class="actions"><button type="button" class="btn small" id="rsCopy">Copy / share</button><button type="button" class="btn ghost small" id="rsPrint">🖨 Print</button><button type="button" class="btn ghost small" id="rsDone">✓ Bought it all</button><button type="button" class="btn ghost small" id="rsX">Close</button></div><p class="helper">After shopping, tap ✓ Bought it all to clear the list. The money you spend shows up with your next Cash App upload (payments to you), or add it with 🛒 Add snack purchase.</p>');
+      $('rsX').onclick = close;
+      $('rsCopy').onclick = async () => { try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e.name === 'AbortError') return; } copy(text, 'Restock list copied ✓'); };
+      $('rsPrint').onclick = () => popup(PAGE('SNA restock list', '<main><h1>SNA snack closet restock list</h1><p class="sub">' + new Date().toLocaleDateString() + '</p>' + CATS.map(c => { const g = need.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return g.length ? '<h2>' + c + '</h2><table>' + g.map(i => '<tr><td style="width:28px">☐</td><td>' + esc(i.name) + '</td><td class="n">' + (i.qty > 1 ? '×' + i.qty : '') + '</td></tr>').join('') + '</table>' : ''; }).join('') + '<button onclick="print()">🖨 Print</button></main>'));
+      $('rsDone').onclick = async () => {
+        const ids = need.map(i => i.id);
+        if (fail(await sb.from('snack_items').update({ need: false, qty: 1 }).in('id', ids))) return;
+        need.forEach(i => { i.need = false; i.qty = 1; }); close(); draw(); toast('Restock list cleared ✓');
+      };
+    }
+
+    // ---- 📋 end-of-semester report ----
+    function reportPicker() {
+      const ks = [cur(), cur() - 1, cur() - 2];
+      open('<h2>📋 Semester report</h2><p class="helper">A printable report of dues, officers, the officer election, cords and the snack closet.</p><div class="methods">' + ks.map(k => '<button type="button" class="chip" data-rk="' + k + '">' + termName(k) + '</button>').join('') + '</div><div class="actions"><button type="button" class="btn ghost" id="rpX">Cancel</button></div>');
+      $('rpX').onclick = close;
+      document.querySelectorAll('[data-rk]').forEach(b => b.onclick = () => { close(); semesterReport(Number(b.dataset.rk)); });
+    }
+    async function semesterReport(k) {
+      toast('Building the report…');
+      if (snacks === null) await loadSnacks();
+      if (elections === null) await loadElection();
+      const now = k === cur(), T = termName(k);
+      const inTerm = d => d && termOfDate(String(d).slice(0, 10)) === k;
+      const fmt = n => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, '');
+      // dues
+      const roster = now ? members.filter(m => m.active) : members.filter(m => paidTermsOf(m).includes(k) || payments.some(p => p.member_id === m.id && inTerm(p.paid_on)));
+      const paid = members.filter(m => paidTermsOf(m).includes(k));
+      const pays = payments.filter(p => inTerm(p.paid_on)), collected = pays.reduce((t, p) => t + Number(p.amount), 0);
+      const byMethod = {}; pays.forEach(p => { const m = p.method || 'Other'; byMethod[m] = (byMethod[m] || 0) + Number(p.amount); });
+      const ahead = paid.filter(m => m.paid_through > k);
+      const duesRows = now ? LEVELS.map(l => { const all = members.filter(m => m.active && m.lvl === l), p = all.filter(m => paidTermsOf(m).includes(k)); return all.length ? '<tr><td>' + lvlName(l) + '</td><td class="n">' + p.length + ' of ' + all.length + '</td><td class="n">' + Math.round(p.length / all.length * 100) + '%</td></tr>' : ''; }).join('') : '';
+      // officers
+      const offs = now ? members.filter(m => m.active && m.role).map(m => ({ name: m.name, role: m.role })) : members.flatMap(m => (m.officer_history || []).filter(h => h.term === T).map(h => ({ name: m.name, role: h.role })));
+      offs.sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.name.localeCompare(b.name));
+      // election(s) run during this semester
+      const els = (elections || []).filter(e => inTerm(String(e.created_at).slice(0, 10)));
+      let elHtml = '';
+      for (const e of els) {
+        const [c, v] = await Promise.all([sb.from('dues_candidates').select('*').eq('election_id', e.id), sb.from('dues_votes').select('*').eq('election_id', e.id)]);
+        const C = c.data || [], V = v.data || [], voters = new Set(V.map(x => x.member_id)).size;
+        elHtml += '<p><b>' + esc(e.title) + '</b> · ' + (e.phase === 'closed' ? 'closed' : e.phase === 'voting' ? 'voting open' : 'sign-ups open') + ' · ' + C.length + ' on the ballot · ' + voters + ' voted</p><table>' + (e.positions || []).map(p => { const cs = C.filter(x => x.position === p.name).map(x => ({ x, n: V.filter(y => y.candidate_id === x.id).length })).sort((a, b) => b.n - a.n); return '<tr><td>' + esc(p.name) + '</td><td>' + (cs.length ? cs.map(y => esc(y.x.name) + (p.volunteer ? '' : ' (' + y.n + ')')).join(', ') : '<span class="sub">no one</span>') + '</td></tr>'; }).join('') + '</table>';
+      }
+      // cords
+      const classes = [...new Set(members.filter(m => m.active && m.lvl >= 0).map(classKey))].sort((a, b) => a - b);
+      const cordRows = classes.map(c => { const xs = members.filter(m => m.active && classKey(m) === c), free = xs.filter(m => ptsTotal(m) >= FREE || m.cords === 'given'); return '<tr><td>' + esc(className(c)) + '</td><td class="n">' + free.length + ' of ' + xs.length + '</td></tr>'; }).join('');
+      const next = classes[0] != null ? members.filter(m => m.active && classKey(m) === classes[0]).sort((a, b) => a.name.localeCompare(b.name)) : [];
+      // snacks
+      const sx = snacks.filter(x => inTerm(x.entry_date)), ss = snackStats(sx);
+      const buyers = {}; ss.sales.forEach(x => { if (x.who) buyers[x.who] = (buyers[x.who] || 0) + Number(x.amount); });
+      const top = Object.entries(buyers).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const body = '<div class="hdr"><h1>ATU <span>SNA</span> · ' + esc(T) + ' report</h1><div>' + esc(settings.org || 'Student Nurses Association') + ' · prepared ' + new Date().toLocaleDateString() + '</div></div><main>' +
+        '<h2>💵 Dues</h2><p><b>' + paid.length + '</b> members paid for ' + esc(T) + (now ? ' (of ' + members.filter(m => m.active).length + ' students on the list)' : '') + ' · <b>' + ahead.length + '</b> paid ahead · <b>' + fmt(collected) + '</b> recorded this semester' + (Object.keys(byMethod).length ? ' (' + Object.entries(byMethod).map(([m, a]) => esc(m) + ' ' + fmt(a)).join(', ') + ')' : '') + '. Dues are ' + fmt(settings.amount) + ' per semester.</p>' +
+        (duesRows ? '<table><tr><th>Level</th><th class="n">Paid</th><th class="n">%</th></tr>' + duesRows + '</table>' : '') +
+        '<h2>⭐ Officers</h2>' + (offs.length ? '<table>' + offs.map(o => '<tr><td>' + esc(o.role) + '</td><td>' + esc(o.name) + '</td></tr>').join('') + '</table>' : '<p class="sub">No officers recorded for this semester.</p>') +
+        '<h2>🗳 Officer election</h2>' + (elHtml || '<p class="sub">No election this semester.</p>') +
+        (now ? '<h2>🎓 Graduation cords</h2><p class="sub">Free cords at ' + FREE + ' points total, Level 0–4.</p><table><tr><th>Graduating class</th><th class="n">Free cords earned</th></tr>' + cordRows + '</table>' +
+          (next.length ? '<p style="margin-top:10px"><b>' + esc(className(classes[0])) + '</b>: ' + next.filter(m => m.cords === 'given' || ptsTotal(m) >= FREE).length + ' earned free cords, ' + next.filter(m => m.cords === 'purchase').length + ' buying, ' + next.filter(m => !m.cords && ptsTotal(m) < FREE).length + ' not earned yet.</p>' : '') : '') +
+        '<h2>🍪 Snack closet</h2><table><tr><td>Cash App snack sales (' + ss.qty + ' purchases)</td><td class="n">' + fmt(ss.saleAmt) + '</td></tr><tr><td>Cash deposits</td><td class="n">' + fmt(ss.cashAmt) + '</td></tr><tr><td><b>Money in</b></td><td class="n"><b>' + fmt(ss.inn) + '</b></td></tr><tr><td>Spent on snacks (' + ss.buys.length + ' restocks)</td><td class="n">' + fmt(ss.out) + '</td></tr><tr><td><b>' + (ss.profit >= 0 ? 'Profit' : 'Behind') + '</b></td><td class="n ' + (ss.profit >= 0 ? 'pos' : 'neg') + '">' + fmt(Math.abs(ss.profit)) + '</td></tr></table>' +
+        (top.length ? '<p class="sub" style="margin-top:8px">Top buyers: ' + top.map(([n, a]) => esc(n) + ' ' + fmt(a)).join(' · ') + '</p>' : '') +
+        '<button onclick="print()">🖨 Print or save as PDF</button></main>';
+      popup(PAGE('ATU SNA ' + T + ' report', body));
+    }
+
     // ---- 🍪 Snack closet money ----
     const termOfEntry = d => termOfDate(d);
     const ITEMS = [['Chips', /chip|dorito|cheeto|takis|pringle|veggie straw/i], ['Soda', /soda|coke|dr\.? ?pepper|sprite|pop\b|can drink|canned drink/i], ['Alani / energy', /alani|energy|celsius|red ?bull|monster/i], ['Pop-Tarts', /pop ?tart|pot tart/i], ['Water', /water/i], ['Cup of noodles / mac', /noodle|ramen|\bmac\b/i], ['Muffins', /muffin/i], ['Cookies / Oreos', /cookie|oreo|nutter/i], ['Cheez-Its / crackers', /cheez|cheese it|crackers?|goldfish/i], ['Breakfast / granola bars', /breakfast|granola|nutri|\bbars?\b/i], ['Popcorn', /pop ?corn/i], ['Little Debbie / honey buns', /debbie|honey ?bun|oatmeal pie|snack cake/i], ['Rice Krispies', /rice cri|krispi/i], ['Pretzels', /pretzel/i]];
@@ -900,6 +1022,7 @@
         '<div class="stats"><div class="stat"><span>Money in</span><b style="color:var(--green)">' + money(st.inn) + '</b><small class="helper" style="display:block;margin:0">Cash App ' + money(st.saleAmt) + ' · cash ' + money(st.cashAmt) + '</small></div><div class="stat"><span>Spent on snacks</span><b style="color:var(--red)">' + money(st.out) + '</b><small class="helper" style="display:block;margin:0">' + st.buys.length + ' purchases</small></div><div class="stat"><span>' + (st.profit >= 0 ? 'Profit' : 'Behind') + '</span><b style="color:' + color(st.profit) + '">' + money(Math.abs(st.profit)) + '</b><small class="helper" style="display:block;margin:0">' + termName(snTerm) + '</small></div></div>' +
         '<div class="actions"><button type="button" class="btn" id="snCash">💵 Add cash</button><button type="button" class="btn" id="snBuy">🛒 Add snack purchase</button><button type="button" class="btn ghost" id="snCa">📥 Cash App import</button><button type="button" class="btn ghost" id="snCsv">⬇ Download</button></div>' +
         '<div class="card"><h2>📊 Snack closet evaluation · ' + termName(snTerm) + '</h2>' + (notes.length ? '<ul style="margin:6px 0 0;padding-left:20px">' + notes.map(n => '<li style="margin:4px 0">' + n + '</li>').join('') + '</ul>' : '<p class="helper">No snack money recorded for this semester yet.</p>') + '</div>' +
+        itemsCard() +
         (mData.length ? '<div class="card"><h2>By month</h2><div style="display:flex;gap:14px;align-items:flex-end;height:150px;padding-top:8px">' + mData.map(m => '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end"><div style="display:flex;gap:3px;align-items:flex-end;height:110px;width:100%;justify-content:center"><div title="In ' + money(m.inn) + '" style="width:40%;max-width:26px;background:var(--green);border-radius:4px 4px 0 0;height:' + Math.max(2, m.inn / max * 100) + '%"></div><div title="Spent ' + money(m.out) + '" style="width:40%;max-width:26px;background:var(--red);opacity:.75;border-radius:4px 4px 0 0;height:' + Math.max(m.out ? 2 : 0, m.out / max * 100) + '%"></div></div><small class="helper" style="margin:0">' + monthName(m.mo) + '</small></div>').join('') + '</div><p class="helper" style="margin:6px 0 0"><span style="color:var(--green)">■</span> money in · <span style="color:var(--red)">■</span> spent</p>' +
           '<div style="margin-top:8px">' + mData.map(m => '<div class="pay"><span>' + new Date(m.mo + '-15T12:00').toLocaleDateString([], { month: 'long', year: 'numeric' }) + '</span><span>in ' + money(m.inn) + ' · spent ' + money(m.out) + ' · <b style="color:' + color(m.inn - m.out) + '">' + (m.inn - m.out >= 0 ? '+' : '−') + money(Math.abs(m.inn - m.out)) + '</b></span></div>').join('') + '</div></div>' : '') +
         (top.length ? '<div class="card"><h2>🏆 Snack leaderboard · ' + termName(snTerm) + '</h2>' + top.map(([n, a], i) => '<div class="pay"><span>' + (['🥇', '🥈', '🥉'][i] || (i + 1) + '.') + ' ' + esc(n) + '</span><b>' + money(a) + '</b></div>').join('') + '</div>' : '') +
@@ -915,6 +1038,7 @@
         if (fail(await sb.from('snack_entries').delete().eq('id', b.dataset.sndel))) return;
         snacks = snacks.filter(x => x.id !== b.dataset.sndel); draw();
       });
+      wireItems();
       $('snCash').onclick = () => snackForm('cash');
       $('snBuy').onclick = () => snackForm('expense');
       $('snCa').onclick = cashImport;
