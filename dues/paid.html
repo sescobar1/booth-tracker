@@ -23,8 +23,10 @@
     @media (prefers-color-scheme: dark) { .big b { color: var(--gold); } }
     input { width: 100%; font: inherit; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
     input:focus { outline: none; border-color: var(--gold); }
+    #find { margin-bottom: 12px; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-    .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: .9rem; cursor: pointer; }
+    .chip { border: 2px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 9px 16px; font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    [hidden] { display: none !important; }
     .chip.on { background: var(--green); border-color: var(--green); color: #fff; }
     h2 { margin: 20px 4px 6px; font-size: 1.05rem; display: flex; justify-content: space-between; align-items: baseline; }
     h2 small { color: var(--muted); font-weight: 600; }
@@ -55,11 +57,15 @@
     const until = k => (k % 2 ? 'Dec ' : 'May ') + Math.floor(k / 2);
     const MAIL = 'Paid but your name isn\'t on the list? Email Dr. Escobar at <a href="mailto:sescobar@atu.edu?subject=SNA%20dues">sescobar@atu.edu</a>.';
     const token = new URLSearchParams(location.search).get('t') || '';
-    let d, find = '', lvl = 'all';
+    let d, find = '', lvl = '';
     if (!/^[0-9a-f]{32}$/.test(token)) { $('view').innerHTML = '<div class="card">This link isn\'t complete. Ask an SNA officer for it again.</div>'; return; }
     function draw() {
       const q = fold(find), words = q.split(' ').filter(Boolean);
-      const shown = d.students.filter(x => (lvl === 'all' || x.lvl === Number(lvl)) && words.every(w => fold(x.name).includes(w)));
+      $('find').hidden = !lvl;
+      if (!lvl) { $('list').innerHTML = '<div class="note"><b>👆 Select your level</b> to see the paid list.</div>'; return; }
+      const inLvl = d.students.filter(x => x.lvl === Number(lvl));
+      if (!inLvl.length) { $('list').innerHTML = '<div class="note"><b>No one in ' + lvlName(Number(lvl)) + ' is marked paid yet.</b><br>' + MAIL + '</div>'; return; }
+      const shown = inLvl.filter(x => words.every(w => fold(x.name).includes(w)));
       const hl = n => { let h = esc(n); words.forEach(w => { if (w.length > 1) h = h.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>'); }); return h; };
       $('list').innerHTML = (words.length && !shown.length ? '<div class="note"><b>Not on the paid list yet.</b><br>' + MAIL + (Number(d.amount) > 0 ? '<br>Dues are ' + money(d.amount) + ' per semester' : '') + (d.pay_info ? ' — pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '.</div>' : '') +
         LEVELS.map(l => { const xs = shown.filter(x => x.lvl === l); if (!xs.length) return '';
@@ -70,9 +76,9 @@
       .then(x => {
         if (!x) { $('view').innerHTML = '<div class="card">This link no longer works. Ask an SNA officer for the new one.</div>'; return; }
         d = x; $('sub').textContent = d.term + ' dues paid list';
-        const lvls = LEVELS.filter(l => d.students.some(s => s.lvl === l));
-        $('view').innerHTML = '<input type="search" id="find" placeholder="🔍 Type your name to check" autocomplete="off">' +
-          '<div class="chips">' + [['all', 'All levels']].concat(lvls.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
+        const lvls = LEVELS;
+        $('view').innerHTML =           '<h2 style="margin:4px 4px 0">Select your level</h2><div class="chips">' + [].concat(lvls.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
+          '<input type="search" id="find" placeholder="🔍 Type your name to check" autocomplete="off">' +
           '<div class="note"><b>Dues: ' + (Number(d.amount) > 0 ? money(d.amount) + ' per semester' : 'see an officer') + '</b>' + (d.pay_info ? '<br>Pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '</div>' +
           '<p class="muted">Only students marked paid are listed. <span class="ok" style="font-size:.7rem">PAID ✓</span> = paid this semester · <span class="ok ahead" style="font-size:.7rem">PAID THROUGH</span> = paid for more than one semester.<br>' + MAIL + '</p><div id="list"></div>';
         $('find').oninput = e => { find = e.target.value; draw(); };
