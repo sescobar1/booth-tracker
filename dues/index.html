@@ -873,7 +873,7 @@
       snSupply = p.error || !p.data ? { items: [], token: '' } : { items: (p.data.sna && p.data.sna.items) || [], token: p.data.tok || '' };
     }
     const CASHAPP_URL = 'https://cash.app/$atunursing';
-    const orderUrl = () => snSupply && snSupply.token ? 'https://sescobar1.github.io/booth-tracker/planner/sna.html?t=' + snSupply.token : '';
+    const orderUrl = () => snSupply && snSupply.token ? 'https://sescobar1.github.io/booth-tracker/planner/sna.html?t=' + snSupply.token + '&out=1' : '';
     const qrSvg = (text, size) => { try { const q = qrcode(0, 'M'); q.addData(text); q.make(); return '<div style="width:' + size + 'px;height:' + size + 'px;background:#fff;border-radius:10px;padding:6px;box-sizing:border-box;flex:0 0 auto">' + q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }) + '</div>'; } catch (e) { return ''; } };
     function itemsCard() {
       if (snItems === null) { loadItems().then(() => { if (mode === 'snacks') draw(); }); return '<div class="card"><p class="helper">Loading price list…</p></div>'; }

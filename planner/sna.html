@@ -20,6 +20,9 @@
     .row:first-of-type { border-top: 0; }
     .row.on { background: linear-gradient(90deg, var(--sage-soft), transparent 80%); border-radius: 10px; }
     .name { flex: 1; min-width: 0; }
+    .mode { display: flex; gap: 8px; margin: 10px 0 4px; }
+    .mode button { flex: 1; padding: 10px 8px; border-radius: 12px; border: 2px solid #d8cec4; background: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    .mode button.on { border-color: currentColor; background: #2b2522; color: #fff; }
     .name small { display: block; color: var(--muted); font-size: 12px; }
     .q { display: flex; align-items: center; gap: 6px; flex: none; }
     .q button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 1.2rem; }
@@ -51,6 +54,8 @@
     const rpc = (fn, body) => fetch(CFG.url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => { if (!r.ok) throw new Error('Something went wrong (' + r.status + ')'); return r.json(); });
     const CATS = ['Bars & breakfast', 'Quick meals', 'Chips & salty', 'Crackers', 'Cookies', 'Snack cakes & pastries', 'Candy', 'Drinks', 'Other'];
     let items = [], pick = {}, find = '', me = {};
+    // Two ways to use the form: picking up the Sam's order (needs pickup info), or just saying what's out (from the QR code on the sign).
+    let pickup = !/[?&]out=1\b/.test(location.search);
     // Only the store choice is remembered. Name, email and phone are never saved (and any saved before are cleared),
     // so the form starts blank for whoever opens it next.
     try { me = JSON.parse(localStorage.getItem('snaMe') || '{}'); me = { store: me.store || '', storeOther: me.storeOther || '' }; localStorage.setItem('snaMe', JSON.stringify(me)); } catch (e) { me = {}; }
@@ -60,17 +65,20 @@
     const keep = () => { try { localStorage.setItem('snaPick-' + token, JSON.stringify(pick)); } catch (e) {} };
     function draw() {
       const q = find.toLowerCase(), shown = items.filter(i => !q || i.name.toLowerCase().includes(q));
-      app.innerHTML = '<h1>🍿 SNA Snack Closet</h1><p class="sub">Arkansas Tech · Tap ＋ on what the closet is running low on, fill in your info and pickup, then tap <b>Send list</b>.</p>' +
+      app.innerHTML = '<h1>🍿 SNA Snack Closet</h1>' +
+        '<div class="mode"><button type="button" data-mode="out" class="' + (pickup ? '' : 'on') + '">📢 Something’s out</button><button type="button" data-mode="pick" class="' + (pickup ? 'on' : '') + '">🛒 I’m picking up at Sam’s</button></div>' +
+        '<p class="sub">Arkansas Tech · Tap ＋ on what the closet is ' + (pickup ? 'running low on, fill in your info and pickup' : 'out of or running low on, add your name') + ', then tap <b>Send list</b>.</p>' +
         '<input id="search" type="search" placeholder="Search snacks" value="' + esc(find) + '">' +
         CATS.map(c => { const l = shown.filter(i => (i.cat || 'Other') === c); return l.length ? '<div class="card"><h2>' + esc(c) + '</h2>' + l.map(i => '<div class="row' + (pick[i.id] ? ' on' : '') + '"><div class="name">' + esc(i.name) + '<small>' + esc(i.size || '') + '</small></div><div class="q">' + (pick[i.id] ? '<button type="button" data-m="' + esc(i.id) + '" aria-label="Less">−</button><b>' + pick[i.id] + '</b>' : '') + '<button type="button" data-p="' + esc(i.id) + '" aria-label="Need this">＋</button></div></div>').join('') + '</div>' : ''; }).join('') +
-        '<div class="card"><h2>Your info</h2><label for="who">Full name (goes on the Sam’s Club pickup order)</label><input id="who" autocomplete="name" placeholder="First and last name" value="' + esc(me.who || '') + '">' +
-        '<label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@atu.edu" value="' + esc(me.email || '') + '">' +
-        '<label for="phone">Cell phone</label><input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="479-555-0123" value="' + esc(me.phone || '') + '"></div>' +
-        '<div class="card"><h2>Pickup</h2><label for="store">Which Sam’s Club?</label><select id="store">' + ['', 'Conway, AR', 'Fort Smith, AR'].map(x => '<option value="' + esc(x) + '"' + (x === (me.store || '') ? ' selected' : '') + '>' + (x || 'Choose a location') + '</option>').join('') + '</select>' +
+        '<div class="card"><h2>Your info</h2><label for="who">Full name' + (pickup ? ' (goes on the Sam’s Club pickup order)' : '') + '</label><input id="who" autocomplete="name" placeholder="First and last name" value="' + esc(me.who || '') + '">' +
+        '<label for="email">Email' + (pickup ? '' : ' (optional)') + '</label><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@atu.edu" value="' + esc(me.email || '') + '">' +
+        '<label for="phone">Cell phone' + (pickup ? '' : ' (optional)') + '</label><input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="479-555-0123" value="' + esc(me.phone || '') + '"></div>' +
+        '<div class="card"><h2>' + (pickup ? 'Pickup' : 'Anything else?') + '</h2><div' + (pickup ? '' : ' hidden') + '><label for="store">Which Sam’s Club?</label><select id="store">' + ['', 'Conway, AR', 'Fort Smith, AR'].map(x => '<option value="' + esc(x) + '"' + (x === (me.store || '') ? ' selected' : '') + '>' + (x || 'Choose a location') + '</option>').join('') + '</select>' +
         '<input id="storeOther" placeholder="Which Sam’s Club?" value="' + esc(me.storeOther || '') + '"' + (me.store === 'Other' ? '' : ' hidden') + '>' +
-        '<div class="two"><div><label for="pdate">Pickup date</label><input id="pdate" type="date" min="' + todayIso() + '"></div><div><label for="ptime">Pickup time</label><input id="ptime" type="time" step="900"></div></div>' +
+        '<div class="two"><div><label for="pdate">Pickup date</label><input id="pdate" type="date" min="' + todayIso() + '"></div><div><label for="ptime">Pickup time</label><input id="ptime" type="time" step="900"></div></div></div>' +
         '<label for="note">Anything else? (optional)</label><textarea id="note" rows="2" placeholder="We’re out of forks, a new snack idea…"></textarea></div>';
       $('store').onchange = () => { $('storeOther').hidden = $('store').value !== 'Other'; };
+      app.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { pickup = b.dataset.mode === 'pick'; redraw(); });
       bar.hidden = false;
       const n = Object.values(pick).reduce((s, x) => s + x, 0), kinds = Object.keys(pick).length;
       $('count').textContent = n ? kinds + (kinds === 1 ? ' snack' : ' snacks') + ' picked' : 'Nothing picked yet';
@@ -83,30 +91,33 @@
     $('send').onclick = async () => {
       const who = $('who').value.trim(), email = $('email').value.trim(), phone = $('phone').value.trim(), store = $('store').value === 'Other' ? $('storeOther').value.trim() : $('store').value, pdate = $('pdate').value, ptime = $('ptime').value;
       const need = (el, msg) => { $(el).focus(); $(el).scrollIntoView({ block: 'center' }); alert(msg); };
-      if (!/\S+\s+\S+/.test(who)) return need('who', 'Please add your full name (first and last) for the pickup order.');
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return need('email', 'Please add a good email address.');
-      if (phone.replace(/\D/g, '').length < 10) return need('phone', 'Please add your cell phone number with area code.');
-      if (!store) return need('store', 'Please choose which Sam’s Club.');
-      if (!pdate) return need('pdate', 'Please pick a pickup date.');
-      if (pdate < todayIso()) return need('pdate', 'The pickup date has already passed.');
-      if (!ptime) return need('ptime', 'Please pick a pickup time.');
+      if (!/\S+\s+\S+/.test(who)) return need('who', 'Please add your full name (first and last)' + (pickup ? ' for the pickup order.' : '.'));
+      if ((pickup || email) && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return need('email', 'Please add a good email address.');
+      if ((pickup || phone) && phone.replace(/\D/g, '').length < 10) return need('phone', 'Please add your cell phone number with area code.');
+      if (pickup) {
+        if (!store) return need('store', 'Please choose which Sam’s Club.');
+        if (!pdate) return need('pdate', 'Please pick a pickup date.');
+        if (pdate < todayIso()) return need('pdate', 'The pickup date has already passed.');
+        if (!ptime) return need('ptime', 'Please pick a pickup time.');
+      }
+      const pStore = pickup ? store : '', pDate = pickup ? pdate : '', pTime = pickup ? ptime : '';
       const lines = Object.keys(pick).map(id => { const it = items.find(i => i.id === id); return it ? { id, name: it.name, qty: pick[id] } : null; }).filter(Boolean);
       $('send').disabled = true; $('send').textContent = 'Sending…';
       try {
-        const ok = await rpc('sna_send', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines, p_email: email, p_phone: phone, p_store: store, p_date: pdate, p_time: ptime });
+        const ok = await rpc('sna_send', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines, p_email: email, p_phone: phone, p_store: pStore, p_date: pDate, p_time: pTime });
         if (!ok) throw new Error('This link isn’t working anymore. Ask for a new one.');
         // Email Dr. Escobar a heads-up (FormSubmit). If it fails, the request is still saved in her Planner.
         try {
-          const when = new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + ' at ' + new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          const when = !pickup ? '' : new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + ' at ' + new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
           fetch('https://formsubmit.co/ajax/sescobar@atu.edu', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({
-            _subject: '🍿 SNA snack order from ' + who, _template: 'box', _captcha: 'false',
-            'Student': who, 'Email': email, 'Cell phone': phone, 'Pickup': store + ' Sam’s Club, ' + when,
+            _subject: (pickup ? '🍿 SNA snack order from ' : '📢 Snack closet is out of something – from ') + who, _template: 'box', _captcha: 'false',
+            'Student': who, 'Email': email || '—', 'Cell phone': phone || '—', 'Pickup': pickup ? store + ' Sam’s Club, ' + when : 'No pickup – just letting you know what’s out',
             'Items': lines.map(l => l.qty + ' × ' + l.name).join('\n'), 'Note': $('note').value.trim() || '—',
             'Open your Planner': 'https://sescobar1.github.io/booth-tracker/planner/#tasks/sna' }) }).catch(() => {});
         } catch (e) {}
         try { localStorage.setItem('snaMe', JSON.stringify({ store: $('store').value, storeOther: $('storeOther').value })); localStorage.removeItem('snaPick-' + token); } catch (e) {}
         pick = {}; bar.hidden = true;
-        app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p><p class="sub">Pickup: <b>' + esc(store) + ' Sam’s Club</b>, ' + esc(new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + ' at ' + esc(new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ', under <b>' + esc(who) + '</b>.</p><button type="button" class="send" onclick="location.reload()">Send another</button></div>';
+        app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p>' + (pickup ? '<p class="sub">Pickup: <b>' + esc(store) + ' Sam’s Club</b>, ' + esc(new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + ' at ' + esc(new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ', under <b>' + esc(who) + '</b>.</p>' : '<p class="sub">Dr. Escobar will add it to the next Sam’s order.</p>') + '<button type="button" class="send" onclick="location.reload()">Send another</button></div>';
       } catch (e) { alert(e.message); $('send').disabled = false; $('send').textContent = 'Send list'; }
     };
     if (token.length < 20) { app.innerHTML = '<div class="msg"><h1>Link not complete</h1><p class="sub">Ask for the full SNA Snack Closet link.</p></div>'; return; }
