@@ -87,6 +87,7 @@
   <div class="toast" id="toast" hidden></div>
   <script src="config.js"></script>
   <script src="vendor/supabase.js"></script>
+  <script src="vendor/qrcode.js"></script>
   <script>
   // SNA Dues: students by level, which semester their dues are paid through, and who still owes.
   // Semesters are numbered year*2 + (0 spring, 1 fall). In January and August everyone moves up a level
@@ -810,11 +811,14 @@
         });
         const lastTs = settings.snack_last_ts || '';
         const snNew = snRows.filter(x => !x.dup && (x.kind !== 'sale' || x.r.Date.slice(0, 19) > lastTs)), sales = snNew.filter(x => x.kind === 'sale'), buys = snNew.filter(x => x.kind === 'expense'), cashes = snNew.filter(x => x.kind === 'cash');
+        // Cash box counts you already logged: a deposit with the same amount within 3 weeks is the same money.
+        const boxes = snacks.filter(y => y.kind === 'cash' && y.source === 'box' && !y.receipt).slice();
+        cashes.forEach(x => { const i = boxes.findIndex(b => Math.abs(Number(b.amount) - x.a) < 0.01 && b.entry_date <= x.d && (new Date(x.d) - new Date(b.entry_date)) / 864e5 <= 21); if (i >= 0) { x.box = boxes[i]; boxes.splice(i, 1); } });
         const others = recent.filter(x => x.k === 'other'), selfs = [];
         const sum = xs => xs.reduce((t, x) => t + x.a, 0);
         $('ciMsg').innerHTML = termName(cur()) + ' so far: <b>' + fresh.length + '</b> new dues payments · <b>' + sales.length + '</b> new snack sales (' + money(sum(sales)) + ') · <b>' + buys.length + '</b> new snack purchases (' + money(sum(buys)) + ') · <b>' + cashes.length + '</b> new cash deposits (' + money(sum(cashes)) + '). Already recorded items are skipped.';
         const opt = sel => '<option value="">— skip —</option>' + everyone.concat(extra).sort((a, b) => a.name.localeCompare(b.name)).map(m => '<option value="' + m.id + '"' + (sel && sel.id === m.id ? ' selected' : '') + '>' + esc(m.name) + (m.active ? '' : ' (past)') + '</option>').join('');
-        const line = x => '<label style="display:flex;gap:8px;align-items:flex-start;margin:5px 0;color:var(--ink);font-weight:400;font-size:.9rem"><input type="checkbox" data-sn="' + snNew.indexOf(x) + '" checked style="width:auto;margin-top:3px"><span style="flex:1">' + esc(fmtDate(x.d)) + ' · ' + esc(x.r['Name of sender/receiver'] || 'Cash Card') + ' · “' + esc(x.r.Notes) + '”' + (x.card ? ' <small style="color:var(--amber)">store card purchase — uncheck if it wasn\'t snacks</small>' : '') + '</span><b>' + money(x.a) + '</b></label>';
+        const line = x => '<label style="display:flex;gap:8px;align-items:flex-start;margin:5px 0;color:var(--ink);font-weight:400;font-size:.9rem"><input type="checkbox" data-sn="' + snNew.indexOf(x) + '"' + (x.box ? '' : ' checked') + ' style="width:auto;margin-top:3px"><span style="flex:1">' + esc(fmtDate(x.d)) + ' · ' + esc(x.r['Name of sender/receiver'] || 'Cash Card') + ' · “' + esc(x.r.Notes) + '”' + (x.card ? ' <small style="color:var(--amber)">store card purchase — uncheck if it wasn\'t snacks</small>' : '') + (x.box ? ' <small style="color:var(--amber)">already logged from the cash box on ' + esc(fmtDate(x.box.entry_date)) + ', so it\'s unchecked</small>' : '') + '</span><b>' + money(x.a) + '</b></label>';
         $('ciOut').innerHTML =
           '<details class="card"' + (found.length ? ' open' : '') + '><summary><b>💵 Dues</b> · ' + found.length + ' new</summary>' + (found.length ? found.map((x, i) => '<div class="pay" style="flex-wrap:wrap"><small class="helper" style="width:100%;margin:0">' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + money(x.a) + ' from ' + esc(x.r['Name of sender/receiver']) + ' · “' + esc(x.r.Notes) + '”</small><select data-cs="' + i + '" style="flex:1;min-width:0">' + opt(x.m) + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">semesters<input data-cn="' + i + '" inputmode="numeric" value="' + x.n + '" style="width:52px"></label>' + (x.snack ? '<small style="width:100%;color:var(--amber)">Includes snacks — only ' + money(each * x.n) + ' counted as dues</small>' : '') + '</div>').join('') : '<p class="helper">Nothing new.</p>') + '</details>' +
           '<div class="card"><b>🍪 Snack sales</b> · ' + sales.length + ' new · ' + money(sum(sales)) + '<p class="helper" style="margin:4px 0 0">Added to the totals and leaderboard; not listed one by one.</p></div>' +
@@ -839,6 +843,8 @@
           // restocks: kept one by one
           const pick = buys.concat(cashes).filter(x => document.querySelector('[data-sn="' + snNew.indexOf(x) + '"]')?.checked).map(x => ({ owner: user.id, kind: x.kind, entry_date: x.d, amount: x.a, note: (x.kind === 'cash' ? 'Cash deposit: ' : '') + String(x.r.Notes || '').slice(0, 200), who: String(x.r['Name of sender/receiver'] || '').slice(0, 80), receipt: x.r['Transaction ID'] || '', source: 'cashapp' }));
           let s = 0;
+          // link matched cash box counts to their deposit so they're never matched again
+          for (const x of cashes) if (x.box && !document.querySelector('[data-sn="' + snNew.indexOf(x) + '"]')?.checked) { const rid = x.r['Transaction ID'] || ''; if (!fail(await sb.from('snack_entries').update({ receipt: rid }).eq('id', x.box.id))) x.box.receipt = rid; }
           if (pick.length) { const r = await sb.from('snack_entries').insert(pick).select(); if (!fail(r)) { snacks = r.data.concat(snacks); s += r.data.length; } }
           // sales: added to each student's monthly total, not kept one by one
           const groups = {};
@@ -860,7 +866,15 @@
     // ---- 🏷 snack price list + 🛒 restock list ----
     let snItems = null;
     const CATS = ['Breakfast', 'Sweets', 'Salty snacks', 'Meals', 'Drinks', 'Snacks', 'Drinks & More', 'Meals & bars', 'Other'];
-    async function loadItems() { const r = await sb.from('snack_items').select('*').order('sort').order('name'); snItems = r.error ? [] : r.data; }
+    let snSupply = null; // the Planner's SNA supply order: { items: [{name, price, have}], token }
+    async function loadItems() {
+      const [r, p] = await Promise.all([sb.from('snack_items').select('*').order('sort').order('name'), sb.from('planner_settings').select('sna:data->settings->sna, tok:data->settings->>snaToken').maybeSingle()]);
+      snItems = r.error ? [] : r.data;
+      snSupply = p.error || !p.data ? { items: [], token: '' } : { items: (p.data.sna && p.data.sna.items) || [], token: p.data.tok || '' };
+    }
+    const CASHAPP_URL = 'https://cash.app/$atunursing';
+    const orderUrl = () => snSupply && snSupply.token ? 'https://sescobar1.github.io/booth-tracker/planner/sna.html?t=' + snSupply.token : '';
+    const qrSvg = (text, size) => { try { const q = qrcode(0, 'M'); q.addData(text); q.make(); return '<div style="width:' + size + 'px;height:' + size + 'px;background:#fff;border-radius:10px;padding:6px;box-sizing:border-box;flex:0 0 auto">' + q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }) + '</div>'; } catch (e) { return ''; } };
     function itemsCard() {
       if (snItems === null) { loadItems().then(() => { if (mode === 'snacks') draw(); }); return '<div class="card"><p class="helper">Loading price list…</p></div>'; }
       const priced = snItems.filter(i => i.price != null).length;
@@ -909,9 +923,9 @@
       if (!xs.length) { toast('Add prices first with ✏️ Items & prices.'); return; }
       const cats = CATS.filter(c => xs.some(i => (CATS.includes(i.category) ? i.category : 'Other') === c));
       const pill = n => '$' + Number(n).toFixed(2);
-      popup(PAGE('ATU SNA snack closet prices', '<div class="hdr" style="text-align:center"><h1 style="font-size:2.4rem">ATU <span>SNA</span></h1><div style="font-size:1.3rem;font-weight:700">Snack Closet</div><div style="margin-top:12px;font-size:2rem;font-weight:800;line-height:1.2">Pay with Cash App: <span style="color:#FFC72C">$atunursing</span></div><div style="font-size:1.15rem;margin-top:2px">Put what you bought in the note.</div></div><main style="max-width:1000px"><div class="cols">' +
+      popup(PAGE('ATU SNA snack closet prices', '<div class="hdr" style="text-align:center"><h1 style="font-size:2.4rem">ATU <span>SNA</span></h1><div style="font-size:1.3rem;font-weight:700">Snack Closet</div><div style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:20px">' + qrSvg(CASHAPP_URL, 120) + '<div style="text-align:left"><div style="font-size:2rem;font-weight:800;line-height:1.2">Pay with Cash App: <span style="color:#FFC72C">$atunursing</span></div><div style="font-size:1.15rem;margin-top:2px">Scan to pay. Put what you bought in the note.</div></div></div></div><main style="max-width:1000px"><div class="cols">' +
         cats.map(c => '<section><h3><span>' + esc(c.toUpperCase()) + '</span></h3>' + xs.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c).map((i, n) => '<div class="it' + (n % 2 ? ' alt' : '') + '"><div><b>' + esc(i.name) + '</b>' + (i.note ? '<small>' + esc(i.note) + '</small>' : '') + '</div><span class="pr">' + pill(i.price) + '</span></div>').join('') + '</section>').join('') +
-        '</div><div style="margin-top:22px;background:#fff4d1;border-left:8px solid #FFC72C;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px"><div><b style="font-size:1.4rem;color:#046A38">SNA Dues: $5 per semester</b><div style="font-size:1.05rem">Cash App $atunursing, cash or check. In the Cash App note, put “Dues” and your level.</div></div><span class="pr" style="font-size:1.25rem">$5.00</span></div><div style="margin-top:16px;text-align:center;font-size:1.75rem;line-height:1.3;color:#046A38;font-weight:800;border:3px dashed #046A38;border-radius:14px;padding:14px 18px">🩺 NCLEX question: You took a snack. What is your priority action? <i>Select all that apply:</i><br>☐ Cash App &nbsp; ☐ Cash<br><span style="font-size:.8em">There is no “none of the above.”</span></div><div style="text-align:center;font-size:1.1rem;color:#5f6f66;font-style:italic;margin-top:6px">Pay by Cash App ($atunursing) or put cash in the box.</div><button onclick="print()">🖨 Print or save as PDF</button></main>',
+        '</div><div style="margin-top:22px;background:#fff4d1;border-left:8px solid #FFC72C;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px"><div><b style="font-size:1.4rem;color:#046A38">SNA Dues: $5 per semester</b><div style="font-size:1.05rem">Cash App $atunursing, cash or check. In the Cash App note, put “Dues” and your level.</div></div><span class="pr" style="font-size:1.25rem">$5.00</span></div>' + (orderUrl() ? '<div style="margin-top:12px;display:flex;align-items:center;gap:16px;border:3px solid #c9dcd1;border-radius:14px;padding:10px 14px">' + qrSvg(orderUrl(), 96) + '<div><b style="font-size:1.25rem;color:#046A38">Out of something? 🛒</b><div style="font-size:1.05rem">Scan to tell Dr. Escobar what the snack closet needs.</div></div></div>' : '') + '<div style="margin-top:16px;text-align:center;font-size:1.75rem;line-height:1.3;color:#046A38;font-weight:800;border:3px dashed #046A38;border-radius:14px;padding:14px 18px">🩺 NCLEX question: You took a snack. What is your priority action? <i>Select all that apply:</i><br>☐ Cash App &nbsp; ☐ Cash<br><span style="font-size:.8em">There is no “none of the above.”</span></div><div style="text-align:center;font-size:1.1rem;color:#5f6f66;font-style:italic;margin-top:6px">Pay by Cash App ($atunursing) or put cash in the box.</div><button onclick="print()">🖨 Print or save as PDF</button></main>',
         '.cols{columns:2 300px;column-gap:26px}.cols section{break-inside:avoid;margin-bottom:12px}h3{display:flex;align-items:center;gap:12px;color:#046A38;font-size:1rem;letter-spacing:.05em;margin:0 0 12px;padding-top:6px}h3::after{content:"";flex:1;height:3px;background:#FFC72C}.it{display:flex;justify-content:space-between;align-items:center;gap:10px;border:3px solid #c9dcd1;border-radius:14px;padding:10px 14px;margin:0 0 10px;background:#fff}.it.alt{background:#e7f0ea}.it b{font-size:1.1rem}.it small{display:block;font-style:italic;color:#5f6f66;font-size:.72rem}.pr{background:#F6C744;border-radius:99px;padding:6px 22px;font:700 1.05rem ui-monospace,Menlo,Consolas,monospace;white-space:nowrap}@media print{.it{break-inside:avoid}}'));
     }
     // ---- 📋 end-of-semester report ----
@@ -1013,8 +1027,9 @@
         '<div class="tabs" style="margin-top:0">' + terms.map(k => '<button type="button" class="chip' + (k === snTerm ? ' on' : '') + '" data-snt="' + k + '">' + termName(k) + '</button>').join('') + '</div>' +
         '<div class="stats"><div class="stat"><span>Money in</span><b style="color:var(--green)">' + money(st.inn) + '</b><small class="helper" style="display:block;margin:0">Cash App ' + money(st.saleAmt) + ' · cash ' + money(st.cashAmt) + '</small></div><div class="stat"><span>Spent on snacks</span><b style="color:var(--red)">' + money(st.out) + '</b><small class="helper" style="display:block;margin:0">' + st.buys.length + ' purchases</small></div><div class="stat"><span>' + (st.profit >= 0 ? 'Profit' : 'Behind') + '</span><b style="color:' + color(st.profit) + '">' + money(Math.abs(st.profit)) + '</b><small class="helper" style="display:block;margin:0">' + termName(snTerm) + '</small></div></div>' +
         (closedInfo ? '<p class="helper" style="margin:4px 0 0">🔒 ' + termName(snTerm) + ' was closed on ' + esc(fmtDate(closedInfo.closed_on)) + '. Anything dated after that counts toward ' + termName(snTerm + 1) + '. <button type="button" class="btn ghost small" id="snReopen">Reopen</button></p>' : '') +
-        '<div class="actions"><button type="button" class="btn" id="snCash">💵 Add cash</button><button type="button" class="btn" id="snBuy">🛒 Add snack purchase</button><button type="button" class="btn ghost" id="snCa">📥 Cash App import</button><button type="button" class="btn ghost" id="snCsv">⬇ Download</button>' + (!closedInfo && snTerm === openTerm() ? '<button type="button" class="btn ghost" id="snClose">🏁 End of semester</button>' : '') + '</div>' +
+        '<div class="actions"><button type="button" class="btn" id="snBox">🪙 Count cash box</button><button type="button" class="btn ghost" id="snCash">💵 Add cash</button><button type="button" class="btn" id="snBuy">🛒 Add snack purchase</button><button type="button" class="btn ghost" id="snCa">📥 Cash App import</button><button type="button" class="btn ghost" id="snCsv">⬇ Download</button>' + (!closedInfo && snTerm === openTerm() ? '<button type="button" class="btn ghost" id="snClose">🏁 End of semester</button>' : '') + '</div>' +
         '<div class="card"><h2>📊 Snack closet evaluation · ' + termName(snTerm) + '</h2>' + (notes.length ? '<ul style="margin:6px 0 0;padding-left:20px">' + notes.map(n => '<li style="margin:4px 0">' + n + '</li>').join('') + '</ul>' : '<p class="helper">No snack money recorded for this semester yet.</p>') + '</div>' +
+        shelfCard(st) +
         itemsCard() +
         (mData.length ? '<div class="card"><h2>By month</h2><div style="display:flex;gap:14px;align-items:flex-end;height:150px;padding-top:8px">' + mData.map(m => '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end"><div style="display:flex;gap:3px;align-items:flex-end;height:110px;width:100%;justify-content:center"><div title="In ' + money(m.inn) + '" style="width:40%;max-width:26px;background:var(--green);border-radius:4px 4px 0 0;height:' + Math.max(2, m.inn / max * 100) + '%"></div><div title="Spent ' + money(m.out) + '" style="width:40%;max-width:26px;background:var(--red);opacity:.75;border-radius:4px 4px 0 0;height:' + Math.max(m.out ? 2 : 0, m.out / max * 100) + '%"></div></div><small class="helper" style="margin:0">' + monthName(m.mo) + '</small></div>').join('') + '</div><p class="helper" style="margin:6px 0 0"><span style="color:var(--green)">■</span> money in · <span style="color:var(--red)">■</span> spent</p>' +
           '<div style="margin-top:8px">' + mData.map(m => '<div class="pay"><span>' + new Date(m.mo + '-15T12:00').toLocaleDateString([], { month: 'long', year: 'numeric' }) + '</span><span>in ' + money(m.inn) + ' · spent ' + money(m.out) + ' · <b style="color:' + color(m.inn - m.out) + '">' + (m.inn - m.out >= 0 ? '+' : '−') + money(Math.abs(m.inn - m.out)) + '</b></span></div>').join('') + '</div></div>' : '') +
@@ -1033,6 +1048,7 @@
       });
       wireItems();
       $('snCash').onclick = () => snackForm('cash');
+      $('snBox').onclick = cashBox;
       $('snBuy').onclick = () => snackForm('expense');
       $('snCa').onclick = cashImport;
       if ($('snClose')) $('snClose').onclick = () => closeSnackTerm(snTerm, st);
@@ -1061,6 +1077,41 @@
         settings.snack_closed = c; snTerm = openTerm(); close(); draw();
         toast(termName(k) + ' closed: ' + (t.profit >= 0 ? '+' : '−') + money(Math.abs(t.profit)));
       };
+    }
+    // 🪙 Empty the cash box: just the amount, saved as today's cash.
+    function cashBox() {
+      open('<h2>🪙 Count the cash box</h2><p class="helper">How much cash was in the snack closet box? It\'s saved as cash for today. If you deposit that same amount into the SNA Cash App within 3 weeks, the Cash App import recognizes it so it isn\'t counted twice.</p>' +
+        '<input id="cbA" inputmode="decimal" placeholder="0.00" style="font-size:2rem;text-align:center;font-weight:700">' +
+        '<div class="actions"><button type="button" class="btn" id="cbS">Save</button><button type="button" class="btn ghost" id="cbX">Cancel</button></div>');
+      setTimeout(() => $('cbA').focus(), 50);
+      $('cbX').onclick = close;
+      $('cbS').onclick = async () => {
+        const a = Math.round(Number(String($('cbA').value).replace(/[$,\s]/g, '')) * 100) / 100;
+        if (!(a > 0)) { toast('Type how much cash was in the box.'); return; }
+        const r = await sb.from('snack_entries').insert({ owner: user.id, kind: 'cash', entry_date: today(), amount: a, qty: 1, note: 'Cash box', who: '', receipt: null, source: 'box' }).select().single();
+        if (fail(r)) return;
+        snacks.unshift(r.data); snacks.sort((x, y) => y.entry_date.localeCompare(x.entry_date)); snTerm = termOfEntry(r.data.entry_date); close(); draw(); toast('Cash box ' + money(a) + ' saved ✓');
+      };
+    }
+    // 📦 Where did the money go? Shelf counts come from the Planner's SNA supply order ("Have" × Sam's price).
+    const PAYBACK = 2; // at the current prices, students pay about $2 for every $1 of snacks bought
+    function shelfCard(st) {
+      if (snTerm !== openTerm() || !st.out) return '';
+      if (snSupply === null) return '';
+      const counted = snSupply.items.filter(i => i.have != null && i.have !== '' && Number(i.price) > 0);
+      const plannerLink = '<a href="../planner/#tasks/sna" target="_blank" rel="noopener">SNA supply order (Planner)</a>';
+      if (!counted.length) return '<div class="card"><h2>📦 Where did the money go?</h2><p class="helper" style="margin:0">Count what\'s on the shelf with the 🖨 Count sheet in your ' + plannerLink + ' and type the counts in <b>Have</b>. Then this shows how much of the gap is snacks still on the shelf and how much is snacks that weren\'t paid for.</p></div>';
+      const shelf = Math.round(counted.reduce((t, i) => t + Number(i.have) * Number(i.price), 0) * 100) / 100;
+      const gone = Math.max(0, Math.round((st.out - shelf) * 100) / 100), should = Math.round(gone * PAYBACK * 100) / 100, missing = Math.round((should - st.inn) * 100) / 100;
+      const row = (a, b, c) => '<div class="pay"><span>' + a + '</span><b' + (c ? ' style="color:' + c + '"' : '') + '>' + b + '</b></div>';
+      return '<div class="card"><h2>📦 Where did the money go? · ' + termName(snTerm) + '</h2>' +
+        row('Spent on snacks', money(st.out)) +
+        row('Still on the shelf (' + counted.length + ' items counted, at Sam\'s prices)', money(shelf)) +
+        row('Sold or taken (at Sam\'s prices)', money(gone)) +
+        row('Should have brought in (about $' + PAYBACK + ' per $1 at your prices)', money(should)) +
+        row('Actually came in', money(st.inn), 'var(--green)') +
+        row(missing > 0 ? 'Not paid for (about)' : 'Extra (more came in than expected)', money(Math.abs(missing)), missing > 0 ? 'var(--red)' : 'var(--green)') +
+        '<p class="helper" style="margin:8px 0 0">' + (missing > 0 ? 'About ' + Math.round(missing / Math.max(should, 1) * 100) + '% of what left the shelf wasn\'t paid for, or the cash hasn\'t been logged yet (🪙 Count cash box). ' : '') + 'Shelf counts come from <b>Have</b> in your ' + plannerLink + ', so update them when you count. Estimates only: some shelf stock may be from last semester.</p></div>';
     }
     function snackForm(kind) {
       const cash = kind === 'cash';
