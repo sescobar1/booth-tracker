@@ -93,6 +93,15 @@
       try {
         const ok = await rpc('sna_send', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines, p_email: email, p_phone: phone, p_store: store, p_date: pdate, p_time: ptime });
         if (!ok) throw new Error('This link isn’t working anymore. Ask for a new one.');
+        // Email Dr. Escobar a heads-up (FormSubmit). If it fails, the request is still saved in her Planner.
+        try {
+          const when = new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + ' at ' + new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          fetch('https://formsubmit.co/ajax/sescobar@atu.edu', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({
+            _subject: '🍿 SNA snack order from ' + who, _template: 'box', _captcha: 'false',
+            'Student': who, 'Email': email, 'Cell phone': phone, 'Pickup': store + ' Sam’s Club, ' + when,
+            'Items': lines.map(l => l.qty + ' × ' + l.name).join('\n'), 'Note': $('note').value.trim() || '—',
+            'Open your Planner': 'https://sescobar1.github.io/booth-tracker/planner/#tasks/sna' }) }).catch(() => {});
+        } catch (e) {}
         try { localStorage.setItem('snaMe', JSON.stringify({ who, email, phone, store: $('store').value, storeOther: $('storeOther').value })); localStorage.removeItem('snaPick-' + token); } catch (e) {}
         pick = {}; bar.hidden = true;
         app.innerHTML = '<div class="msg"><h1>✓ Thank you!</h1><p class="sub">Your list was sent: ' + lines.map(l => esc(l.name) + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ') + '.</p><p class="sub">Pickup: <b>' + esc(store) + ' Sam’s Club</b>, ' + esc(new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })) + ' at ' + esc(new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ', under <b>' + esc(who) + '</b>.</p><button type="button" class="send" onclick="location.reload()">Send another</button></div>';
