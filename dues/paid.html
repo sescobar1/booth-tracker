@@ -31,7 +31,10 @@
     .list { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 2px 14px; }
     .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
     .row:first-child { border-top: 0; }
+    .note a, .muted a { color: var(--green); font-weight: 700; }
+    @media (prefers-color-scheme: dark) { .note a, .muted a { color: var(--gold); } }
     .ok { background: var(--gold); color: #1c2a22; font-weight: 800; font-size: .78rem; border-radius: 99px; padding: 3px 10px; white-space: nowrap; }
+    .ok.ahead { background: var(--green); color: #fff; }
     .note { background: var(--gold-soft); border-left: 5px solid var(--gold); border-radius: 10px; padding: 12px 14px; }
     .muted { color: var(--muted); font-size: .9rem; }
     mark { background: var(--gold); color: #1c2a22; border-radius: 3px; }
@@ -49,6 +52,8 @@
     const LEVELS = [0, 1, 2, 3, 4, -1], lvlName = l => l < 0 ? 'Lower division' : 'Level ' + l;
     const money = n => '$' + (Math.round(Number(n || 0) * 100) / 100).toFixed(2).replace(/\.00$/, '');
     const fold = s => String(s).toLowerCase().normalize('NFKD').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const until = k => (k % 2 ? 'Dec ' : 'May ') + Math.floor(k / 2);
+    const MAIL = 'Paid but your name isn\'t on the list? Email Dr. Escobar at <a href="mailto:sescobar@atu.edu?subject=SNA%20dues">sescobar@atu.edu</a>.';
     const token = new URLSearchParams(location.search).get('t') || '';
     let d, find = '', lvl = 'all';
     if (!/^[0-9a-f]{32}$/.test(token)) { $('view').innerHTML = '<div class="card">This link isn\'t complete. Ask an SNA officer for it again.</div>'; return; }
@@ -56,9 +61,9 @@
       const q = fold(find), words = q.split(' ').filter(Boolean);
       const shown = d.students.filter(x => (lvl === 'all' || x.lvl === Number(lvl)) && words.every(w => fold(x.name).includes(w)));
       const hl = n => { let h = esc(n); words.forEach(w => { if (w.length > 1) h = h.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>'); }); return h; };
-      $('list').innerHTML = (words.length && !shown.length ? '<div class="note"><b>Not on the paid list yet.</b><br>If you\'ve paid, give it a few days or check with an SNA officer.' + (Number(d.amount) > 0 ? '<br>Dues are ' + money(d.amount) + ' per semester' : '') + (d.pay_info ? ' — pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '.</div>' : '') +
+      $('list').innerHTML = (words.length && !shown.length ? '<div class="note"><b>Not on the paid list yet.</b><br>' + MAIL + (Number(d.amount) > 0 ? '<br>Dues are ' + money(d.amount) + ' per semester' : '') + (d.pay_info ? ' — pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '.</div>' : '') +
         LEVELS.map(l => { const xs = shown.filter(x => x.lvl === l); if (!xs.length) return '';
-          return '<h2>' + lvlName(l) + '</h2><div class="list">' + xs.map(x => '<div class="row"><span>' + hl(x.name) + '</span><span class="ok">PAID ✓</span></div>').join('') + '</div>'; }).join('');
+          return '<h2>' + lvlName(l) + '</h2><div class="list">' + xs.map(x => '<div class="row"><span>' + hl(x.name) + '</span>' + (x.thru > d.term_key ? '<span class="ok ahead">PAID THROUGH ' + until(x.thru).toUpperCase() + '</span>' : '<span class="ok">PAID ✓</span>') + '</div>').join('') + '</div>'; }).join('');
     }
     fetch(CFG.url + '/rest/v1/rpc/dues_paid_list', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: token }) })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -69,7 +74,7 @@
         $('view').innerHTML = '<input type="search" id="find" placeholder="🔍 Type your name to check" autocomplete="off">' +
           '<div class="chips">' + [['all', 'All levels']].concat(lvls.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvl === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>' +
           '<div class="note"><b>Dues: ' + (Number(d.amount) > 0 ? money(d.amount) + ' per semester' : 'see an officer') + '</b>' + (d.pay_info ? '<br>Pay with ' + esc(d.pay_info.replace(/^./, c => c.toLowerCase())) : '') + '</div>' +
-          '<p class="muted">Only students marked paid are listed. Don\'t see your name? You\'re not marked paid yet.</p><div id="list"></div>';
+          '<p class="muted">Only students marked paid are listed. <span class="ok" style="font-size:.7rem">PAID ✓</span> = paid this semester · <span class="ok ahead" style="font-size:.7rem">PAID THROUGH</span> = paid for more than one semester.<br>' + MAIL + '</p><div id="list"></div>';
         $('find').oninput = e => { find = e.target.value; draw(); };
         document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { lvl = b.dataset.l; document.querySelectorAll('[data-l]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
         draw();
