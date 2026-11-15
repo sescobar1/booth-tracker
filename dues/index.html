@@ -863,18 +863,17 @@
     async function loadItems() { const r = await sb.from('snack_items').select('*').order('sort').order('name'); snItems = r.error ? [] : r.data; }
     function itemsCard() {
       if (snItems === null) { loadItems().then(() => { if (mode === 'snacks') draw(); }); return '<div class="card"><p class="helper">Loading price list…</p></div>'; }
-      const priced = snItems.filter(i => i.price != null).length, need = snItems.filter(i => i.need);
-      return '<div class="card"><h2>🏷 Price list &amp; 🛒 restock list</h2><p class="helper" style="margin:0 0 8px">' + snItems.length + ' items · ' + priced + ' with prices · <b>' + need.length + '</b> on the restock list' + (priced < snItems.length ? '<br>Tap ✏️ Items &amp; prices to fill in prices before printing.' : '') + '</p>' +
-        (need.length ? '<p style="margin:0 0 6px">🛒 ' + esc(need.map(i => i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join(', ')) + '</p>' : '') +
-        '<div class="actions" style="margin-top:6px"><button type="button" class="btn small" id="itEdit">✏️ Items &amp; prices</button><button type="button" class="btn ghost small" id="itPrint">🖨 Price list sign</button><button type="button" class="btn ghost small" id="itShop"' + (need.length ? '' : ' disabled') + '>🛒 Restock list</button></div></div>';
+      const priced = snItems.filter(i => i.price != null).length;
+      return '<div class="card"><h2>🏷 Price list</h2><p class="helper" style="margin:0 0 8px">' + snItems.length + ' items · ' + priced + ' with prices</p>' +
+        '<div class="actions" style="margin-top:6px"><button type="button" class="btn small" id="itEdit">✏️ Items &amp; prices</button><button type="button" class="btn ghost small" id="itPrint">🖨 Price list sign</button><a class="btn ghost small" href="../planner/#tasks/sna" target="_blank" rel="noopener">🛒 SNA supply order (Planner)</a></div></div>';
     }
     function wireItems() {
       if (!$('itEdit')) return;
-      $('itEdit').onclick = editItems; $('itPrint').onclick = printPrices; $('itShop').onclick = restockList;
+      $('itEdit').onclick = editItems; $('itPrint').onclick = printPrices;
     }
     function editItems() {
-      const row = i => '<div class="pay" style="flex-wrap:wrap;gap:6px" data-it="' + i.id + '"><input data-f="name" value="' + esc(i.name) + '" style="flex:1 1 140px;min-width:0"><select data-f="category" style="flex:0 1 120px">' + CATS.map(c => '<option' + (c === i.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select><input data-f="note" value="' + esc(i.note || '') + '" placeholder="Note on the sign (optional)" style="flex:1 1 100%;font-size:.85rem"><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">$<input data-f="price" inputmode="decimal" value="' + (i.price != null ? Number(i.price) : '') + '" placeholder="—" style="width:64px"></label><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem;color:var(--ink);font-weight:400"><input type="checkbox" data-f="need"' + (i.need ? ' checked' : '') + ' style="width:auto">🛒 buy</label><input data-f="qty" inputmode="numeric" value="' + (i.qty || 1) + '" title="How many" style="width:48px"><button type="button" class="btn ghost small" data-itdel="' + i.id + '" aria-label="Remove">✕</button></div>';
-      open('<h2>✏️ Snack items &amp; prices</h2><p class="helper">Set what each item costs students. Check 🛒 buy (and how many) for anything you need to restock.</p>' +
+      const row = i => '<div class="pay" style="flex-wrap:wrap;gap:6px" data-it="' + i.id + '"><input data-f="name" value="' + esc(i.name) + '" style="flex:1 1 140px;min-width:0"><select data-f="category" style="flex:0 1 120px">' + CATS.map(c => '<option' + (c === i.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select><input data-f="note" value="' + esc(i.note || '') + '" placeholder="Note on the sign (optional)" style="flex:1 1 100%;font-size:.85rem"><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">$<input data-f="price" inputmode="decimal" value="' + (i.price != null ? Number(i.price) : '') + '" placeholder="—" style="width:64px"></label><button type="button" class="btn ghost small" data-itdel="' + i.id + '" aria-label="Remove">✕</button></div>';
+      open('<h2>✏️ Snack items &amp; prices</h2><p class="helper">Set what each item costs students. These print on the price list sign.</p>' +
         CATS.map(c => { const xs = snItems.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return xs.length ? '<p class="helper" style="margin:12px 0 2px"><b>' + c + '</b></p>' + xs.map(row).join('') : ''; }).join('') +
         '<div class="actions"><button type="button" class="btn ghost small" id="itAdd">➕ Add an item</button></div>' +
         '<div class="actions"><button type="button" class="btn" id="itSave">Save</button><button type="button" class="btn ghost" id="itX">Cancel</button></div>');
@@ -894,8 +893,8 @@
         for (const el of document.querySelectorAll('[data-it]')) {
           const i = snItems.find(x => x.id === el.dataset.it); if (!i) continue;
           const g = f => el.querySelector('[data-f="' + f + '"]'), p = g('price').value.trim();
-          const row = { name: g('name').value.trim() || i.name, note: g('note').value.trim(), category: g('category').value, price: p === '' || isNaN(Number(p)) ? null : Math.round(Number(p) * 100) / 100, need: g('need').checked, qty: Math.max(1, Number(g('qty').value) || 1) };
-          if (row.name !== i.name || row.note !== (i.note || '') || row.category !== i.category || row.price !== (i.price == null ? null : Number(i.price)) || row.need !== i.need || row.qty !== i.qty) {
+          const row = { name: g('name').value.trim() || i.name, note: g('note').value.trim(), category: g('category').value, price: p === '' || isNaN(Number(p)) ? null : Math.round(Number(p) * 100) / 100 };
+          if (row.name !== i.name || row.note !== (i.note || '') || row.category !== i.category || row.price !== (i.price == null ? null : Number(i.price))) {
             if (fail(await sb.from('snack_items').update(row).eq('id', i.id))) return;
             Object.assign(i, row);
           }
@@ -915,20 +914,6 @@
         '</div><div style="margin-top:22px;background:#fff4d1;border-left:8px solid #FFC72C;border-radius:10px;padding:14px 18px;font-size:1.2rem"><b>Pay with Cash App: $atunursing</b><br>Put what you bought in the note.</div><button onclick="print()">🖨 Print or save as PDF</button></main>',
         '.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}h3{display:flex;align-items:center;gap:12px;color:#046A38;font-size:1rem;letter-spacing:.05em;margin:6px 0 12px}h3::after{content:"";flex:1;height:3px;background:#FFC72C}.it{display:flex;justify-content:space-between;align-items:center;gap:10px;border:3px solid #c9dcd1;border-radius:14px;padding:10px 14px;margin:0 0 10px;background:#fff}.it.alt{background:#e7f0ea}.it b{font-size:1.1rem}.it small{display:block;font-style:italic;color:#5f6f66;font-size:.72rem}.pr{background:#F6C744;border-radius:99px;padding:6px 22px;font:700 1.05rem ui-monospace,Menlo,Consolas,monospace;white-space:nowrap}@media print{.it{break-inside:avoid}}'));
     }
-    function restockList() {
-      const need = snItems.filter(i => i.need);
-      const text = 'SNA snack closet restock list\n' + CATS.map(c => { const g = need.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return g.length ? '\n' + c + '\n' + g.map(i => '☐ ' + i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join('\n') : ''; }).join('\n');
-      open('<h2>🛒 Restock list</h2><div class="linkbox">' + esc(text) + '</div><div class="actions"><button type="button" class="btn small" id="rsCopy">Copy / share</button><button type="button" class="btn ghost small" id="rsPrint">🖨 Print</button><button type="button" class="btn ghost small" id="rsDone">✓ Bought it all</button><button type="button" class="btn ghost small" id="rsX">Close</button></div><p class="helper">After shopping, tap ✓ Bought it all to clear the list. The money you spend shows up with your next Cash App upload (payments to you), or add it with 🛒 Add snack purchase.</p>');
-      $('rsX').onclick = close;
-      $('rsCopy').onclick = async () => { try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e.name === 'AbortError') return; } copy(text, 'Restock list copied ✓'); };
-      $('rsPrint').onclick = () => popup(PAGE('SNA restock list', '<main><h1>SNA snack closet restock list</h1><p class="sub">' + new Date().toLocaleDateString() + '</p>' + CATS.map(c => { const g = need.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return g.length ? '<h2>' + c + '</h2><table>' + g.map(i => '<tr><td style="width:28px">☐</td><td>' + esc(i.name) + '</td><td class="n">' + (i.qty > 1 ? '×' + i.qty : '') + '</td></tr>').join('') + '</table>' : ''; }).join('') + '<button onclick="print()">🖨 Print</button></main>'));
-      $('rsDone').onclick = async () => {
-        const ids = need.map(i => i.id);
-        if (fail(await sb.from('snack_items').update({ need: false, qty: 1 }).in('id', ids))) return;
-        need.forEach(i => { i.need = false; i.qty = 1; }); close(); draw(); toast('Restock list cleared ✓');
-      };
-    }
-
     // ---- 📋 end-of-semester report ----
     function reportPicker() {
       const ks = [cur(), cur() - 1, cur() - 2];
