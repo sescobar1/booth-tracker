@@ -859,7 +859,7 @@
 
     // ---- 🏷 snack price list + 🛒 restock list ----
     let snItems = null;
-    const CATS = ['Drinks', 'Salty snacks', 'Sweets', 'Meals & bars', 'Other'];
+    const CATS = ['Snacks', 'Drinks & More', 'Drinks', 'Salty snacks', 'Sweets', 'Meals & bars', 'Other'];
     async function loadItems() { const r = await sb.from('snack_items').select('*').order('sort').order('name'); snItems = r.error ? [] : r.data; }
     function itemsCard() {
       if (snItems === null) { loadItems().then(() => { if (mode === 'snacks') draw(); }); return '<div class="card"><p class="helper">Loading price list…</p></div>'; }
@@ -873,7 +873,7 @@
       $('itEdit').onclick = editItems; $('itPrint').onclick = printPrices; $('itShop').onclick = restockList;
     }
     function editItems() {
-      const row = i => '<div class="pay" style="flex-wrap:wrap;gap:6px" data-it="' + i.id + '"><input data-f="name" value="' + esc(i.name) + '" style="flex:1 1 140px;min-width:0"><select data-f="category" style="flex:0 1 120px">' + CATS.map(c => '<option' + (c === i.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">$<input data-f="price" inputmode="decimal" value="' + (i.price != null ? Number(i.price) : '') + '" placeholder="—" style="width:64px"></label><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem;color:var(--ink);font-weight:400"><input type="checkbox" data-f="need"' + (i.need ? ' checked' : '') + ' style="width:auto">🛒 buy</label><input data-f="qty" inputmode="numeric" value="' + (i.qty || 1) + '" title="How many" style="width:48px"><button type="button" class="btn ghost small" data-itdel="' + i.id + '" aria-label="Remove">✕</button></div>';
+      const row = i => '<div class="pay" style="flex-wrap:wrap;gap:6px" data-it="' + i.id + '"><input data-f="name" value="' + esc(i.name) + '" style="flex:1 1 140px;min-width:0"><select data-f="category" style="flex:0 1 120px">' + CATS.map(c => '<option' + (c === i.category ? ' selected' : '') + '>' + c + '</option>').join('') + '</select><input data-f="note" value="' + esc(i.note || '') + '" placeholder="Note on the sign (optional)" style="flex:1 1 100%;font-size:.85rem"><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem">$<input data-f="price" inputmode="decimal" value="' + (i.price != null ? Number(i.price) : '') + '" placeholder="—" style="width:64px"></label><label style="margin:0;display:flex;align-items:center;gap:4px;font-size:.85rem;color:var(--ink);font-weight:400"><input type="checkbox" data-f="need"' + (i.need ? ' checked' : '') + ' style="width:auto">🛒 buy</label><input data-f="qty" inputmode="numeric" value="' + (i.qty || 1) + '" title="How many" style="width:48px"><button type="button" class="btn ghost small" data-itdel="' + i.id + '" aria-label="Remove">✕</button></div>';
       open('<h2>✏️ Snack items &amp; prices</h2><p class="helper">Set what each item costs students. Check 🛒 buy (and how many) for anything you need to restock.</p>' +
         CATS.map(c => { const xs = snItems.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return xs.length ? '<p class="helper" style="margin:12px 0 2px"><b>' + c + '</b></p>' + xs.map(row).join('') : ''; }).join('') +
         '<div class="actions"><button type="button" class="btn ghost small" id="itAdd">➕ Add an item</button></div>' +
@@ -881,7 +881,7 @@
       $('itX').onclick = close;
       $('itAdd').onclick = async () => {
         const name = prompt('New item name'); if (!name || !name.trim()) return;
-        const r = await sb.from('snack_items').insert({ owner: user.id, name: name.trim(), category: 'Other', sort: 99 }).select().single(); if (fail(r)) return;
+        const r = await sb.from('snack_items').insert({ owner: user.id, name: name.trim(), category: 'Snacks', sort: 99 }).select().single(); if (fail(r)) return;
         snItems.push(r.data); editItems();
       };
       document.querySelectorAll('[data-itdel]').forEach(b => b.onclick = async () => {
@@ -894,8 +894,8 @@
         for (const el of document.querySelectorAll('[data-it]')) {
           const i = snItems.find(x => x.id === el.dataset.it); if (!i) continue;
           const g = f => el.querySelector('[data-f="' + f + '"]'), p = g('price').value.trim();
-          const row = { name: g('name').value.trim() || i.name, category: g('category').value, price: p === '' || isNaN(Number(p)) ? null : Math.round(Number(p) * 100) / 100, need: g('need').checked, qty: Math.max(1, Number(g('qty').value) || 1) };
-          if (row.name !== i.name || row.category !== i.category || row.price !== (i.price == null ? null : Number(i.price)) || row.need !== i.need || row.qty !== i.qty) {
+          const row = { name: g('name').value.trim() || i.name, note: g('note').value.trim(), category: g('category').value, price: p === '' || isNaN(Number(p)) ? null : Math.round(Number(p) * 100) / 100, need: g('need').checked, qty: Math.max(1, Number(g('qty').value) || 1) };
+          if (row.name !== i.name || row.note !== (i.note || '') || row.category !== i.category || row.price !== (i.price == null ? null : Number(i.price)) || row.need !== i.need || row.qty !== i.qty) {
             if (fail(await sb.from('snack_items').update(row).eq('id', i.id))) return;
             Object.assign(i, row);
           }
@@ -908,9 +908,12 @@
     function printPrices() {
       const xs = snItems.filter(i => i.price != null);
       if (!xs.length) { toast('Add prices first with ✏️ Items & prices.'); return; }
-      popup(PAGE('ATU SNA snack closet prices', '<div class="hdr" style="text-align:center"><h1 style="font-size:2.4rem">ATU <span>SNA</span></h1><div style="font-size:1.3rem;font-weight:700">Snack Closet</div></div><main>' +
-        CATS.map(c => { const g = xs.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c); return g.length ? '<h2 style="font-size:1.4rem">' + c + '</h2><table>' + g.map(i => '<tr><td style="font-size:1.25rem">' + esc(i.name) + '</td><td class="n" style="font-size:1.25rem;font-weight:800">' + money(i.price) + '</td></tr>').join('') + '</table>' : ''; }).join('') +
-        '<div style="margin-top:26px;background:#fff4d1;border-left:8px solid #FFC72C;border-radius:10px;padding:14px 18px;font-size:1.25rem"><b>Pay with Cash App: $atunursing</b><br>Put what you bought in the note. Cash goes in the box.</div><button onclick="print()">🖨 Print or save as PDF</button></main>', 'td{border-bottom:2px dotted #c9d6cd}'));
+      const cats = CATS.filter(c => xs.some(i => (CATS.includes(i.category) ? i.category : 'Other') === c));
+      const pill = n => '$' + Number(n).toFixed(2);
+      popup(PAGE('ATU SNA snack closet prices', '<div class="hdr" style="text-align:center"><h1 style="font-size:2.4rem">ATU <span>SNA</span></h1><div style="font-size:1.3rem;font-weight:700">Snack Closet</div></div><main style="max-width:1000px"><div class="cols">' +
+        cats.map(c => '<section><h3><span>' + esc(c.toUpperCase()) + '</span></h3>' + xs.filter(i => (CATS.includes(i.category) ? i.category : 'Other') === c).map((i, n) => '<div class="it' + (n % 2 ? ' alt' : '') + '"><div><b>' + esc(i.name) + '</b>' + (i.note ? '<small>' + esc(i.note) + '</small>' : '') + '</div><span class="pr">' + pill(i.price) + '</span></div>').join('') + '</section>').join('') +
+        '</div><div style="margin-top:22px;background:#fff4d1;border-left:8px solid #FFC72C;border-radius:10px;padding:14px 18px;font-size:1.2rem"><b>Pay with Cash App: $atunursing</b><br>Put what you bought in the note.</div><button onclick="print()">🖨 Print or save as PDF</button></main>',
+        '.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}h3{display:flex;align-items:center;gap:12px;color:#046A38;font-size:1rem;letter-spacing:.05em;margin:6px 0 12px}h3::after{content:"";flex:1;height:3px;background:#FFC72C}.it{display:flex;justify-content:space-between;align-items:center;gap:10px;border:3px solid #c9dcd1;border-radius:14px;padding:10px 14px;margin:0 0 10px;background:#fff}.it.alt{background:#e7f0ea}.it b{font-size:1.1rem}.it small{display:block;font-style:italic;color:#5f6f66;font-size:.72rem}.pr{background:#F6C744;border-radius:99px;padding:6px 22px;font:700 1.05rem ui-monospace,Menlo,Consolas,monospace;white-space:nowrap}@media print{.it{break-inside:avoid}}'));
     }
     function restockList() {
       const need = snItems.filter(i => i.need);
