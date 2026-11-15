@@ -423,9 +423,18 @@ $('fab').onclick = () => {
 
 // "Dentist friday 3pm", "call Mrs. Abbott tomorrow", "band trip 10/24 to 10/26", "pay water bill on the 15th".
 function parseQuick(text) {
-  let t = ' ' + text + ' ', date = '', endDate = '', start = '', end = '';
+  let t = ' ' + text + ' ', date = '', endDate = '', start = '', end = '', repeat = '', remindMe = false;
   const now = new Date(), base = today();
   const found = (re, fn) => { const m = t.match(re); if (m) { const r = fn(m); if (r !== false) t = t.replace(m[0], ' '); } };
+  // "Remind me to …" makes a task with a reminder; "every Monday", "weekly", "every 2 weeks" make it repeat.
+  found(/^\s*(?:please\s+)?remind me (?:to |about |that )?/i, () => { remindMe = true; });
+  found(/\b(?:every|each) (sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:day|nesday|rsday|urday|sday)?\b/i, m => { repeat = 'weekly'; t = t.replace(m[0], ' ' + m[1] + ' '); return false; });
+  found(/\b(?:every (?:other|2) weeks?|biweekly)\b/i, () => { repeat = 'biweekly'; });
+  found(/\b(?:every weekday|weekdays)\b/i, () => { repeat = 'weekdays'; });
+  found(/(?<!\bdr\.?\s?)\b(?:every ?day|daily)\b/i, () => { repeat = 'daily'; });
+  found(/\b(?:every week|weekly)\b/i, () => { repeat = 'weekly'; });
+  found(/\b(?:every month|monthly)\b/i, () => { repeat = 'monthly'; });
+  found(/\b(?:every year|yearly|annually)\b/i, () => { repeat = 'yearly'; });
   // A date without a year that has already passed means next year.
   const toIso = (mo, d, y) => { const yr = y ? (String(y).length === 2 ? 2000 + +y : +y) : now.getFullYear(); let s = yr + '-' + pad(mo) + '-' + pad(d); if (!y && s < base) s = (yr + 1) + '-' + pad(mo) + '-' + pad(d); return s; };
   found(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:-|to|through|thru)\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/i, m => { date = toIso(+m[1], +m[2], m[3]); endDate = toIso(+m[4], +m[5], m[6]); });
@@ -435,21 +444,44 @@ function parseQuick(text) {
   if (!date) found(/\btomorrow\b/i, () => { date = addDays(base, 1); });
   if (!date) found(/\bnext week\b/i, () => { date = addDays(base, 7 - now.getDay() + 1); });
   if (!date) found(/\bin (\d+) days?\b/i, m => { date = addDays(base, +m[1]); });
+  if (!date) found(/\bin (\d+|a|one|two) weeks?\b/i, m => { const n = { a: 1, one: 1, two: 2 }[m[1].toLowerCase()] || +m[1]; date = addDays(base, 7 * n); });
+  if (!date) found(/\b(?:this )?weekend\b/i, () => { date = addDays(base, (6 - now.getDay() + 7) % 7); });
   if (!date) found(/\b(?:on )?the (\d{1,2})(?:st|nd|rd|th)\b/i, m => { const d = +m[1]; let s = base.slice(0, 8) + pad(d); if (s < base) { const x = new Date(now.getFullYear(), now.getMonth() + 1, d); s = isoDay(x); } date = s; });
   if (!date) found(/\b(next )?(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:day|nesday|rsday|urday|sday)?\b/i, m => { const want = DAYS.indexOf(m[2].slice(0, 2).toLowerCase()); let n = (want - now.getDay() + 7) % 7 || 7; if (m[1]) n += n < 7 ? 7 : 0; date = addDays(base, n); });
   const tm = s => { const m = s.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|a|p)?/i); if (!m) return ''; let h = +m[1]; const ap = (m[3] || '').toLowerCase(); if (ap.startsWith('p') && h < 12) h += 12; if (ap.startsWith('a') && h === 12) h = 0; if (!ap && h >= 1 && h <= 7) h += 12; return pad(h) + ':' + (m[2] || '00'); };
   found(/\b(?:at |@ ?)?(\d{1,2}(?::\d{2})?\s*(?:am|pm|a|p)?)\s*(?:-|to|until|till)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm|a|p))\b/i, m => { end = tm(m[2]); start = tm(m[1] + (/[ap]/i.test(m[1]) ? '' : m[2].replace(/[\d:\s]/g, ''))); });
   if (!start) found(/\b(?:at |@ ?)(\d{1,2}(?::\d{2})?\s*(?:am|pm|a|p)?)\b|\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b|\b(noon)\b/i, m => { start = m[3] ? '12:00' : tm(m[1] || m[2]); });
   const title = t.replace(/\s+(on|at|by|due)\s*$/i, ' ').replace(/\s+/g, ' ').trim();
-  return { title: title.charAt(0).toUpperCase() + title.slice(1), date, endDate, start, end };
+  return { title: title.charAt(0).toUpperCase() + title.slice(1), date, endDate, start, end, repeat, remindMe };
+}
+// Which list a typed item belongs on, from its words (work things go on ATU).
+const ATU_WORDS = /\b(nur\s?\d*|nursing|clinicals?|sim(ulation)?|sim lab|lab|exams?|quiz|lecture|class(es)?|syllabus|grades?|grading|students?|advising|advisees?|faculty|sna|stti|omega iota|atu|cords|pinning|nclex|ati|concepts|nutrition|canvas|blackboard|dean|dr\.? daily|committee|office hours)\b/i;
+function guessList(title) {
+  const lists = S().lists || [];
+  if (ATU_WORDS.test(title) && lists.includes('ATU')) return 'ATU';
+  return '';
 }
 function quickAdd(text, openAfter) {
   const p = parseQuick(text);
-  const kind = p.start || p.endDate ? 'event' : 'task';
-  const it = { id: uid(), kind, title: p.title || text, date: p.date || (kind === 'event' ? today() : null), endDate: p.endDate || null, start: p.start, end: p.end || (p.start ? pad(Math.min(23, +p.start.slice(0, 2) + 1)) + p.start.slice(2) : ''), allDay: !p.start, done: false, list: '', priority: 0, notes: '', location: '', repeat: '', color: '', sort: 0 };
+  // "Remind me…" is always a task; otherwise a time or a date range makes it an event.
+  const kind = p.remindMe ? 'task' : p.start || p.endDate ? 'event' : 'task';
+  const date = p.date || (kind === 'event' || p.remindMe || p.repeat ? today() : null);
+  const it = { id: uid(), kind, title: p.title || text, date, endDate: kind === 'event' ? p.endDate || null : null, start: kind === 'event' ? p.start : '', end: kind === 'event' ? p.end || (p.start ? pad(Math.min(23, +p.start.slice(0, 2) + 1)) + p.start.slice(2) : '') : '', allDay: kind === 'task' || !p.start, done: false, list: guessList(p.title || text), priority: 0, notes: '', location: '', repeat: p.repeat || '', color: '', sort: 0,
+    remind: kind === 'task' && p.start ? -(+p.start.slice(0, 2) * 60 + +p.start.slice(3, 5)) : null };
   data.items.push(it); window.save(); route();
-  toast('✓ ' + (kind === 'event' ? 'Event' : 'Task') + ' added' + (it.date ? ' for ' + fmtDate(it.date, 'rel') + (it.start ? ' at ' + fmtTime(it.start) : '') : '') + '. Tap it to change.');
+  toast('✓ ' + (kind === 'event' ? 'Event' : p.remindMe ? 'Reminder' : 'Task') + ' added' + (it.date ? ' for ' + fmtDate(it.date, 'rel') + (p.start ? ' at ' + fmtTime(p.start) : '') : '') + (it.repeat ? ' · ' + REPEATS[it.repeat].toLowerCase() : '') + (it.list ? ' · ' + it.list : '') + '. Tap it to change.');
   return it;
+}
+// Talk instead of type, where the browser supports it (Safari and Chrome do).
+function listenInto(input, btn) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { input.focus(); toast('Tap the 🎤 on your keyboard to talk.'); return; }
+  const r = new SR(); r.lang = 'en-US'; r.interimResults = true; r.maxAlternatives = 1;
+  btn.classList.add('listening');
+  r.onresult = e => { input.value = Array.from(e.results).map(x => x[0].transcript).join(' '); };
+  r.onerror = () => { btn.classList.remove('listening'); toast('Couldn’t hear that. Try again or type it.'); };
+  r.onend = () => { btn.classList.remove('listening'); input.focus(); };
+  try { r.start(); } catch (e) { btn.classList.remove('listening'); input.focus(); }
 }
 
 // ---------- Today ----------
@@ -500,6 +532,7 @@ function viewToday() {
     '<span class="sub">' + eventsToday.length + (eventsToday.length === 1 ? ' event' : ' events') + ' · ' + todayTasks.length + (todayTasks.length === 1 ? ' task' : ' tasks') + ' today</span>' +
     (todayTasks.length ? '<div class="prog">' + doneToday + ' of ' + todayTasks.length + ' tasks complete' + (doneToday && doneToday === todayTasks.length ? ' — all done!' : '') + '<div class="bar"><i style="width:' + Math.round(doneToday / todayTasks.length * 100) + '%"></i></div></div>' : '') + '</div>' +
     cheerCard() +
+    '<div class="quickbar typeadd"><input id="tAdd" enterkeyhint="done" placeholder="Type it: “Exam Thursday 9am”"><button type="button" class="ghost" id="tMic" aria-label="Talk">🎤</button><button type="button" id="tGo">Add</button></div>' +
     '<div class="tiles">' +
     '<button type="button" class="tile t-event" data-tile="event">' + TILE_ICONS.event + '<b>Event</b></button>' +
     '<button type="button" class="tile t-task" data-tile="task">' + TILE_ICONS.task + '<b>Task</b></button>' +
@@ -524,6 +557,8 @@ function viewToday() {
   loadKidNews(); loadBirthdays(); loadFamilyTodos(); wirePing($('view'));
   $('view').querySelectorAll('[data-meal]').forEach(b => b.onclick = () => editMeal(b.dataset.mealdate, b.dataset.meal));
   $('view').querySelectorAll('[data-sday]').forEach(b => b.onclick = () => { todaySel = b.dataset.sday; viewToday(); });
+  { const go = () => { const v = $('tAdd').value.trim(); if (!v) { $('tAdd').focus(); return; } $('tAdd').value = ''; quickAdd(v); };
+    $('tGo').onclick = go; $('tAdd').onkeydown = e => { if (e.key === 'Enter') go(); }; $('tMic').onclick = () => listenInto($('tAdd'), $('tMic')); }
   $('view').querySelectorAll('[data-tile]').forEach(b => b.onclick = () => {
     const k = b.dataset.tile;
     if (k === 'event' || k === 'task') editItem(null, { kind: k, date: sel });
@@ -1756,11 +1791,86 @@ function viewAtu() {
       (done.length ? '<p class="lbl">Recently done</p>' + done.map(i => entryRow(Object.assign({ src: 'planner', kind: 'task', listName: 'ATU', allDay: true }, i))).join('') : '') + '</div>' +
     '<a class="card pad tip" href="#tasks/sna"><b>🍿 SNA Snack Closet <span id="atuReqN"></span></b><span class="sub">' + sn.items.length + ' items · ' + (last ? 'last order ' + fmtDate(last.date, 'rel') + ' ($' + last.total.toFixed(2) + ')' : 'make an order') + ' →</span></a>' +
     '<div class="card pad"><h2>Next 2 weeks at ATU</h2>' + (events.length ? events.slice(0, 12).map(entryRow).join('') : '<p class="helper">Nothing on your ATU calendar in the next 2 weeks.</p>') + '</div>' +
+    '<a class="card pad tip" href="#tasks/atu" id="atuSem"><b>🗓 Set up a semester</b><span class="sub">Add the academic calendar and all your class meetings at once →</span></a>' +
     '<a class="card pad tip" href="#files" id="atuFiles"><b>📁 ATU files</b><span class="sub">Documents and notes in your ATU folder →</span></a>';
   const go = () => { const v = $('atuAdd').value.trim(); if (!v) return; const p = parseQuick(v); data.items.push(newItem({ kind: 'task', title: p.title || v, date: p.date || null, list: 'ATU' })); window.save(); viewAtu(); toast('✓ ATU task added'); setTimeout(() => $('atuAdd').focus(), 50); };
   $('atuGo').onclick = go; $('atuAdd').onkeydown = e => { if (e.key === 'Enter') go(); };
   $('atuFiles').onclick = () => { fileFolder = 'ATU'; fileFind = ''; };
+  $('atuSem').onclick = e => { e.preventDefault(); semesterSetup(); };
   wireRows($('view'));
+}
+// ---------- 🗓 Semester setup ----------
+// Step 1 uses the document import for the academic calendar. Step 2 adds every class meeting between the first and last day,
+// skipping breaks and holidays. Each class's meetings share an id prefix "sem-<id>-" so they can be removed together.
+const BREAK_WORDS = /\b(break|holiday|no class(es)?|no school|closed|recess|reading day|study day|thanksgiving|labor day|mlk|martin luther king|good friday|juneteenth|independence day|memorial day|veterans day)\b/i;
+const SEM_DAYS = [['MO', 'M', 1], ['TU', 'T', 2], ['WE', 'W', 3], ['TH', 'Th', 4], ['FR', 'F', 5], ['SA', 'Sa', 6]];
+function semSeries() {
+  const g = {};
+  data.items.filter(i => i.kind === 'event' && /^sem-[^-]+-/.test(i.id)).forEach(i => { const k = i.id.split('-')[1]; (g[k] = g[k] || []).push(i); });
+  return Object.entries(g).map(([k, list]) => { list.sort((a, b) => a.date.localeCompare(b.date)); return { k, title: list[0].title, n: list.length, first: list[0].date, last: list[list.length - 1].date, start: list[0].start, end: list[0].end, allDay: list[0].allDay }; }).sort((a, b) => b.last.localeCompare(a.last));
+}
+// Breaks already on the calendar between two days (your own events and connected calendars).
+function semBreaks(from, to) {
+  const out = new Set();
+  if (!from || !to || from > to) return out;
+  agenda(from, to).filter(e => BREAK_WORDS.test(e.title || '')).forEach(e => { for (let d = e.date; d <= (e.endDate || e.date) && d <= to; d = addDays(d, 1)) if (d >= from) out.add(d); });
+  return out;
+}
+function semesterSetup() {
+  $('modalBody').classList.add('wide');
+  const series = semSeries();
+  let days = new Set(), skips = new Set(), auto = new Set(), color = COLORS[5];
+  openModal('<h2>🗓 Set up a semester</h2>' +
+    '<div class="card pad"><h3>1. Important dates</h3><p class="helper">Add the ATU academic calendar first (first day, breaks, finals, deadlines). Upload the PDF or a screenshot, or paste the text. You check every date before it’s added. Put them on the <b>ATU</b> list.</p>' +
+    '<div class="row-actions tight"><button type="button" class="ghost" id="semImp">📷 Add dates from the academic calendar</button></div></div>' +
+    '<div class="card pad"><h3>2. Class meetings</h3><p class="helper">One class at a time. Breaks and holidays already on your calendar are skipped automatically.</p>' +
+    '<label>Class<input id="semT" placeholder="NUR 3606 Concepts II"></label>' +
+    '<p class="lbl">Meets on</p><div class="segs semdays">' + SEM_DAYS.map(([c, l]) => '<button type="button" class="seg" data-sd="' + c + '">' + l + '</button>').join('') + '</div>' +
+    '<div class="grid2"><label>Starts<input type="time" id="semS"></label><label>Ends<input type="time" id="semE"></label></div>' +
+    '<p class="helper" style="margin-top:-4px">Leave the times empty for an online class (it shows as all day).</p>' +
+    '<label>Where<input id="semL" placeholder="Dean Hall 101"></label>' +
+    '<div class="grid2"><label>First day of class<input type="date" id="semF"></label><label>Last day of class<input type="date" id="semZ"></label></div>' +
+    '<p class="lbl">Skip these days</p><div id="semSkips" class="semskips"></div><div class="row-actions tight"><input type="date" id="semSkipD" aria-label="Day to skip"><button type="button" class="ghost small" id="semSkipAdd">＋ Skip a day</button></div>' +
+    '<div class="grid2"><label>Reminder<select id="semR">' + REMIND_TIMED.map(([v, l]) => '<option value="' + v + '"' + (v === '-1' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label><span></span></div>' +
+    '<p class="lbl">Color</p><div class="colors">' + COLORS.map(c => '<button type="button" class="cdot' + (c === color ? ' on' : '') + '" data-semc="' + c + '" style="background:' + c + '"></button>').join('') + '</div>' +
+    '<p class="helper" id="semSum"></p><div class="row-actions"><button type="button" id="semAdd" disabled>Add class meetings</button></div></div>' +
+    (series.length ? '<div class="card pad"><h3>Classes already added</h3>' + series.map(x => '<div class="mini-row"><span><b>' + esc(x.title) + '</b> <small class="sub">' + x.n + ' meetings · ' + esc(fmtDate(x.first)) + '–' + esc(fmtDate(x.last)) + (x.allDay ? '' : ' · ' + fmtTime(x.start) + (x.end ? '–' + fmtTime(x.end) : '')) + '</small></span><button type="button" class="danger small" data-semdel="' + x.k + '">Remove</button></div>').join('') + '</div>' : '') +
+    '<div class="row-actions"><button type="button" class="ghost" id="semX">Done</button></div>');
+  const dates = () => {
+    const f = $('semF').value, z = $('semZ').value, out = [], skipped = [];
+    if (!f || !z || z < f || !days.size) return { out, skipped };
+    const want = new Set(SEM_DAYS.filter(([c]) => days.has(c)).map(x => x[2]));
+    for (let d = f, i = 0; d <= z && i < 400; d = addDays(d, 1), i++) { if (!want.has(new Date(d + 'T12:00').getDay())) continue; (skips.has(d) ? skipped : out).push(d); }
+    return { out, skipped };
+  };
+  const refresh = () => {
+    const onDays = new Set(SEM_DAYS.filter(([c]) => days.has(c)).map(x => x[2])), shownSkips = [...skips].sort().filter(d => !auto.has(d) || !onDays.size || onDays.has(new Date(d + 'T12:00').getDay()));
+    $('semSkips').innerHTML = shownSkips.length ? shownSkips.map(d => '<span class="chip">' + esc(fmtDate(d)) + (auto.has(d) ? ' <small>break</small>' : '') + ' <button type="button" class="linkish" data-semun="' + d + '" aria-label="Don’t skip">✕</button></span>').join('') : '<span class="helper">None</span>';
+    $('semSkips').querySelectorAll('[data-semun]').forEach(b => b.onclick = () => { skips.delete(b.dataset.semun); refresh(); });
+    const { out, skipped } = dates(), ok = $('semT').value.trim() && out.length;
+    $('semSum').textContent = out.length ? 'Adds ' + out.length + ' class meetings' + (skipped.length ? ', skipping ' + skipped.length : '') + ', from ' + fmtDate(out[0]) + ' to ' + fmtDate(out[out.length - 1]) + '.' : (days.size && $('semF').value && $('semZ').value ? 'No class days in those dates.' : 'Pick the days it meets and the first and last day.');
+    $('semAdd').disabled = !ok; $('semAdd').textContent = ok ? 'Add ' + out.length + ' class meetings' : 'Add class meetings';
+  };
+  const findBreaks = () => { const f = $('semF').value, z = $('semZ').value; [...auto].forEach(d => skips.delete(d)); auto = semBreaks(f, z); auto.forEach(d => skips.add(d)); refresh(); };
+  $('semX').onclick = closeModal;
+  $('semImp').onclick = () => importEvents();
+  $('modalBody').querySelectorAll('[data-sd]').forEach(b => b.onclick = () => { const c = b.dataset.sd; days.has(c) ? days.delete(c) : days.add(c); b.classList.toggle('on', days.has(c)); refresh(); });
+  $('modalBody').querySelectorAll('[data-semc]').forEach(b => b.onclick = () => { color = b.dataset.semc; $('modalBody').querySelectorAll('[data-semc]').forEach(x => x.classList.toggle('on', x === b)); });
+  ['semF', 'semZ'].forEach(id => $(id).addEventListener('change', findBreaks));
+  $('semT').oninput = refresh;
+  $('semS').onchange = () => { const s = $('semS').value; if (s && !$('semE').value) $('semE').value = pad(Math.min(23, +s.slice(0, 2) + 1)) + s.slice(2); };
+  $('semSkipAdd').onclick = () => { const d = $('semSkipD').value; if (!d) { toast('Pick a day to skip.'); return; } skips.add(d); $('semSkipD').value = ''; refresh(); };
+  $('modalBody').querySelectorAll('[data-semdel]').forEach(b => b.onclick = () => {
+    const x = series.find(y => y.k === b.dataset.semdel); if (!confirm('Remove all ' + x.n + ' “' + x.title + '” class meetings?')) return;
+    data.items = data.items.filter(i => !i.id.startsWith('sem-' + x.k + '-')); window.save(); route(); semesterSetup(); toast('Removed ' + x.title);
+  });
+  $('semAdd').onclick = () => {
+    const title = $('semT').value.trim(), { out } = dates(); if (!title || !out.length) return;
+    const k = uid().replace(/-/g, '').slice(0, 10), st = $('semS').value, en = $('semE').value, r = $('semR').value;
+    out.forEach((d, n) => data.items.push(newItem({ id: 'sem-' + k + '-' + n, kind: 'event', title, date: d, allDay: !st, start: st || '', end: st ? en : '', location: $('semL').value.trim(), list: 'ATU', color, remind: r === '' ? null : Number(r) })));
+    window.save(); route(); toast('✓ Added ' + out.length + ' ' + title + ' meetings'); semesterSetup();
+  };
+  refresh();
 }
 // The snack closet catalog (Sam's Club), counts, order quantities and past orders live in settings.sna.
 // Snack kinds in the order of a student's day: breakfast, lunch, snacks, sweets, drinks. Within each kind, the list keeps
@@ -3780,7 +3890,7 @@ function viewMore() {
     '<a class="card pad tip" href="../recipes/"><b>Family recipes</b><span class="sub">📸 Recipe photos to share with family →</span></a>' +
     '<a class="card pad tip" href="#meds"><b>Medicines</b><span class="sub">💊 Medicine & vitamin reminders for everyone →</span></a>' +
     '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
-    '<a class="card pad tip" href="#tasks/atu"><b>ATU</b><span class="sub">🎓 ATU tasks and the 🍿 SNA Snack Closet order →</span></a>' +
+    '<a class="card pad tip" href="#tasks/atu"><b>ATU</b><span class="sub">🎓 ATU tasks, 🗓 semester setup and the 🍿 SNA Snack Closet order →</span></a>' +
     '<a class="card pad tip" href="#quick"><b>Quick adds</b><span class="sub">⭐ Add, change or delete your one-tap events →</span></a>' +
     '<a class="card pad tip" href="#gifts"><b>Gifts</b><span class="sub">🎁 Birthdays, anniversaries and gift ideas →</span></a>' +
     '<a class="card pad tip" href="#notes"><b>Notes</b><span class="sub">📝 Sticky notes →</span></a>' +

@@ -193,3 +193,12 @@ table.cmp td:first-child { white-space: normal; } .card { overflow-x: auto; }
 #fFind { margin: 4px 0 2px; }
 /* The page fade-in must never apply to printouts (it left them blank). */
 .print-only, .print-only * { animation: none !important; opacity: 1 !important; transform: none !important; }
+/* Type-it box on Today */
+.typeadd { margin: 10px 0 12px; }
+.typeadd button.ghost { padding: 0 12px; }
+.typeadd button.listening { background: #c0392b; color: #fff; border-color: #c0392b; animation: micpulse 1s ease-in-out infinite; }
+@keyframes micpulse { 50% { opacity: .6; } }
+/* Semester setup */
+.semdays { flex-wrap: wrap; }
+.semskips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.semskips .chip small { opacity: .7; }

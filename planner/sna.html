@@ -106,6 +106,8 @@
       try {
         const ok = await rpc('sna_send', { p_token: token, p_name: who, p_note: $('note').value.trim(), p_lines: lines, p_email: email, p_phone: phone, p_store: pStore, p_date: pDate, p_time: pTime });
         if (!ok) throw new Error('This link isn’t working anymore. Ask for a new one.');
+        // Phone alert to Dr. Escobar (if it fails, the email and the Planner still have it).
+        try { fetch(CFG.url + '/functions/v1/sna-notify', { method: 'POST', keepalive: true, headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }).catch(() => {}); } catch (e) {}
         // Email Dr. Escobar a heads-up (FormSubmit). If it fails, the request is still saved in her Planner.
         try {
           const when = !pickup ? '' : new Date(pdate + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) + ' at ' + new Date('2000-01-01T' + ptime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
