@@ -220,7 +220,7 @@
       $('view').innerHTML = modeTabs() + (banner ? '<div class="banner">' + esc(banner) + '</div>' : '') +
         '<div class="stats"><div class="stat"><span>Paid this semester</span><b style="color:var(--green)">' + nPaid + '</b><small class="helper" style="display:block;margin:0">of ' + active.length + ' on the list</small></div><div class="stat"><span>Collected in app</span><b>' + money(collected) + '</b><small class="helper" style="display:block;margin:0">' + termName(cur()) + '</small></div><div class="stat"><span>Dues</span><b>' + (settings.amount > 0 ? money(settings.amount) : '—') + '</b><small class="helper" style="display:block;margin:0">per semester</small></div></div>' +
         '<div class="meter"><i style="width:' + (active.length ? nPaid / active.length * 100 : 0) + '%"></i></div>' +
-        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="stuBtn">💚 Student paid list</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
+        '<div class="actions"><button type="button" class="btn" id="ciBtn">📥 Cash App import</button><button type="button" class="btn" id="paidBtn">📄 Paid list</button><button type="button" class="btn ghost" id="stuBtn">💚 Student links</button><button type="button" class="btn ghost" id="facBtn">🔗 Faculty link</button><button type="button" class="btn" id="rosBtn">👥 Upload student list</button><button type="button" class="btn ghost" id="addBtn">➕ Add a student</button><button type="button" class="btn ghost" id="bulkBtn">👥 Paste a list</button><button type="button" class="btn ghost" id="csvBtn">⬇ Everything</button><button type="button" class="btn ghost" id="nextBtn">🔄 Start ' + termName(cur() + 1) + '</button></div>' +
         '<div class="tabs">' + [['all', 'Everyone'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['officers', '⭐ Officers'], ['grad', '🎓 Graduated'], ['left', '🚪 Left program']].map(([k, l]) => '<button type="button" class="chip' + (filter === k ? ' on' : '') + '" data-f="' + k + '">' + l + '</button>').join('') + '</div>' +
         (past ? '' : '<div class="tabs">' + [['all', 'All levels']].concat(LEVELS.map(l => [String(l), l < 0 ? 'Lower div.' : 'Level ' + l])).map(([k, l]) => '<button type="button" class="chip' + (lvlFilter === k ? ' on' : '') + '" data-l="' + k + '">' + l + '</button>').join('') + '</div>') +
         '<p class="helper"><span class="nm paid">Yellow</span> = paid this semester · <span class="nm ahead">Purple</span> = paid ahead · no color = not paid.<br><b>✓ Paid</b> = this semester. <b style="color:var(--purple)">⏩</b> = more than one semester. Then tap Cash App, Cash or Check. Tap a name to edit it or change the level.</p><input type="search" id="find" placeholder="🔍 Search name, email or note" value="' + esc(find) + '">' +
@@ -511,8 +511,8 @@
     }
 
     // ---- officers ----
-    const ROLE_ORDER = ['president', 'vice president', 'secretary', 'treasurer', 'level 0', 'level 1', 'level 2', 'level 3', 'level 4', 'fundraising', 'curriculum', 'welfare', 'recognition'];
-    const roleRank = r => { const s = String(r).toLowerCase(), i = ROLE_ORDER.findIndex(x => s.includes(x)); return i < 0 ? 99 : i; };
+    const ROLE_ORDER = ['vice president', 'president', 'secretary', 'treasurer', 'level 0', 'level 1', 'level 2', 'level 3', 'level 4', 'fundraising', 'curriculum', 'welfare', 'recognition'];
+    const roleRank = r => { const s = String(r).toLowerCase(), i = ROLE_ORDER.findIndex(x => s.includes(x)); return i < 0 ? 99 : i === 0 ? 1.5 : i; };
     const ROLE_IDEAS = ['President', 'Vice President', 'Secretary', 'Treasurer', 'Level 0 Representative', 'Level 1 Representative', 'Level 2 Representative', 'Level 3 Representative', 'Level 4 Representative', 'Fundraising Rep. – T-Shirts', 'Fundraising Rep. – Snack Room', 'Curriculum Committee Rep.', 'Welfare Committee Rep.', 'Recognition Committee Co-Chair', 'Recognition Committee'];
     const termRank = t => { const m = String(t).match(/(Spring|Fall)\s+(\d{4})/); return m ? Number(m[2]) * 2 + (m[1] === 'Fall' ? 1 : 0) : 0; };
     function drawOfficers() {
@@ -986,11 +986,13 @@
     }
     function studentLink() {
       const link = location.href.split('#')[0].replace(/[^/]*$/, '') + 'paid.html?t=' + settings.student_token;
-      open('<h2>💚 Student paid list</h2><p class="helper">An ATU SNA page in green and gold that lists everyone marked paid this semester, by level, with a name search. Students who haven\'t paid are not listed, so no one sees who still owes. It updates as soon as you mark someone paid.</p>' +
+      const hub = location.href.split('#')[0].replace(/[^/]*$/, '') + 'students.html?t=' + settings.student_token;
+      open('<h2>💚 Student links</h2><p class="helper"><b>ATU SNA student page</b> — one link with dues info, the paid list, cords points, the officer election (when open) and your officers.</p><div class="linkbox">' + esc(hub) + '</div><div class="actions"><button type="button" class="btn small" id="hCopy">Copy student page link</button><a class="btn ghost small" href="' + esc(hub) + '" target="_blank" rel="noopener">Open it</a></div><h2 style="margin-top:18px">Dues paid list only</h2><p class="helper">An ATU SNA page in green and gold that lists everyone marked paid this semester, by level, with a name search. Students who haven\'t paid are not listed, so no one sees who still owes. It updates as soon as you mark someone paid.</p>' +
         '<div class="linkbox">' + esc(link) + '</div><div class="actions"><button type="button" class="btn small" id="sCopy">Copy link</button><a class="btn ghost small" href="' + esc(link) + '" target="_blank" rel="noopener">Open it</a></div>' +
-        '<p class="helper" style="margin-top:16px">Make a new link if this one gets shared too far. The old one stops working.</p><button type="button" class="btn ghost small" id="sNew">Make a new link</button>' +
+        '<p class="helper" style="margin-top:16px">Make a new link if these get shared too far. The student page, paid list and cords links all change, and the old ones stop working.</p><button type="button" class="btn ghost small" id="sNew">Make a new link</button>' +
         '<div class="actions"><button type="button" class="btn ghost" id="sClose">Close</button></div>');
       $('sCopy').onclick = () => copy(link, 'Student list link copied ✓');
+      $('hCopy').onclick = () => copy(hub, 'Student page link copied ✓');
       $('sClose').onclick = close;
       $('sNew').onclick = async () => {
         if (!confirm('Make a new student list link? The old one will stop working.')) return;
