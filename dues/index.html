@@ -760,13 +760,14 @@
       const a = caAmt(r.Amount), n = String(r.Notes || '').trim(), t = r['Transaction Type'], who = String(r['Name of sender/receiver'] || '').trim();
       if ((r.Status || 'COMPLETE') !== 'COMPLETE' || t === 'Account Notifications') return null;
       if (a > 0 && t === 'P2P') {
-        if (/^shaana escobar$/i.test(who)) return NOT_SNACK_RE.test(n) ? 'other' : 'cash';
+        if (/^shaana escobar$/i.test(who)) return 'cash';
         if (NOT_SNACK_RE.test(n)) return 'other';
         if (isDuesNote(n)) return 'dues';
         if (SNACK_RE.test(n) || /^\$[\d.,]+ payment from/i.test(n) || !n || a <= 3) return 'sale';
         return 'other';
       }
       if (a < 0) {
+        if (t === 'P2P' && /^shaana escobar$/i.test(who)) return 'expense';
         if (NOT_SNACK_RE.test(n)) return 'other';
         if (t === 'P2P' && SNACK_RE.test(n)) return 'expense';
         return 'other';
@@ -819,7 +820,7 @@
           '<div class="card"><b>🍪 Snack sales</b> · ' + sales.length + ' new · ' + money(sum(sales)) + '<p class="helper" style="margin:4px 0 0">Added to the totals and leaderboard; not listed one by one.</p></div>' +
           '<details class="card"' + (buys.length ? ' open' : '') + '><summary><b>🛒 Snack purchases</b> · ' + buys.length + ' new · ' + money(sum(buys)) + '</summary>' + (buys.map(line).join('') || '<p class="helper">Nothing new.</p>') + '</details>' +
           '<details class="card"' + (cashes.length ? ' open' : '') + '><summary><b>💵 Cash deposits</b> (money you put in the Cash App) · ' + cashes.length + ' new · ' + money(sum(cashes)) + '</summary>' + (cashes.map(line).join('') || '<p class="helper">Nothing new.</p>') + '</details>' +
-          '<details class="card"><summary>Not counted · ' + (others.length + selfs.length) + '</summary><p class="helper">CPR, cords, T-shirts, pizza cards, store card purchases (supplies) and other money aren\'t dues or snacks. Your deposits for CPR, cords or STTI aren\'t counted either.</p>' + others.concat(selfs).map(x => '<div class="pay"><span>' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + esc(x.r['Name of sender/receiver'] || x.r['Transaction Type']) + ' · “' + esc(x.r.Notes) + '”</span><span>' + money(caAmt(x.r.Amount)) + '</span></div>').join('') + '</details>' +
+          '<details class="card"><summary>Not counted · ' + (others.length + selfs.length) + '</summary><p class="helper">CPR, cords, T-shirts, pizza cards, store card purchases (supplies) and other money aren\'t dues or snacks. Everything you send into the SNA Cash App counts as a cash deposit, and everything the SNA Cash App sends you counts as a snack purchase.</p>' + others.concat(selfs).map(x => '<div class="pay"><span>' + esc(fmtDate(x.r.Date.slice(0, 10))) + ' · ' + esc(x.r['Name of sender/receiver'] || x.r['Transaction Type']) + ' · “' + esc(x.r.Notes) + '”</span><span>' + money(caAmt(x.r.Amount)) + '</span></div>').join('') + '</details>' +
           ((found.length || snNew.length) ? '<div class="actions"><button type="button" class="btn" id="ciSave">Save</button></div>' : '<p class="helper">Nothing new to add. You\'re up to date ✓</p>');
         if (!$('ciSave')) return;
         $('ciSave').onclick = async () => {
