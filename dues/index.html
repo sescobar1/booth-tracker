@@ -134,7 +134,7 @@
       return [...t].filter(k => k > 0).sort((a, b) => a - b);
     }
     let toastTimer;
-    const toast = (m, undo) => { const t = $('toast'); t.innerHTML = esc(m) + (undo ? ' <button type="button" id="undoBtn" style="margin-left:10px;background:none;border:1px solid currentColor;color:inherit;border-radius:99px;padding:3px 10px;font-weight:700">Undo</button>' : ''); t.hidden = false; if (undo) $('undoBtn').onclick = () => { t.hidden = true; undo(); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 6000 : 3200); };
+    const toast = (m, undo) => { const t = $('toast'); t.innerHTML = esc(m) + (undo ? ' <button type="button" id="undoBtn" style="margin-left:10px;background:none;border:1px solid currentColor;color:inherit;border-radius:99px;padding:3px 10px;font-weight:700">Undo</button>' : ''); t.hidden = false; if (undo) $('undoBtn').onclick = () => { t.hidden = true; undo(); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 15000 : 3200); };
     const open = html => { $('sheet').innerHTML = html; $('modal').hidden = false; };
     const close = () => { $('modal').hidden = true; $('sheet').innerHTML = ''; };
     $('modal').addEventListener('click', e => { if (e.target.id === 'modal') close(); });
@@ -336,7 +336,42 @@
         const r = await sb.from('dues_payments').insert({ owner: user.id, member_id: id, amount, paid_on: $('pDate').value || today(), method: meth, receipt: $('pRec').value.trim(), note: $('pNote').value.trim(), through_term: thru }).select().single();
         if (fail(r)) return;
         if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) return;
-        payments.push(r.data); m.paid_through = thru; close(); draw(); toast('✓ ' + firstName(m.name) + ' paid until ' + until(thru));
+        const before = m.paid_through;
+        payments.push(r.data); m.paid_through = thru; close(); draw();
+        toast('✓ ' + firstName(m.name) + ' paid ' + money(amount) + ' · until ' + until(thru), async () => {
+          if (fail(await sb.from('dues_payments').delete().eq('id', r.data.id))) return;
+          if (fail(await sb.from('dues_members').update({ paid_through: before, updated_at: new Date().toISOString() }).eq('id', id))) return;
+          payments = payments.filter(p => p.id !== r.data.id); m.paid_through = before; draw(); toast('Undone');
+        });
+      };
+    }
+
+    // ---- edit a payment already saved ----
+    function editPay(id, pid) {
+      const m = members.find(x => x.id === id), p = payments.find(x => x.id === pid); if (!m || !p) return;
+      const latest = !p.through_term || p.through_term >= m.paid_through;
+      const lo = Math.min(cur(), p.through_term || cur()) - 2;
+      let thru = p.through_term || cur(), meth = p.method || 'Cash App';
+      open('<h2>Edit payment · ' + esc(m.name) + '</h2>' +
+        '<label>Paid until</label><div class="methods">' + range(lo, Math.max(LAST, thru)).map(k => '<button type="button" class="chip' + (k === thru ? ' on' : '') + '" data-eu="' + k + '">' + until(k) + '</button>').join('') + '</div>' +
+        '<div class="grid2"><label>Amount<input id="eAmt" inputmode="decimal" value="' + esc(String(Number(p.amount))) + '"></label><label>Date<input id="eDate" type="date" value="' + esc(p.paid_on || today()) + '"></label></div>' +
+        '<label>Paid with</label><div class="methods">' + METHODS.map(x => '<button type="button" class="chip' + (x === meth ? ' on' : '') + '" data-em="' + x + '">' + x + '</button>').join('') + '</div>' +
+        '<div class="grid2"><label>Receipt #<input id="eRec" value="' + esc(p.receipt || '') + '"></label><label>Note<input id="eNote" value="' + esc(p.note || '') + '"></label></div>' +
+        '<div class="actions"><button type="button" class="btn" id="eSave">Save changes</button><button type="button" class="btn ghost" id="eCancel">Cancel</button></div>');
+      document.querySelectorAll('[data-eu]').forEach(b => b.onclick = () => { thru = Number(b.dataset.eu); document.querySelectorAll('[data-eu]').forEach(x => x.classList.toggle('on', x === b)); });
+      document.querySelectorAll('[data-em]').forEach(b => b.onclick = () => { meth = b.dataset.em; document.querySelectorAll('[data-em]').forEach(x => x.classList.toggle('on', x === b)); });
+      $('eCancel').onclick = () => showMember(id);
+      $('eSave').onclick = async () => {
+        const amount = Number($('eAmt').value); if (!(amount > 0)) { toast('Type the amount paid.'); return; }
+        const row = { amount, paid_on: $('eDate').value || p.paid_on, method: meth, receipt: $('eRec').value.trim(), note: $('eNote').value.trim(), through_term: thru };
+        if (fail(await sb.from('dues_payments').update(row).eq('id', pid))) return;
+        Object.assign(p, row);
+        // If this is their newest payment, "paid until" follows it.
+        if (latest && thru !== m.paid_through) {
+          if (fail(await sb.from('dues_members').update({ paid_through: thru, updated_at: new Date().toISOString() }).eq('id', id))) return;
+          m.paid_through = thru;
+        }
+        draw(); showMember(id); toast('✓ Payment updated · ' + (m.paid_through >= cur() ? 'paid until ' + until(m.paid_through) : 'not paid for ' + termName(cur())));
       };
     }
 
@@ -1284,7 +1319,7 @@
         (() => { const c = cordsState(m), P = m.points || {}; return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">🎓 Cords · ' + ptsTotal(m) + ' points</h2><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div><p class="helper" style="margin:6px 0">' + [0, 1, 2, 3, 4].map(l => 'L' + l + ': ' + (P[l] != null ? P[l] : '–')).join(' · ') + '</p><button type="button" class="btn ghost small" id="mCords">Edit points</button></div>'; })() +
         (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' +
           '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px"><button type="button" class="btn ghost small" id="lvDown"' + (m.lvl <= -1 ? ' disabled' : '') + '>⬇ Back a level</button><b>' + esc(lvlName(m.lvl)) + '</b><button type="button" class="btn ghost small" id="lvUp"' + (m.lvl >= 4 ? ' disabled' : '') + '>⬆ Up a level</button></div>' : '') +
-        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(String(p.receipt).replace(/^#/, '')) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Undo this payment">↩ Undo</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
+        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(String(p.receipt).replace(/^#/, '')) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Undo this payment">↩ Undo</button> <button type="button" class="btn ghost small" data-editpay="' + p.id + '" aria-label="Edit this payment">✏️ Edit</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
         '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. They can check their own dues any time; it shows nothing about anyone else.</p><div class="linkbox">' + esc(link) + '</div>' +
         '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + '</div></div>' +
         '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit name &amp; info</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
@@ -1305,6 +1340,7 @@
         payments = payments.filter(x => x.id !== p.id); m.paid_through = back; draw(); showMember(id);
         toast('↩ Payment undone · ' + (back >= cur() ? 'paid until ' + until(back) : 'not paid for ' + termName(cur())));
       });
+      document.querySelectorAll('[data-editpay]').forEach(b => b.onclick = () => editPay(id, b.dataset.editpay));
       $('lCopy').onclick = () => copy(link, 'Link copied ✓');
       $('mEdit').onclick = () => editMember(m);
       $('mCords').onclick = () => cordsEditor(id, () => showMember(id));
