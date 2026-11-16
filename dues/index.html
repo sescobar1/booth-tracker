@@ -1284,15 +1284,26 @@
         (() => { const c = cordsState(m), P = m.points || {}; return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">🎓 Cords · ' + ptsTotal(m) + ' points</h2><span class="tag ' + (c.key === 'need' ? 'unpaid' : c.key === 'buy' ? 'grad' : 'paid') + '">' + esc(c.label) + '</span></div><p class="helper" style="margin:6px 0">' + [0, 1, 2, 3, 4].map(l => 'L' + l + ': ' + (P[l] != null ? P[l] : '–')).join(' · ') + '</p><button type="button" class="btn ghost small" id="mCords">Edit points</button></div>'; })() +
         (m.active ? '<div class="actions"><button type="button" class="btn" id="mPay">💵 Record a payment</button></div>' +
           '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px"><button type="button" class="btn ghost small" id="lvDown"' + (m.lvl <= -1 ? ' disabled' : '') + '>⬇ Back a level</button><b>' + esc(lvlName(m.lvl)) + '</b><button type="button" class="btn ghost small" id="lvUp"' + (m.lvl >= 4 ? ' disabled' : '') + '>⬆ Up a level</button></div>' : '') +
-        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(String(p.receipt).replace(/^#/, '')) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Delete payment">✕</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
+        '<div class="card"><h2>Payments recorded here</h2>' + (mine.length ? mine.map(p => '<div class="pay"><span>' + esc(fmtDate(p.paid_on)) + ' · ' + esc(p.method || '—') + (p.receipt ? ' · #' + esc(String(p.receipt).replace(/^#/, '')) : '') + (p.through_term ? '<br><small class="helper">through ' + termName(p.through_term) + '</small>' : '') + (p.note ? '<br><small class="helper">' + esc(p.note) + '</small>' : '') + '</span><span><b>' + money(p.amount) + '</b> <button type="button" class="btn ghost small" data-delpay="' + p.id + '" aria-label="Undo this payment">↩ Undo</button></span></div>').join('') : '<p class="helper">None yet' + (m.paid_through >= cur() ? ' — marked paid from your Fall 2026 list.' : '.') + '</p>') + '</div>' +
         '<div class="card"><h2>Private status link</h2><p class="helper">Send this to ' + esc(firstName(m.name)) + '. They can check their own dues any time; it shows nothing about anyone else.</p><div class="linkbox">' + esc(link) + '</div>' +
         '<div class="actions"><button type="button" class="btn ghost small" id="lCopy">Copy link</button>' + '</div></div>' +
         '<div class="actions"><button type="button" class="btn ghost" id="mEdit">✏️ Edit name &amp; info</button><button type="button" class="btn ghost" id="mAct">' + (m.active ? 'Remove from roster' : 'Put back on roster') + '</button><button type="button" class="btn ghost" id="mClose">Close</button></div>');
       if ($('mPay')) $('mPay').onclick = () => payForm(id);
       document.querySelectorAll('[data-delpay]').forEach(b => b.onclick = async () => {
-        if (!confirm('Delete this payment? Their "paid through" semester stays as it is; change it with Edit if needed.')) return;
-        if (fail(await sb.from('dues_payments').delete().eq('id', b.dataset.delpay))) return;
-        payments = payments.filter(p => p.id !== b.dataset.delpay); draw(); showMember(id);
+        const p = payments.find(x => x.id === b.dataset.delpay); if (!p) return;
+        if (!confirm('Undo the ' + money(p.amount) + ' payment from ' + fmtDate(p.paid_on) + '? It will be removed, and you can record it again with the right amount.')) return;
+        // Put "paid until" back to what it was before this payment.
+        const rest = payments.filter(x => x.member_id === id && x.id !== p.id && x.through_term);
+        let back = m.paid_through;
+        if (p.through_term && p.through_term >= m.paid_through) {
+          const n = Math.max(1, Math.round(Number(p.amount) / (Number(settings.amount) || 5)));
+          back = rest.length ? Math.max(...rest.map(x => x.through_term)) : p.through_term - n;
+          back = Math.min(back, m.paid_through);
+        }
+        if (fail(await sb.from('dues_payments').delete().eq('id', p.id))) return;
+        if (back !== m.paid_through && fail(await sb.from('dues_members').update({ paid_through: back, updated_at: new Date().toISOString() }).eq('id', id))) return;
+        payments = payments.filter(x => x.id !== p.id); m.paid_through = back; draw(); showMember(id);
+        toast('↩ Payment undone · ' + (back >= cur() ? 'paid until ' + until(back) : 'not paid for ' + termName(cur())));
       });
       $('lCopy').onclick = () => copy(link, 'Link copied ✓');
       $('mEdit').onclick = () => editMember(m);
