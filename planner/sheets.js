@@ -1,8 +1,11 @@
-// Printable fridge pages for one week (Calendar → 🖨️ Printable pages):
+// Printable fridge pages for one week (Monday through Sunday) (Calendar → 🖨️ Printable pages):
 //  - "This Week": each day's events and to-dos, breakfast/lunch/dinner, the week's to-dos, the shopping list and week notes.
 //  - "Our Week": a column for each person in the family with their times, plus each day's to-dos and dinner.
 // Both pages leave out bills and the period tracker, since they're meant to hang on the fridge.
 // Loaded before app.js; everything here runs only when the #sheet page opens, so app.js helpers are ready by then.
+const SHEET_DAYS = 7;
+// The Monday that starts the week a day is in (a Sunday belongs to the week before it).
+const sheetMonday = d => addDays(weekStart(addDays(d, -1)), 1);
 const SHEET_PEOPLE = [['Shaana', 'Shaana'], ['Salvador', 'Salvador'], ['Eli', 'Elisha'], ['Cece', 'Cece']];
 // Used until the family links' own rules load (same as what the links had in Nov 2026).
 const SHEET_RULES_FALLBACK = {
@@ -47,7 +50,7 @@ const sheetEsc = s => esc(s);
 const sheetTime = e => e.kind === 'task' || e.allDay ? '' : fmtTime(e.start);
 const sheetMD = d => { const x = new Date(d + 'T12:00'); return (x.getMonth() + 1) + '/' + x.getDate(); };
 const sheetDay = d => new Date(d + 'T12:00').toLocaleDateString([], { weekday: 'long' });
-const sheetRange = ws => { const f = d => new Date(d + 'T12:00').toLocaleDateString([], { month: 'long', day: 'numeric' }); return f(ws) + ' – ' + f(addDays(ws, 6)); };
+const sheetRange = ws => { const f = d => new Date(d + 'T12:00').toLocaleDateString([], { month: 'long', day: 'numeric' }); return f(ws) + ' – ' + f(addDays(ws, SHEET_DAYS - 1)); };
 // A short list that fits its box, with "+2 more" when it doesn't.
 const sheetFit = (lines, max) => lines.length > max ? lines.slice(0, max - 1).concat('<div class="ws-more">+' + (lines.length - max + 1) + ' more</div>') : lines;
 const sheetLine = (e, chip) => '<div class="ws-l' + (e.done ? ' done' : '') + (chip ? ' ws-chip' : '') + '">' + (e.kind === 'task' ? '<span class="ws-box">' + (e.done ? '✓' : '') + '</span>' : '') +
@@ -55,14 +58,14 @@ const sheetLine = (e, chip) => '<div class="ws-l' + (e.done ? ' done' : '') + (c
 
 function sheetEntries(ws) {
   // Bills and the period tracker stay off the fridge.
-  return agenda(ws, addDays(ws, 6)).filter(e => e.src !== 'bill' && e.src !== 'period');
+  return agenda(ws, addDays(ws, SHEET_DAYS - 1)).filter(e => e.src !== 'bill' && e.src !== 'period');
 }
 function sheetMeal(d, slot) { const m = mealsOn(d).find(x => x.list === slot); return m ? m.title : ''; }
 
 function drawThisWeek(ws) {
-  const we = addDays(ws, 6), list = sheetEntries(ws);
+  const we = addDays(ws, SHEET_DAYS - 1), list = sheetEntries(ws);
   let rows = '';
-  for (let k = 0; k < 7; k++) {
+  for (let k = 0; k < SHEET_DAYS; k++) {
     const d = addDays(ws, k), es = onDay(list, d);
     rows += '<div class="ws-day' + (k % 2 ? ' alt' : '') + '"><div class="ws-dl">' + esc(sheetDay(d)) + ' <span>' + sheetMD(d) + '</span></div>' +
       sheetFit(es.map(e => sheetLine(e, e.kind === 'task')), 6).join('') + '</div>' +
@@ -87,7 +90,7 @@ function drawThisWeek(ws) {
 function drawOurWeek(ws) {
   const list = sheetEntries(ws), rules = sheetRules();
   let rows = '';
-  for (let k = 0; k < 7; k++) {
+  for (let k = 0; k < SHEET_DAYS; k++) {
     const d = addDays(ws, k), es = onDay(list, d), cols = {}, todo = [];
     SHEET_PEOPLE.forEach(([p]) => { cols[p] = []; });
     es.forEach(e => {
@@ -109,11 +112,11 @@ function drawOurWeek(ws) {
 // #sheet/week/2026-11-15 or #sheet/family/2026-11-15
 function viewSheet() {
   const parts = location.hash.slice(1).split('/'), kind = parts[1] === 'family' ? 'family' : 'week';
-  const ws = weekStart(/^\d{4}-\d{2}-\d{2}$/.test(parts[2] || '') ? parts[2] : (typeof calDay !== 'undefined' && calDay) || today());
+  const ws = sheetMonday(/^\d{4}-\d{2}-\d{2}$/.test(parts[2] || '') ? parts[2] : (typeof calDay !== 'undefined' && calDay) || today());
   const go = (k, w) => { location.hash = 'sheet/' + k + '/' + w; };
   $('view').innerHTML = '<div class="no-print ws-bar">' +
     '<div class="segs viewseg"><button type="button" class="seg' + (kind === 'week' ? ' on' : '') + '" data-wk="week">This Week</button><button type="button" class="seg' + (kind === 'family' ? ' on' : '') + '" data-wk="family">Our Week</button></div>' +
-    '<div class="cal-head"><button type="button" class="ghost small" id="wsPrev">‹</button><h2>' + esc(weekTitle(ws)) + '</h2><button type="button" class="ghost small" id="wsNext">›</button></div>' +
+    '<div class="cal-head"><button type="button" class="ghost small" id="wsPrev">‹</button><h2>' + esc(fmtDate(ws) + ' – ' + fmtDate(addDays(ws, SHEET_DAYS - 1))) + '</h2><button type="button" class="ghost small" id="wsNext">›</button></div>' +
     '<div class="row-actions center"><button type="button" class="small" id="wsPrint">🖨️ Print</button><a class="button ghost small" href="#calendar">Back to calendar</a></div>' +
     '<p class="helper">Prints on one letter-size page. To save a PDF, tap Print, then share or save from the print preview. Bills and the period tracker are left off.</p></div>' +
     '<div class="wsheet print-only">' + (kind === 'family' ? drawOurWeek(ws) : drawThisWeek(ws)) + '</div>';
