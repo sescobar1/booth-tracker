@@ -60,3 +60,6 @@
   .wsheet.print-only { width: 7.8in; max-width: none; margin: 0; }
   .ws-page { box-shadow: none; border-radius: 0; break-inside: avoid; }
 }
+/* Narrow family columns: let a long name wrap to two lines instead of cutting off. */
+.ws-pc .ws-l, .ws-left .ws-l, .ws-day .ws-l { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: clip; }
+.ws-left .ws-l.ws-chip, .ws-day .ws-l.ws-chip { display: -webkit-box; }
