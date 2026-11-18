@@ -391,8 +391,8 @@ function toggleDone(id) {
 // ---------- Routing ----------
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' || tab === 'meds' || tab === 'car' || tab === 'kids' ? 'more' : tab)));
-  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : a === 'atu' ? viewAtu() : a === 'sna' ? viewSna() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, meds: viewMeds, car: viewCar, kids: viewKids, more: viewMore, calendars: viewCalendars, feed: viewFeed };
+  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === (tab === 'brief' || tab === 'track' || tab === 'gifts' ? 'today' : tab === 'notes' ? 'files' : tab === 'quick' || tab === 'meds' || tab === 'car' || tab === 'kids' ? 'more' : tab === 'sheet' ? 'calendar' : tab)));
+  const views = { today: viewToday, brief: viewBrief, track: viewTrack, calendar: viewCalendar, tasks: a => a === 'routines' ? viewRoutines() : a === 'templates' ? viewTemplates() : a === 'cleaning' ? viewCleaning() : a === 'atu' ? viewAtu() : a === 'sna' ? viewSna() : viewTasks(), meals: viewMeals, files: viewFiles, notes: viewNotes, gifts: viewGifts, quick: viewQuick, meds: viewMeds, car: viewCar, kids: viewKids, more: viewMore, calendars: viewCalendars, feed: viewFeed, sheet: viewSheet };
   (views[tab] || viewToday)(arg);
 }
 // Load connected calendars, band events and bills the first time the planner is signed in (it may open signed out).
@@ -598,7 +598,7 @@ function viewCalendar() {
   const seg = '<div class="segs viewseg">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(([k, l]) => '<button type="button" class="seg' + (calMode === k ? ' on' : '') + '" data-mode="' + k + '">' + l + '</button>').join('') + '</div>';
   const title = calMode === 'month' ? monthName(calMonth) : calMode === 'week' ? weekTitle(weekStart(calDay)) : fmtDate(calDay, 'long');
   $('view').innerHTML = seg + '<div class="cal-head"><button type="button" class="ghost small" id="cPrev">‹</button><h2>' + esc(title) + '</h2><button type="button" class="ghost small" id="cNext">›</button></div>' +
-    '<div class="row-actions center"><button type="button" class="ghost small" id="cToday">Today</button>' + (S().calendars.length ? '<button type="button" class="ghost small" id="cRefresh">Refresh</button>' : '<a class="button ghost small" href="#calendars">Connect Google or Outlook</a>') + '<button type="button" class="small" id="cAdd">＋ Add</button></div>' +
+    '<div class="row-actions center"><button type="button" class="ghost small" id="cToday">Today</button>' + (S().calendars.length ? '<button type="button" class="ghost small" id="cRefresh">Refresh</button>' : '<a class="button ghost small" href="#calendars">Connect Google or Outlook</a>') + '<button type="button" class="small" id="cAdd">＋ Add</button><a class="button ghost small" href="#sheet/week/' + weekStart(calDay) + '">🖨️ Week pages</a></div>' +
     '<div id="calBody"></div>' + legend();
   ({ month: drawMonth, week: drawWeek, day: drawDay })[calMode]();
   const step = calMode === 'day' ? 1 : calMode === 'week' ? 7 : 0;
@@ -3892,6 +3892,7 @@ function viewMore() {
     '<a class="card pad tip" href="#car"><b>Car care</b><span class="sub">🚗 Oil changes, tires, tags & insurance →</span></a>' +
     '<a class="card pad tip" href="#tasks/atu"><b>ATU</b><span class="sub">🎓 ATU tasks, 🗓 semester setup and the 🍿 SNA Snack Closet order →</span></a>' +
     '<a class="card pad tip" href="#more" id="moreSem"><b>Set up a semester</b><span class="sub">🗓 Academic calendar and all your class meetings at once →</span></a>' +
+    '<a class="card pad tip" href="#sheet/week"><b>Printable week pages</b><span class="sub">🖨️ This Week and Our Week (the family page) for the fridge →</span></a>' +
     '<a class="card pad tip" href="#quick"><b>Quick adds</b><span class="sub">⭐ Add, change or delete your one-tap events →</span></a>' +
     '<a class="card pad tip" href="#gifts"><b>Gifts</b><span class="sub">🎁 Birthdays, anniversaries and gift ideas →</span></a>' +
     '<a class="card pad tip" href="#notes"><b>Notes</b><span class="sub">📝 Sticky notes →</span></a>' +

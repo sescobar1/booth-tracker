@@ -1,0 +1,62 @@
+/* Printable week pages (#sheet). Sized in container units so the phone preview and the printed page match. */
+.wsheet.print-only { display: block; container-type: inline-size; max-width: 7.8in; margin: 10px auto 0; }
+.ws-page {
+  aspect-ratio: 7.8 / 10.05; display: flex; flex-direction: column; overflow: hidden;
+  background: #f6f0e8; color: #4f4038; padding: 3.2cqw 3.4cqw 2.6cqw; box-sizing: border-box;
+  border-radius: 1.2cqw; box-shadow: 0 2px 14px rgba(80, 60, 45, .14);
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive; font-size: 1.62cqw; line-height: 1.22;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+}
+.ws-head { display: flex; align-items: flex-end; gap: 2.4cqw; margin-bottom: 1.8cqw; }
+.ws-head h1 { margin: 0; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 5.4cqw; line-height: .95; letter-spacing: .35cqw; text-transform: uppercase; color: #7a6558; }
+.ws-range { flex: 1; font-size: 2.6cqw; border-bottom: .18cqw solid #8a7568; padding: 0 .6cqw .3cqw; color: #4f4038; }
+
+.ws-grid { flex: 1; min-height: 0; display: grid; border: .14cqw solid #b8a698; background: #fbf8f3; }
+.ws-this .ws-grid { grid-template-columns: 44fr 19fr 37fr; grid-template-rows: auto repeat(7, minmax(0, 1fr)); }
+.ws-fam { grid-template-columns: 24fr repeat(4, 19fr); grid-template-rows: auto repeat(7, minmax(0, 1fr)); }
+
+.ws-ch { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 1.2cqw; letter-spacing: .25cqw; text-transform: uppercase; text-align: center; color: #fff; background: #8a7568; padding: .7cqw .4cqw; }
+.ws-band { border-left: .14cqw solid #a8968a; }
+.ws-band:first-child { border-left: 0; }
+
+.ws-day, .ws-meal, .ws-left, .ws-pc { min-height: 0; overflow: hidden; border-top: .12cqw solid #d6cabe; padding: .55cqw .8cqw; }
+.ws-meal, .ws-pc { border-left: .12cqw solid #d6cabe; }
+.alt { background: #f3ece3; }
+.ws-dl { font-family: 'Inter', sans-serif; font-size: 1.12cqw; font-weight: 600; letter-spacing: .12cqw; text-transform: uppercase; color: #7a6558; margin-bottom: .3cqw; }
+.ws-dl span { font-weight: 400; color: #9a887b; }
+
+.ws-l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: .05cqw 0; }
+.ws-l b { font-weight: 400; color: #8a7568; }
+.ws-l.ws-chip { display: block; width: fit-content; max-width: 100%; box-sizing: border-box; background: #e7dacd; border-radius: .4cqw; padding: .05cqw .6cqw; margin: .15cqw 0; }
+.ws-l.ws-chip.fam { background: #dfe6d8; }
+.ws-l.done, .ws-ck.done { text-decoration: line-through; color: #9a887b; }
+.ws-box { display: inline-flex; align-items: center; justify-content: center; width: 1.25cqw; height: 1.25cqw; border: .14cqw solid #8a7568; border-radius: .25cqw; margin-right: .6cqw; font-size: 1cqw; vertical-align: -.1cqw; flex: 0 0 auto; }
+.ws-more { font-size: 1.25cqw; color: #9a887b; }
+
+.ws-ml { display: flex; gap: .6cqw; align-items: baseline; border-bottom: .1cqw dashed #d6cabe; padding: .12cqw 0; }
+.ws-ml:last-child { border-bottom: 0; }
+.ws-ml i, .ws-dinner i { font-style: normal; font-family: 'Inter', sans-serif; font-size: .95cqw; letter-spacing: .1cqw; text-transform: uppercase; color: #9a887b; flex: 0 0 5.6cqw; }
+.ws-ml span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; }
+
+.ws-side { grid-column: 3; grid-row: 1 / span 8; display: flex; flex-direction: column; border-left: .14cqw solid #b8a698; min-height: 0; overflow: hidden; }
+.ws-sec { padding-bottom: .6cqw; }
+.ws-sec > :not(.ws-ch) { margin: 0 1cqw; }
+.ws-sec .ws-ch { margin-bottom: .5cqw; }
+.ws-ck { display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: .1cqw solid #e2d8cd; padding: .2cqw 0; min-height: 1.9cqw; }
+.ws-notes { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 0; }
+.ws-nt { flex: 1; white-space: pre-wrap; overflow: hidden; padding-top: .2cqw; line-height: 2.2cqw; background-image: repeating-linear-gradient(transparent 0 2.1cqw, #e2d8cd 2.1cqw 2.2cqw); }
+
+.ws-left { display: flex; flex-direction: column; }
+.ws-todo { flex: 1; min-height: 0; overflow: hidden; }
+.ws-dinner { border-top: .1cqw dashed #d6cabe; padding-top: .2cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-dinner i { margin-right: .4cqw; }
+
+.ws-bar .helper { text-align: center; }
+
+@media print {
+  @page { size: letter portrait; margin: .4in .35in; }
+  html, body { background: #fff !important; height: auto !important; padding: 0 !important; margin: 0 !important; }
+  main#view { padding: 0 !important; margin: 0 !important; }
+  .wsheet.print-only { width: 7.8in; max-width: none; margin: 0; }
+  .ws-page { box-shadow: none; border-radius: 0; break-inside: avoid; }
+}
