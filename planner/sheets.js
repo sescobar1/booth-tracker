@@ -58,7 +58,8 @@ const sheetLine = (e, chip) => '<div class="ws-l' + (e.done ? ' done' : '') + (c
 
 function sheetEntries(ws) {
   // Bills and the period tracker stay off the fridge.
-  return agenda(ws, addDays(ws, SHEET_DAYS - 1)).filter(e => e.src !== 'bill' && e.src !== 'period');
+  // Checked-off tasks drop off the page.
+  return agenda(ws, addDays(ws, SHEET_DAYS - 1)).filter(e => e.src !== 'bill' && e.src !== 'period' && !(e.kind === 'task' && e.done));
 }
 function sheetMeal(d, slot) { const m = mealsOn(d).find(x => x.list === slot); return m ? m.title : ''; }
 
@@ -71,8 +72,9 @@ function drawThisWeek(ws) {
       sheetFit(es.map(e => sheetLine(e, e.kind === 'task')), 6).join('') + '</div>' +
       '<div class="ws-meal' + (k % 2 ? ' alt' : '') + '">' + ['Breakfast', 'Lunch', 'Dinner'].map(s => '<div class="ws-ml"><i>' + s + '</i><span>' + esc(sheetMeal(d, s)) + '</span></div>').join('') + '</div>';
   }
-  const todos = data.items.filter(i => i.kind === 'task' && ((!i.done && (!i.date || i.date <= we)) || (i.done && i.date >= ws && i.date <= we)))
-    .sort((a, b) => (a.done - b.done) || (b.priority || 0) - (a.priority || 0) || (a.date || '9999').localeCompare(b.date || '9999'));
+  const todos = data.items.filter(i => i.kind === 'task' && !i.done && (!i.date || i.date <= we))
+    
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.date || '9999').localeCompare(b.date || '9999'));
   const shop = data.items.filter(i => i.kind === 'shop' && !i.done).sort((a, b) => AISLE_ORDER.indexOf(a.list || 'Other') - AISLE_ORDER.indexOf(b.list || 'Other'));
   const note = data.items.find(i => i.id === 'wnote-' + ws);
   const check = (t, done) => '<div class="ws-ck' + (done ? ' done' : '') + '"><span class="ws-box">' + (done ? '✓' : '') + '</span>' + esc(t) + '</div>';
