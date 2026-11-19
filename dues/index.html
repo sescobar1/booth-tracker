@@ -1113,12 +1113,32 @@
         toast(termName(k) + ' closed: ' + (t.profit >= 0 ? '+' : '−') + money(Math.abs(t.profit)));
       };
     }
+    // 💵 Cash counter: type how many of each bill/coin; the total fills the amount box.
+    const DENOMS = [[10000, '$100 bills'], [5000, '$50 bills'], [2000, '$20 bills'], [1000, '$10 bills'], [500, '$5 bills'], [100, '$1 bills'], [25, 'Quarters'], [10, 'Dimes'], [5, 'Nickels'], [1, 'Pennies']];
+    function counterHtml() {
+      return '<details id="ccBox" open style="margin:8px 0"><summary style="cursor:pointer;font-weight:600">🧮 Count it by bills &amp; coins</summary>' +
+        '<div style="display:grid;grid-template-columns:1fr 80px 80px;gap:6px 10px;align-items:center;margin-top:8px">' +
+        DENOMS.map(([c, n]) => '<span>' + n + '</span><input data-cc="' + c + '" inputmode="numeric" placeholder="0" style="text-align:center;margin:0"><b data-ccl="' + c + '" style="text-align:right">$0.00</b>').join('') +
+        '<span style="font-weight:700">Total</span><span></span><b id="ccT" style="text-align:right;font-size:1.15rem;color:var(--green)">$0.00</b></div></details>';
+    }
+    function wireCounter(amountId) {
+      const boxes = document.querySelectorAll('[data-cc]');
+      const upd = () => {
+        let t = 0;
+        boxes.forEach(b => { const n = Math.max(0, parseInt(b.value, 10) || 0), c = Number(b.dataset.cc) * n; t += c; document.querySelector('[data-ccl="' + b.dataset.cc + '"]').textContent = money(c / 100); });
+        $('ccT').textContent = money(t / 100);
+        if (t > 0) $(amountId).value = (t / 100).toFixed(2);
+      };
+      boxes.forEach(b => b.oninput = upd);
+    }
     // 🪙 Empty the cash box: just the amount, saved as today's cash.
     function cashBox() {
       open('<h2>🪙 Count the cash box</h2><p class="helper">How much cash was in the snack closet box? It\'s saved as cash for today. If you deposit that same amount into the SNA Cash App within 3 weeks, the Cash App import recognizes it so it isn\'t counted twice.</p>' +
         '<input id="cbA" inputmode="decimal" placeholder="0.00" style="font-size:2rem;text-align:center;font-weight:700">' +
+        counterHtml() +
         '<div class="actions"><button type="button" class="btn" id="cbS">Save</button><button type="button" class="btn ghost" id="cbX">Cancel</button></div>');
-      setTimeout(() => $('cbA').focus(), 50);
+      setTimeout(() => { const f = document.querySelector('[data-cc]'); if (f) f.focus(); }, 50);
+      wireCounter('cbA');
       $('cbX').onclick = close;
       $('cbS').onclick = async () => {
         const a = Math.round(Number(String($('cbA').value).replace(/[$,\s]/g, '')) * 100) / 100;
@@ -1152,12 +1172,14 @@
       const cash = kind === 'cash';
       open('<h2>' + (cash ? '💵 Add cash' : '🛒 Add a snack purchase') + '</h2><p class="helper">' + (cash ? 'Cash from the snack closet that you collected. Cash you deposit into the Cash App comes in automatically with the Cash App import, so don\'t add it twice.' : 'Money spent restocking the snack closet (Sam\'s, Walmart…). Cash App reimbursements to you come in automatically with the Cash App import.') + '</p>' +
         '<div class="grid2"><label>Amount<input id="snA" inputmode="decimal" placeholder="0.00"></label><label>Date<input id="snD" type="date" value="' + today() + '"></label></div>' +
+        (cash ? counterHtml() : '') +
         (cash ? '' : '<label>Store</label><div class="methods">' + ['Sam\'s Club', 'Walmart', 'Kroger', 'Other'].map(s => '<button type="button" class="chip" data-st="' + esc(s) + '">' + esc(s) + '</button>').join('') + '</div>') +
         '<label>Note<input id="snN" placeholder="' + (cash ? 'Cash box count' : 'Drinks, chips, Alanis…') + '"></label>' +
         '<div class="actions"><button type="button" class="btn" id="snS">Save</button><button type="button" class="btn ghost" id="snX">Cancel</button></div>');
       let store = '';
       document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { store = b.dataset.st; document.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === b)); });
       $('snX').onclick = close;
+      if (cash) wireCounter('snA');
       setTimeout(() => { if ($('snA')) $('snA').focus(); }, 50);
       $('snS').onclick = async () => {
         const a = Number($('snA').value); if (!(a > 0)) { toast('Type the amount.'); return; }
