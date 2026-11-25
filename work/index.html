@@ -26,14 +26,13 @@
     const { $, esc, money, hrs, timer, register, totals, registerTable, totalsHtml, toast, tm, KIND } = WORK, CFG = window.WORK_CONFIG, KID = CFG.kid;
     // Same sign-in as Money and the Planner (they share this site, so being signed in there signs you in here).
     const sb = supabase.createClient(CFG.sync.url, CFG.sync.key);
-    let user = null, shifts = [], entries = [], token = '', tick = null;
+    let user = null, shifts = [], entries = [], tick = null;
 
     const pad = n => String(n).padStart(2, '0');
     const localDate = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     const localTime = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
     const today = () => localDate(new Date());
     const openShift = () => shifts.find(s => !s.clock_out);
-    const kidLink = () => token ? location.href.split(/[?#]/)[0].replace(/index\.html$/, '').replace(/\/?$/, '/') + 'clock.html?t=' + token : '';
 
     function signInView() {
       $('out').hidden = true;
@@ -49,13 +48,12 @@
     }
 
     async function load() {
-      const [a, b, c] = await Promise.all([
+      const [a, b] = await Promise.all([
         sb.from('work_shifts').select('*').eq('kid', KID).order('clock_in', { ascending: false }),
-        sb.from('work_register').select('*').eq('kid', KID).order('date', { ascending: false }),
-        token ? Promise.resolve({ data: [{ token }] }) : sb.from('kid_links').select('token').eq('name', KID).limit(1)
+        sb.from('work_register').select('*').eq('kid', KID).order('date', { ascending: false })
       ]);
       if (a.error || b.error) { $('view').innerHTML = '<div class="card"><p>Couldn’t load. Check your internet. <button class="ghost sm" onclick="location.reload()">Try again</button></p></div>'; return; }
-      shifts = a.data; entries = b.data; token = (c.data && c.data[0] && c.data[0].token) || '';
+      shifts = a.data; entries = b.data;
       draw();
     }
 
@@ -67,19 +65,16 @@
       const weekMs = shifts.filter(s => s.clock_out && new Date(s.clock_in) >= week).reduce((n, s) => n + WORK.shiftMs(s), 0);
       $('view').innerHTML =
         '<div class="card clock">' +
+          '<p class="hi">Hi ' + esc(CFG.kidName) + '!</p>' +
           (open
-            ? '<p class="state"><span class="dot"></span>' + esc(CFG.kidName) + ' is clocked in since <b>' + tm(open.clock_in) + '</b></p><div class="timer" id="tm"></div><div class="pay" id="earn"></div><button class="big out" id="go">Clock her out</button>'
-            : '<p class="state muted">' + esc(CFG.kidName) + ' is clocked out.</p><div class="pay">$' + Number(CFG.rate).toFixed(2) + ' an hour · ' + hrs(weekMs) + ' this week</div><button class="big in" id="go">Clock her in</button>') +
+            ? '<p class="state"><span class="dot"></span>Clocked in since <b>' + tm(open.clock_in) + '</b></p><div class="timer" id="tm"></div><div class="pay" id="earn"></div><button class="big out" id="go">Clock out</button>'
+            : '<p class="state muted">You’re clocked out.</p><div class="pay">$' + Number(CFG.rate).toFixed(2) + ' an hour · ' + hrs(weekMs) + ' this week</div><button class="big in" id="go">Clock in</button>') +
         '</div>' +
         totalsHtml(t) +
         '<h2>Check register <small>tap a line to fix or delete it</small></h2>' +
         '<div class="row" style="margin-bottom:10px"><button id="addSpend">− Spent</button><button class="ghost" id="addCash">− Cash</button><button class="ghost" id="addBonus">＋ Bonus</button></div>' +
         '<div class="card" style="padding:8px 10px">' + registerTable(lines, true) + '</div>' +
-        '<p><button class="ghost" id="addShift" style="width:100%">＋ Add a shift she forgot to clock</button></p>' +
-        '<h2>Cecilia’s clock-in link</h2>' +
-        '<div class="card">' + (token
-          ? '<p class="small muted" style="margin-top:0">Send this to her phone. She opens it and taps <b>Add to Home Screen</b> to get a Clock In button. She can clock in and out and see her register, but can’t change it.</p><div class="link-box"><input id="lk" readonly value="' + esc(kidLink()) + '"><button class="sm" id="share">' + (navigator.share ? 'Share' : 'Copy') + '</button></div>'
-          : '<p class="small">Cecilia doesn’t have a family link yet. Make one in the Planner (More → Kid links) named “' + esc(KID) + '”, then come back here.</p>') + '</div>';
+        '<p><button class="ghost" id="addShift" style="width:100%">＋ Add a shift she forgot to clock</button></p>';
       if (open) {
         const upd = () => { const ms = Date.now() - new Date(open.clock_in); $('tm').textContent = timer(ms); $('earn').textContent = '+' + money(ms / 3600000 * open.rate) + ' so far'; };
         upd(); tick = setInterval(upd, 1000);
@@ -89,7 +84,7 @@
         const r = open
           ? await sb.from('work_shifts').update({ clock_out: new Date().toISOString() }).eq('id', open.id)
           : await sb.from('work_shifts').insert({ owner: user.id, kid: KID, clock_in: new Date().toISOString(), rate: CFG.rate });
-        if (r.error) toast('Couldn’t save. Try again.'); else toast(open ? '✓ Clocked out' : '✓ Clocked in');
+        if (r.error) toast('Couldn’t save. Try again.'); else if (open) { const s = { ...open, clock_out: new Date().toISOString() }; toast('✓ Clocked out · ' + hrs(WORK.shiftMs(s)) + ' · +' + money(WORK.shiftPay(s))); } else toast('✓ Clocked in. Have a good shift!');
         load();
       };
       $('addSpend').onclick = () => entrySheet({ kind: 'spend' });
@@ -100,11 +95,6 @@
         if (tr.dataset.type === 'shift') shiftSheet(shifts.find(s => s.id === tr.dataset.id));
         else entrySheet(entries.find(e => e.id === tr.dataset.id));
       });
-      if ($('share')) $('share').onclick = async () => {
-        const url = kidLink();
-        if (navigator.share) { try { await navigator.share({ title: 'Clock In', text: 'Your work clock-in page 💜', url }); } catch (e) {} return; }
-        try { await navigator.clipboard.writeText(url); toast('✓ Link copied'); } catch (e) { $('lk').select(); }
-      };
     }
 
     function openSheet(html) { $('sheet').innerHTML = html; $('modal').hidden = false; }
