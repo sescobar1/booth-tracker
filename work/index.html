@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cecilia's Pay</title>
+  <meta name="theme-color" content="#7a3e8e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cece's Pay">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top"><div class="brand"><img src="icon.svg" alt="" width="28" height="28"> Cecilia's Pay</div><button type="button" class="sm" id="out" hidden>Sign out</button></header>
+  <main id="view"><div class="card"><p class="muted">Loading…</p></div></main>
+  <div id="modal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="../money/vendor/supabase.js"></script>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script>
+  (function () {
+    const { $, esc, money, hrs, timer, register, totals, registerTable, totalsHtml, toast, tm, KIND } = WORK, CFG = window.WORK_CONFIG, KID = CFG.kid;
+    // Same sign-in as Money and the Planner (they share this site, so being signed in there signs you in here).
+    const sb = supabase.createClient(CFG.sync.url, CFG.sync.key);
+    let user = null, shifts = [], entries = [], token = '', tick = null;
+
+    const pad = n => String(n).padStart(2, '0');
+    const localDate = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    const localTime = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
+    const today = () => localDate(new Date());
+    const openShift = () => shifts.find(s => !s.clock_out);
+    const kidLink = () => token ? location.href.split(/[?#]/)[0].replace(/index\.html$/, '').replace(/\/?$/, '/') + 'clock.html?t=' + token : '';
+
+    function signInView() {
+      $('out').hidden = true;
+      $('view').innerHTML = '<div class="card"><h2 style="margin-top:0">Sign in</h2><p class="muted small">Use the same email and password as your Money and Planner apps.</p>' +
+        '<label for="em">Email</label><input id="em" type="email" autocomplete="username"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">' +
+        '<p><button id="si" style="width:100%">Sign in</button></p><p id="err" class="small" style="color:var(--red)"></p></div>';
+      $('si').onclick = async () => {
+        $('si').disabled = true;
+        const { data, error } = await sb.auth.signInWithPassword({ email: $('em').value.trim(), password: $('pw').value });
+        if (error) { $('err').textContent = 'That email or password didn’t work.'; $('si').disabled = false; return; }
+        user = data.user; load();
+      };
+    }
+
+    async function load() {
+      const [a, b, c] = await Promise.all([
+        sb.from('work_shifts').select('*').eq('kid', KID).order('clock_in', { ascending: false }),
+        sb.from('work_register').select('*').eq('kid', KID).order('date', { ascending: false }),
+        token ? Promise.resolve({ data: [{ token }] }) : sb.from('kid_links').select('token').eq('name', KID).limit(1)
+      ]);
+      if (a.error || b.error) { $('view').innerHTML = '<div class="card"><p>Couldn’t load. Check your internet. <button class="ghost sm" onclick="location.reload()">Try again</button></p></div>'; return; }
+      shifts = a.data; entries = b.data; token = (c.data && c.data[0] && c.data[0].token) || '';
+      draw();
+    }
+
+    function draw() {
+      clearInterval(tick);
+      $('out').hidden = false;
+      const open = openShift(), lines = register(shifts, entries), t = totals(lines);
+      const week = new Date(); week.setHours(0, 0, 0, 0); week.setDate(week.getDate() - ((week.getDay() + 6) % 7));
+      const weekMs = shifts.filter(s => s.clock_out && new Date(s.clock_in) >= week).reduce((n, s) => n + WORK.shiftMs(s), 0);
+      $('view').innerHTML =
+        '<div class="card clock">' +
+          (open
+            ? '<p class="state"><span class="dot"></span>' + esc(CFG.kidName) + ' is clocked in since <b>' + tm(open.clock_in) + '</b></p><div class="timer" id="tm"></div><div class="pay" id="earn"></div><button class="big out" id="go">Clock her out</button>'
+            : '<p class="state muted">' + esc(CFG.kidName) + ' is clocked out.</p><div class="pay">$' + Number(CFG.rate).toFixed(2) + ' an hour · ' + hrs(weekMs) + ' this week</div><button class="big in" id="go">Clock her in</button>') +
+        '</div>' +
+        totalsHtml(t) +
+        '<h2>Check register <small>tap a line to fix or delete it</small></h2>' +
+        '<div class="row" style="margin-bottom:10px"><button id="addSpend">− Spent</button><button class="ghost" id="addCash">− Cash</button><button class="ghost" id="addBonus">＋ Bonus</button></div>' +
+        '<div class="card" style="padding:8px 10px">' + registerTable(lines, true) + '</div>' +
+        '<p><button class="ghost" id="addShift" style="width:100%">＋ Add a shift she forgot to clock</button></p>' +
+        '<h2>Cecilia’s clock-in link</h2>' +
+        '<div class="card">' + (token
+          ? '<p class="small muted" style="margin-top:0">Send this to her phone. She opens it and taps <b>Add to Home Screen</b> to get a Clock In button. She can clock in and out and see her register, but can’t change it.</p><div class="link-box"><input id="lk" readonly value="' + esc(kidLink()) + '"><button class="sm" id="share">' + (navigator.share ? 'Share' : 'Copy') + '</button></div>'
+          : '<p class="small">Cecilia doesn’t have a family link yet. Make one in the Planner (More → Kid links) named “' + esc(KID) + '”, then come back here.</p>') + '</div>';
+      if (open) {
+        const upd = () => { const ms = Date.now() - new Date(open.clock_in); $('tm').textContent = timer(ms); $('earn').textContent = '+' + money(ms / 3600000 * open.rate) + ' so far'; };
+        upd(); tick = setInterval(upd, 1000);
+      }
+      $('go').onclick = async () => {
+        $('go').disabled = true;
+        const r = open
+          ? await sb.from('work_shifts').update({ clock_out: new Date().toISOString() }).eq('id', open.id)
+          : await sb.from('work_shifts').insert({ owner: user.id, kid: KID, clock_in: new Date().toISOString(), rate: CFG.rate });
+        if (r.error) toast('Couldn’t save. Try again.'); else toast(open ? '✓ Clocked out' : '✓ Clocked in');
+        load();
+      };
+      $('addSpend').onclick = () => entrySheet({ kind: 'spend' });
+      $('addCash').onclick = () => entrySheet({ kind: 'cash' });
+      $('addBonus').onclick = () => entrySheet({ kind: 'bonus' });
+      $('addShift').onclick = () => shiftSheet(null);
+      document.querySelectorAll('.reg tr.tap').forEach(tr => tr.onclick = () => {
+        if (tr.dataset.type === 'shift') shiftSheet(shifts.find(s => s.id === tr.dataset.id));
+        else entrySheet(entries.find(e => e.id === tr.dataset.id));
+      });
+      if ($('share')) $('share').onclick = async () => {
+        const url = kidLink();
+        if (navigator.share) { try { await navigator.share({ title: 'Clock In', text: 'Your work clock-in page 💜', url }); } catch (e) {} return; }
+        try { await navigator.clipboard.writeText(url); toast('✓ Link copied'); } catch (e) { $('lk').select(); }
+      };
+    }
+
+    function openSheet(html) { $('sheet').innerHTML = html; $('modal').hidden = false; }
+    function closeSheet() { $('modal').hidden = true; }
+    $('modal').onclick = e => { if (e.target === $('modal')) closeSheet(); };
+
+    function entrySheet(e) {
+      let kind = e.kind || 'spend';
+      const isNew = !e.id;
+      openSheet('<h3>' + (isNew ? 'Add to register' : 'Edit entry') + '</h3>' +
+        '<div class="seg" id="kd">' + Object.keys(KIND).map(k => '<button type="button" data-k="' + k + '"' + (k === kind ? ' class="on"' : '') + '>' + KIND[k] + '</button>').join('') + '</div>' +
+        '<p class="small muted" id="kh"></p>' +
+        '<label for="ea">Amount</label><input id="ea" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00" value="' + (e.amount != null ? Number(e.amount).toFixed(2) : '') + '">' +
+        '<label for="ep" id="epl">What for</label><input id="ep" placeholder="Gift for Maya – Target" value="' + esc(e.payee || '') + '">' +
+        '<label for="ed">Date</label><input id="ed" type="date" value="' + esc(e.date || today()) + '">' +
+        '<label for="en">Note (optional)</label><input id="en" value="' + esc(e.note || '') + '">' +
+        '<div class="row" style="margin-top:16px">' + (isNew ? '' : '<button class="danger" id="del">Delete</button>') + '<button class="ghost" id="cx">Cancel</button><button id="sv">Save</button></div>');
+      const hint = () => { $('kh').textContent = kind === 'bonus' ? 'Adds to what she has.' : kind === 'cash' ? 'Money you handed her. Takes it off her pay.' : 'Something you bought for her. Takes it off her pay.'; $('ep').placeholder = kind === 'bonus' ? 'Extra chore, birthday…' : kind === 'cash' ? 'Cash for the mall' : 'Gift for Maya – Target'; };
+      hint();
+      $('kd').onclick = ev => { const b = ev.target.closest('button'); if (!b) return; kind = b.dataset.k; $('kd').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); hint(); };
+      $('cx').onclick = closeSheet;
+      setTimeout(() => $('ea').focus(), 50);
+      $('sv').onclick = async () => {
+        const amount = Math.round(parseFloat($('ea').value) * 100) / 100;
+        if (!(amount > 0)) { toast('Enter an amount'); return; }
+        const row = { kind, amount, payee: $('ep').value.trim(), date: $('ed').value || today(), note: $('en').value.trim() };
+        const r = isNew ? await sb.from('work_register').insert({ ...row, owner: user.id, kid: KID }) : await sb.from('work_register').update(row).eq('id', e.id);
+        if (r.error) { toast('Couldn’t save. Try again.'); return; }
+        closeSheet(); toast('✓ Saved'); load();
+      };
+      if ($('del')) $('del').onclick = async () => {
+        if (!confirm('Delete this entry?')) return;
+        const r = await sb.from('work_register').delete().eq('id', e.id);
+        if (r.error) { toast('Couldn’t delete.'); return; }
+        closeSheet(); toast('Deleted'); load();
+      };
+    }
+
+    function shiftSheet(s) {
+      const isNew = !s, a = s ? new Date(s.clock_in) : new Date(), b = s && s.clock_out ? new Date(s.clock_out) : null;
+      openSheet('<h3>' + (isNew ? 'Add a shift' : 'Edit shift') + '</h3>' +
+        '<label for="sd">Date</label><input id="sd" type="date" value="' + localDate(a) + '">' +
+        '<div class="row"><div><label for="si1">Clocked in</label><input id="si1" type="time" value="' + (isNew ? '' : localTime(a)) + '"></div><div><label for="so1">Clocked out</label><input id="so1" type="time" value="' + (b ? localTime(b) : '') + '"></div></div>' +
+        (s && !s.clock_out ? '<p class="small muted">Leave “Clocked out” empty to keep her clocked in.</p>' : '') +
+        '<label for="sr">Pay per hour</label><input id="sr" type="number" inputmode="decimal" step="0.25" min="0" value="' + Number(s ? s.rate : CFG.rate) + '">' +
+        '<label for="sn">Note (optional)</label><input id="sn" placeholder="Folded laundry, cleaned garage…" value="' + esc(s ? s.note : '') + '">' +
+        '<div class="row" style="margin-top:16px">' + (isNew ? '' : '<button class="danger" id="del">Delete</button>') + '<button class="ghost" id="cx">Cancel</button><button id="sv">Save</button></div>');
+      $('cx').onclick = closeSheet;
+      $('sv').onclick = async () => {
+        const d = $('sd').value, i = $('si1').value, o = $('so1').value;
+        if (!d || !i) { toast('Pick the day and the clock-in time'); return; }
+        if (!o && (isNew || s.clock_out)) { toast('Add the clock-out time'); return; }
+        const cin = new Date(d + 'T' + i);
+        let cout = o ? new Date(d + 'T' + o) : null;
+        if (cout && cout <= cin) cout.setDate(cout.getDate() + 1); // worked past midnight
+        if (cout && cout - cin > 16 * 3600000) { toast('That’s more than 16 hours. Check the times.'); return; }
+        const row = { clock_in: cin.toISOString(), clock_out: cout ? cout.toISOString() : null, rate: Number($('sr').value) || 0, note: $('sn').value.trim() };
+        const r = isNew ? await sb.from('work_shifts').insert({ ...row, owner: user.id, kid: KID }) : await sb.from('work_shifts').update(row).eq('id', s.id);
+        if (r.error) { toast('Couldn’t save. Try again.'); return; }
+        closeSheet(); toast('✓ Saved'); load();
+      };
+      if ($('del')) $('del').onclick = async () => {
+        if (!confirm('Delete this shift? Its pay comes off her balance.')) return;
+        const r = await sb.from('work_shifts').delete().eq('id', s.id);
+        if (r.error) { toast('Couldn’t delete.'); return; }
+        closeSheet(); toast('Deleted'); load();
+      };
+    }
+
+    $('out').onclick = async () => { await sb.auth.signOut(); user = null; signInView(); };
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && user && $('modal').hidden) load(); });
+    // Pick up Cece clocking in on her phone while this page is open.
+    setInterval(() => { if (user && !document.hidden && $('modal').hidden) load(); }, 30000);
+
+    sb.auth.getSession().then(({ data }) => { user = data.session && data.session.user; if (user) load(); else signInView(); });
+  })();
+  </script>
+</body>
+</html>
