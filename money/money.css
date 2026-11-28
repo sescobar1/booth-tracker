@@ -1,7 +1,11 @@
 /* Money app: green theme and register styles on top of the shared app.css. */
-:root { --navy: #1d5c46; --navy-2: #26775b; --gold: #e0a526; --adult-bg: #e2f2ea; --income: #1d7a46; --expense: #b3261e; }
+:root { --navy: #1d5c46; --navy-2: #26775b; --gold: #e0a526; --adult-bg: #e2f2ea; --income: #198a45; --expense: #c62828; }
 .income { color: var(--income); }
 .expense { color: var(--expense); }
+/* Register rows: green edge for money in, red edge for money out. */
+.tx.tx-income { border-left: 5px solid var(--income); background: #f1faf4; }
+.tx.tx-expense { border-left: 5px solid var(--expense); background: #fdf3f2; }
+.tx .amt b.income, .tx .amt b.expense { font-size: 1.05rem; }
 .neg { color: #ffd2cf; }
 
 .balance-card { background: linear-gradient(135deg, var(--navy), var(--navy-2)); color: #fff; border-radius: 16px; padding: 14px 16px; margin: 8px 0 10px; }

@@ -235,7 +235,7 @@ function viewRegister() {
   let lastDate = '', rows = '';
   shown.forEach(t => {
     if (t.date !== lastDate) { rows += '<div class="day">' + esc(fmtDate(t.date, true)) + '</div>'; lastDate = t.date; }
-    rows += (selMode ? '' : '<div class="swipe"><button type="button" class="swipe-del" data-swdel="' + t.id + '" tabindex="-1">🗑<span>Delete</span></button>') + '<div class="tx' + (t.cleared ? ' cleared' : '') + (selMode && picked.has(t.id) ? ' picked' : '') + '" data-tx="' + t.id + '">' +
+    rows += (selMode ? '' : '<div class="swipe"><button type="button" class="swipe-del" data-swdel="' + t.id + '" tabindex="-1">🗑<span>Delete</span></button>') + '<div class="tx tx-' + t.type + (t.cleared ? ' cleared' : '') + (selMode && picked.has(t.id) ? ' picked' : '') + '" data-tx="' + t.id + '">' +
       (selMode ? '<span class="selbox' + (picked.has(t.id) ? ' on' : '') + '" aria-hidden="true">' + (picked.has(t.id) ? '✓' : '') + '</span>' :
       '<button type="button" class="clr" data-clear="' + t.id + '" title="' + (t.cleared ? 'Cleared – tap to unclear' : 'Not cleared – tap to clear') + '">' + (t.cleared ? '✓' : '') + '</button>') +
       '<div class="who"><b>' + (String(t.id).startsWith('rec_') ? '🔁 ' : '') + esc(t.payee || '(no payee)') + '</b>' +
@@ -251,7 +251,7 @@ function viewRegister() {
     (searching ? '' : favRow()) +
     '<div class="searchbar"><input id="regFind" type="search" placeholder="🔍 Search payee, amount, category, #tag" value="' + esc(regSearch) + '">' +
     '<div class="segs" id="regType"><button type="button" class="seg' + (!regType ? ' on' : '') + '" data-rt="">All</button><button type="button" class="seg' + (regType === 'expense' ? ' on' : '') + '" data-rt="expense">− Expenses</button><button type="button" class="seg' + (regType === 'income' ? ' on' : '') + '" data-rt="income">+ Income</button></div>' +
-    (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out ' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + ' · in ' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</span>' +
+    (searching ? '<div class="search-sum"><span><b>' + shown.length + '</b> ' + (shown.length === 1 ? 'entry' : 'entries') + ' · out <b class="expense">' + money(shown.filter(t => t.type === 'expense').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</b> · in <b class="income">' + money(shown.filter(t => t.type === 'income').reduce((s2, t) => s2 + Number(t.amount), 0)) + '</b></span>' +
       (shown.length ? '<button type="button" class="ghost small" id="selToggle">' + (selMode ? 'Done selecting' : '☑ Select to delete') + '</button>' : '') + '<button type="button" class="linkish" id="regClear">Clear search</button></div>' : '') + '</div>' +
     (signedIn() ? '' : '<div class="card pad"><h2>Sign in</h2><div data-syncbox></div></div>') +
     '<div class="toptabs"><a href="#register" class="on">📒 Register</a><a href="#reports">📊 Reports</a><a href="#calendar">📅 Calendar</a><a href="#review">🔍 Review</a><a href="#leaders">🏆 Top spending</a></div>' +
@@ -268,7 +268,7 @@ function viewRegister() {
     '<div class="filters">' +
     '<select id="regMonth"><option value="">All months</option>' + months.map(m => '<option value="' + m + '"' + (m === regMonth ? ' selected' : '') + '>' + esc(monthName(m)) + '</option>').join('') + '</select>' +
     '<select id="regCat"><option value="">All categories</option>' + data.settings.categories.map(c => '<option' + (c === regCat ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></div>' +
-    (regMonth ? '<p class="helper">' + esc(monthName(regMonth)) + ': in ' + money(monthIn.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)) + ' · out ' + money(monthIn.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)) + '</p>' : '') +
+    (regMonth ? '<p class="helper">' + esc(monthName(regMonth)) + ': in <b class="income">' + money(monthIn.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)) + '</b> · out <b class="expense">' + money(monthIn.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)) + '</b></p>' : '') +
     (selMode && shown.length ? '<p class="helper">Tap entries to pick them. <button type="button" class="linkish" id="selAll">' + (shown.every(t => picked.has(t.id)) ? 'Unpick all' : 'Pick all ' + shown.length) + '</button></p>' : '') +
     (rows || '<p class="helper">No entries' + (searching ? ' match' : ' yet') + '.</p>') +
     (selMode ? '<div class="del-bar"><span>' + picked.size + ' picked' + (picked.size ? ' · ' + money([...picked].map(id => data.tx.find(x => x.id === id)).filter(Boolean).reduce((s2, t) => s2 + Number(t.amount), 0)) : '') + '</span><button type="button" class="danger" id="delPicked"' + (picked.size ? '' : ' disabled') + '>🗑 Delete</button><button type="button" class="ghost" id="selCancel">Cancel</button></div>' : '');
